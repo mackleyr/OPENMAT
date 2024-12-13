@@ -1,0 +1,35 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Custom global styles */
+html, body, #root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background-color: #f3f4f6; /* Tailwind's gray-100 */
+  font-family: 'Inter', sans-serif;
+}
+
+/* Button styling based on active/inactive states */
+.button-active {
+  background-color: var(--main-color);
+  color: #FFFFFF;
+}
+
+.button-inactive {
+  background-color: #f3f4f6; /* Gray-100 */
+  color: #d1d5db;            /* Gray-300 */
+  cursor: not-allowed;
+}
+
+input::placeholder {
+  color: rgba(0, 0, 0, 0.2); /* 20% opacity */
+}
+
+input:focus::placeholder {
+  color: rgba(0, 0, 0, 0.5);
+}
