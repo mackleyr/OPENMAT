@@ -1,8 +1,8 @@
 // supabase/functions/start-verification/index.ts
-
 import { serve } from 'https://deno.land/std@0.131.0/http/server.ts'
 
 serve(async (req) => {
+  // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response(null, {
       status: 200,

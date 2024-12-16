@@ -1,3 +1,5 @@
+// CouponSide.js
+
 import React, { useContext, useEffect, useState } from 'react';
 import { useCoupon } from '../contexts/CouponContext';
 import { AuthContext } from '../contexts/AuthContext';

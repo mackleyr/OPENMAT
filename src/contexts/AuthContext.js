@@ -46,7 +46,7 @@ export const AuthProvider = ({ children }) => {
       }
 
       if (!existingUser) {
-        console.log("AuthContext.createUserIfNotExists(): Creating new user row.");
+        console.log("No existing user row, creating one...");
         const { data: newUser, error: upsertError } = await supabase
           .from("users")
           .upsert({
@@ -63,11 +63,11 @@ export const AuthProvider = ({ children }) => {
           return null;
         }
 
-        console.log("New user created:", newUser);
+        console.log("New user row created:", newUser);
         return newUser;
       }
 
-      console.log("User already exists:", existingUser);
+      console.log("User row already exists:", existingUser);
       return existingUser;
     } catch (err) {
       console.warn("Unexpected error ensuring user row:", err);
@@ -77,11 +77,11 @@ export const AuthProvider = ({ children }) => {
 
   const fetchUserProfile = useCallback(async (identifier) => {
     if (!identifier) {
-      console.warn("AuthContext.fetchUserProfile(): No identifier provided.");
+      console.warn("No identifier for fetchUserProfile.");
       return;
     }
 
-    console.log("AuthContext.fetchUserProfile(): Fetching profile for:", identifier);
+    console.log("fetchUserProfile(): Fetching profile for:", identifier);
     setProfileLoading(true);
 
     try {
@@ -103,6 +103,7 @@ export const AuthProvider = ({ children }) => {
         return;
       }
 
+      console.log("Profile data fetched:", data);
       setProfileData({
         phoneNumber: data.phone_number || "",
         name: data.name || "",
@@ -113,16 +114,15 @@ export const AuthProvider = ({ children }) => {
       const onboarded = !!data.name && !!data.phone_number && !!data.profile_image_url;
       setIsOnboarded(onboarded);
       setProfileLoading(false);
-
-      console.log("AuthContext.fetchUserProfile(): Profile fetched and updated:", data, "Onboarded:", onboarded);
+      console.log("Profile updated in state:", profileData, "Onboarded:", onboarded);
     } catch (err) {
       console.warn("Unexpected error fetching profile:", err);
       resetProfileData();
     }
-  }, [resetProfileData]);
+  }, [resetProfileData, profileData]);
 
   const fetchSession = useCallback(async () => {
-    console.log("AuthContext.fetchSession(): Checking session...");
+    console.log("fetchSession(): Checking session...");
     const { data: { session }, error } = await supabase.auth.getSession();
 
     if (error || !session || !session.user?.id) {
@@ -133,7 +133,7 @@ export const AuthProvider = ({ children }) => {
 
     setAuthUser(session.user);
     setIsVerified(true);
-    console.log("AuthContext.fetchSession(): Session found. User is verified:", session.user);
+    console.log("Session found. User is verified:", session.user);
   }, [resetProfileData]);
 
   useEffect(() => {
@@ -145,13 +145,12 @@ export const AuthProvider = ({ children }) => {
         if (event === "SIGNED_IN" && session?.user?.id) {
           setAuthUser(session.user);
           setIsVerified(true);
-
+          console.log("AuthUser after sign-in:", session.user.id);
           const ensuredUser = await createUserIfNotExists(session.user.id, session.user.phone);
           if (!ensuredUser) {
             resetProfileData();
             return;
           }
-
           await fetchUserProfile(session.user.id);
         } else if (event === "SIGNED_OUT") {
           resetProfileData();
@@ -163,7 +162,7 @@ export const AuthProvider = ({ children }) => {
   }, [fetchSession, createUserIfNotExists, fetchUserProfile, resetProfileData]);
 
   const updateUserProfile = async (newProfileData) => {
-    console.log("AuthContext.updateUserProfile(): Attempting profile update with:", newProfileData);
+    console.log("updateUserProfile(): Attempting profile update with:", newProfileData);
     if (!authUser?.id) {
       console.warn("No authUser present. Re-checking session...");
       await fetchSession();
@@ -177,6 +176,7 @@ export const AuthProvider = ({ children }) => {
     const name = newProfileData.name || profileData.name || "";
     const profile_image_url = newProfileData.profile_image_url || profileData.profileImage || "";
 
+    console.log("updateUserProfile(): Performing upsert...");
     const { data, error } = await supabase
       .from("users")
       .upsert({
@@ -188,9 +188,10 @@ export const AuthProvider = ({ children }) => {
       .select("id, phone_number, name, profile_image_url")
       .single();
 
+    console.log("updateUserProfile(): Upsert result:", { data, error });
     if (error) {
       console.warn("Error updating user profile:", error);
-      throw error; // Throw so calling function can handle it
+      throw error;
     }
 
     setProfileData({
@@ -203,21 +204,22 @@ export const AuthProvider = ({ children }) => {
     const onboarded = !!data.name && !!data.phone_number && !!data.profile_image_url;
     setIsOnboarded(onboarded);
 
-    console.log("AuthContext.updateUserProfile(): Profile updated successfully.", data, "Onboarded:", onboarded);
+    console.log("Profile updated successfully:", data, "Onboarded:", onboarded);
   };
 
   const refreshProfile = async () => {
     if (authUser?.id) {
-      console.log("AuthContext.refreshProfile(): Refreshing profile for user:", authUser.id);
+      console.log("refreshProfile(): Refreshing profile for user:", authUser.id);
       await fetchUserProfile(authUser.id);
+      console.log("After refresh, profileData:", profileData, "isOnboarded:", isOnboarded);
     } else {
-      console.warn("AuthContext.refreshProfile(): No authUser available.");
+      console.warn("refreshProfile(): No authUser available.");
     }
   };
 
   const deleteUser = async () => {
     if (!authUser?.id) return;
-    console.log("AuthContext.deleteUser(): Deleting user from DB:", authUser.id);
+    console.log("deleteUser(): Deleting user from DB:", authUser.id);
     const { error: deleteError } = await supabase
       .from("users")
       .delete()
@@ -235,7 +237,7 @@ export const AuthProvider = ({ children }) => {
     }
 
     resetProfileData();
-    console.log("AuthContext.deleteUser(): User deleted and signed out.");
+    console.log("User deleted and signed out.");
   };
 
   console.log("AuthContext: Current state:", {

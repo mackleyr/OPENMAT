@@ -1,49 +1,24 @@
+// dealsService.js
 import { supabase } from '../supabaseClient';
 
-export const createDeal = async (dealData) => {
-  const { title, description, imageUrl, dealType, value, deposit, expirationDate, userId } = dealData;
+export const createDeal = async ({ creator_id, title, background, expires_at, creatorName }) => {
+  console.log("createDeal(): Attempting to create deal:", { creator_id, title, background, expires_at, creatorName });
+
+  const uniqueUrl = crypto.randomUUID();
+  const encodedName = encodeURIComponent(creatorName);
+  const share_link = `https://and.deals/share/${encodedName}/${uniqueUrl}`;
 
   const { data: deal, error: dealError } = await supabase
     .from('deals')
-    .insert([
-      {
-        title,
-        description,
-        image_url: imageUrl,
-        deal_type: dealType,
-        value,
-        deposit,
-        expiration_date: expirationDate,
-        creator_id: userId,
-      },
-    ])
-    .select()
+    .insert([{ creator_id, title, background, expires_at, share_link }])
+    .select('*')
     .single();
 
-  if (dealError) throw dealError;
+  if (dealError) {
+    console.error("createDeal() error:", dealError.message);
+    throw dealError;
+  }
 
+  console.log("createDeal(): Deal created successfully:", deal);
   return deal;
-};
-
-export const generateShareLink = async (dealId, userId) => {
-  const uniqueUrl = crypto.randomUUID(); // Generate unique ID
-  const expiration = new Date();
-  expiration.setDate(expiration.getDate() + 7);
-
-  const { data: shareLink, error: shareLinkError } = await supabase
-    .from('sharelinks')
-    .insert([
-      {
-        deal_id: dealId,
-        user_id: userId,
-        unique_url: uniqueUrl,
-        expires_at: expiration.toISOString(),
-      },
-    ])
-    .select()
-    .single();
-
-  if (shareLinkError) throw shareLinkError;
-
-  return `https://and.deals/share/${uniqueUrl}`;
 };

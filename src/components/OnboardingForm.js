@@ -1,20 +1,19 @@
-import React, { useState, useContext } from 'react';
-import { supabase } from '../supabaseClient';
+// OnboardingForm.js
+import React, { useState, useContext, useEffect } from 'react';
 import Progress from './Progress';
 import Text from '../config/Text';
 import Profile from './Profile';
 import { AuthContext } from '../contexts/AuthContext';
+import { OnboardingContext } from '../contexts/OnboardingContext'; // Ensure you have this context available
 import { mainColor, textColors } from '../config/Colors';
+import { supabase } from '../supabaseClient';
 
 function OnboardingForm({ onComplete }) {
   const { updateUserProfile, setIsOnboarded, setIsVerified, fetchSession } = useContext(AuthContext);
+  const { completeOnboarding, pendingAction, setPendingAction } = useContext(OnboardingContext);
 
   const START_VERIFICATION_URL = "https://api.and.deals/functions/v1/start-verification";
   const CHECK_VERIFICATION_URL = "https://api.and.deals/functions/v1/check-verification";
-
-  // Must match what's in check-verification EXACTLY
-  const knownEmail = "mvpuser@and.deals";
-  const knownPassword = "DemoPassw0rd_12345!";
 
   const [currentStep, setCurrentStep] = useState(1);
   const [phoneNumber, setPhoneNumber] = useState('');
@@ -89,8 +88,9 @@ function OnboardingForm({ onComplete }) {
   const handleNext = async () => {
     try {
       if (currentStep === 1) {
+        // Phone step
         if (!steps[0].validation(phoneNumber)) {
-          alert("Invalid phone number format. Make sure it matches (XXX) XXX-XXXX.");
+          alert("Invalid phone number. Format: (XXX) XXX-XXXX.");
           return;
         }
         const normalized = toE164(phoneNumber);
@@ -104,14 +104,15 @@ function OnboardingForm({ onComplete }) {
         setCurrentStep((prev) => prev + 1);
 
       } else if (currentStep === 2) {
+        // OTP step
         if (!steps[1].validation(otp)) {
-          alert("Invalid OTP. Please enter a valid 6-digit code.");
+          alert("Invalid OTP. 6 digits required.");
           return;
         }
         setIsVerifying(true);
         const normalized = toE164(phoneNumber);
 
-        await fetch(CHECK_VERIFICATION_URL, {
+        const checkResp = await fetch(CHECK_VERIFICATION_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ phoneNumber: normalized, otpCode: otp }),
@@ -119,28 +120,35 @@ function OnboardingForm({ onComplete }) {
 
         setIsVerifying(false);
 
-        // Attempt sign-in
-        const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
-          email: knownEmail,
-          password: knownPassword
-        });
+        if (!checkResp || !checkResp.ok) {
+          alert("Could not verify phone. Please try again.");
+          return;
+        }
 
+        const checkData = await checkResp.json();
+        if (!checkData.success) {
+          alert("Verification failed. Please try again.");
+          return;
+        }
+
+        const { email, password } = checkData;
+        console.log("Attempting sign-in with verified credentials...");
+        const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({ email, password });
         console.log("Sign-in attempt response:", { signInData, signInError });
 
         if (signInError) {
           console.error("Sign-in error:", signInError.message);
-          alert("Could not sign in. Please try again.");
+          alert("Sign-in failed. Please contact support.");
           return;
         }
 
-        console.log("User signed in successfully. Session:", signInData?.session);
-
-        // Refresh the session in AuthContext
+        console.log("User signed in. Session:", signInData.session);
         await fetchSession();
 
         setCurrentStep((prev) => prev + 1);
 
       } else if (currentStep === 3) {
+        // Name step
         if (!steps[2].validation(name)) {
           alert("Name must be at least 2 letters.");
           return;
@@ -148,32 +156,36 @@ function OnboardingForm({ onComplete }) {
         setCurrentStep((prev) => prev + 1);
 
       } else if (currentStep === 4) {
+        // Profile photo step
         if (!profilePhoto) {
           alert("Please upload a profile photo.");
           return;
         }
 
+        // Update user profile in DB
+        console.log("OnboardingForm: Updating user profile with name/phone/photo");
         await updateUserProfile({
           phone_number: phoneNumber,
           name: name,
           profile_image_url: profilePhoto,
-        }).catch(() => {});
+        });
 
         setIsVerified(true);
         setIsOnboarded(true);
+
+        // Complete onboarding in OnboardingContext
+        await completeOnboarding();
+
+        // After onboarding is complete, call onComplete()
         onComplete();
       }
 
     } catch (error) {
       console.error("Error during onboarding step:", error.message);
-      // For MVP: gracefully continue
-      if (currentStep < 4) {
-        setCurrentStep(currentStep + 1);
-      } else {
-        setIsVerified(true);
-        setIsOnboarded(true);
-        onComplete();
-      }
+      alert("An unexpected error occurred. Please try again.");
+
+      // If onboarding fails, decide what to do.
+      // Here, we just stay on the same step. You could also allow retries or go back a step.
     }
   };
 
@@ -187,7 +199,7 @@ function OnboardingForm({ onComplete }) {
               ? name
               : ''
         )
-    : !!profilePhoto;
+    : !!profilePhoto; // For the photo step, just check if a photo is set.
 
   return (
     <div
@@ -265,18 +277,12 @@ function OnboardingForm({ onComplete }) {
             disabled={isVerifying || !isValid || isUploading}
             className="w-full rounded-full font-semibold transition-all duration-150"
             style={{
-              backgroundColor: isValid && !isUploading && !isVerifying
-                ? textColors.white
-                : 'rgba(255, 255, 255, 0.2)',
-              color: isValid && !isUploading && !isVerifying
-                ? textColors.primary
-                : 'rgba(255, 255, 255, 0.2)',
+              backgroundColor: isValid && !isUploading && !isVerifying ? textColors.white : 'rgba(255, 255, 255, 0.2)',
+              color: isValid && !isUploading && !isVerifying ? textColors.primary : 'rgba(255, 255, 255, 0.2)',
               padding: 'clamp(1.25rem, 2.5%, 3rem)',
               fontSize: 'clamp(1.25rem, 2vw, 3rem)',
-              boxSizing: 'border-box',
               textAlign: 'center',
               fontWeight: 'semibold',
-              transition: 'background-color 0.3s ease, color 0.3s ease',
             }}
           >
             {currentStep === 2 && isVerifying ? 'Verifying...' : 'Next'}

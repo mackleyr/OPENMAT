@@ -1,71 +1,128 @@
-// OnboardingContext.js
-import React, { createContext, useState, useContext } from 'react';
+// src/contexts/OnboardingContext.js
+import React, { createContext, useContext, useState, useCallback } from 'react';
+import { supabase } from '../supabaseClient';
 import { AuthContext } from './AuthContext';
 
 export const OnboardingContext = createContext();
 
 const OnboardingProvider = ({ children }) => {
-  const { updateUserProfile, refreshProfile, setIsOnboarded, profileData } = useContext(AuthContext);
+  const { authUser, fetchSession } = useContext(AuthContext);
 
-  const [currentStep, setCurrentStep] = useState(1);
   const [phoneNumber, setPhoneNumber] = useState('');
-  const [otp, setOtp] = useState('');
   const [name, setName] = useState('');
-  const [photo, setPhoto] = useState(null);
-  const [pendingAction, setPendingAction] = useState(null);
+  const [photo, setPhoto] = useState('');
+  const [isOnboarded, setIsOnboarded] = useState(false);
+  const [profileLoading, setProfileLoading] = useState(true);
+
+  const loadUserProfile = useCallback(async (userId) => {
+    if (!userId) {
+      setProfileLoading(false);
+      return;
+    }
+    console.log("OnboardingContext: Loading user profile:", userId);
+    setProfileLoading(true);
+    const { data, error } = await supabase
+      .from('users')
+      .select('phone_number, name, profile_image_url')
+      .eq('id', userId)
+      .maybeSingle();
+
+    if (error) {
+      console.warn("OnboardingContext: Error loading profile:", error.message);
+      setProfileLoading(false);
+      return;
+    }
+
+    if (data) {
+      setPhoneNumber(data.phone_number || '');
+      setName(data.name || '');
+      setPhoto(data.profile_image_url || '');
+      const complete = !!data.phone_number && !!data.name && !!data.profile_image_url;
+      setIsOnboarded(complete);
+    } else {
+      console.warn("OnboardingContext: No user record found for:", userId);
+      setIsOnboarded(false);
+    }
+
+    setProfileLoading(false);
+  }, []);
+
+  React.useEffect(() => {
+    if (authUser?.id) {
+      loadUserProfile(authUser.id);
+    } else {
+      setPhoneNumber('');
+      setName('');
+      setPhoto('');
+      setIsOnboarded(false);
+      setProfileLoading(false);
+    }
+  }, [authUser, loadUserProfile]);
+
+  const updateUserProfileInDB = async () => {
+    if (!authUser?.id) {
+      console.warn("No authUser. Can't update profile.");
+      return;
+    }
+
+    console.log("OnboardingContext: Updating user profile in DB with:", { phoneNumber, name, photo });
+    const { data, error } = await supabase
+      .from('users')
+      .upsert({
+        id: authUser.id,
+        phone_number: phoneNumber,
+        name: name,
+        profile_image_url: photo
+      })
+      .select('id, phone_number, name, profile_image_url')
+      .single();
+
+    if (error) {
+      console.error("OnboardingContext: Error updating profile:", error.message);
+      throw error;
+    }
+
+    const complete = !!data.phone_number && !!data.name && !!data.profile_image_url;
+    setIsOnboarded(complete);
+    console.log("OnboardingContext: Profile updated successfully. Onboarded:", complete);
+  };
 
   const completeOnboarding = async () => {
-    console.log("OnboardingContext.completeOnboarding() started", { phoneNumber, name, photo });
+    console.log("OnboardingContext: completeOnboarding() started");
+    if (!phoneNumber || !name || !photo) {
+      console.warn("OnboardingContext: Missing data. Cannot complete onboarding.");
+      return;
+    }
 
-    const userData = {
-      phone_number: phoneNumber,
-      name: name,
-      profile_image_url: photo,
-    };
+    await updateUserProfileInDB();
+    await fetchSession(); 
+    await loadUserProfile(authUser.id);
+    console.log("OnboardingContext: Onboarding complete. isOnboarded:", isOnboarded);
+  };
 
-    try {
-      console.log("OnboardingContext: Updating user profile...");
-      await updateUserProfile(userData);
-
-      console.log("OnboardingContext: Refreshing profile after update...");
-      await refreshProfile();
-
-      // Double-check that profileData is complete after refresh
-      if (profileData && profileData.name && profileData.phoneNumber && profileData.profileImage) {
-        console.log("OnboardingContext: Profile complete. Setting isOnboarded to true.");
-        setIsOnboarded(true);
-      } else {
-        console.warn("OnboardingContext: Profile not fully complete after refresh. Check data:", profileData);
-      }
-
-      if (pendingAction) {
-        console.log("OnboardingContext: Executing pending action...");
-        await pendingAction();
-        setPendingAction(null);
-      }
-
-      console.log("OnboardingContext.completeOnboarding() finished successfully.");
-    } catch (error) {
-      console.error("OnboardingContext.completeOnboarding() error:", error.message);
+  const refreshProfile = async () => {
+    if (authUser?.id) {
+      console.log("OnboardingContext: refreshProfile()");
+      await loadUserProfile(authUser.id);
+    } else {
+      console.warn("OnboardingContext: No authUser, cannot refresh.");
     }
   };
 
   return (
     <OnboardingContext.Provider
       value={{
-        currentStep,
-        setCurrentStep,
         phoneNumber,
         setPhoneNumber,
-        otp,
-        setOtp,
         name,
         setName,
         photo,
         setPhoto,
+        isOnboarded,
+        profileLoading,
         completeOnboarding,
-        pendingAction,
-        setPendingAction,
+        refreshProfile,
+        updateUserProfileInDB
       }}
     >
       {children}
