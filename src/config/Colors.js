@@ -2,7 +2,7 @@
 
 // Define the main color for the app (primary color)
 export const mainColor = '#1A1A1A'; // Black
-export const minorColor = '#FFFFFF'; // White
+export const minorColor = '#EBEBEB'; // White
 
 // Define the color scheme for different button and component states
 export const colorScheme = {

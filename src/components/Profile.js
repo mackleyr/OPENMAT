@@ -1,16 +1,10 @@
-// src/components/Profile.js
-
 import React from 'react';
 import profileDefault from '../assets/profile.svg';
-import { useAuth } from '../contexts/AuthContext';
-import { mainColor } from '../config/Colors';
 
 function Profile({ src = '', onClick, size = '50%', score }) {
-  const { profileData } = useAuth();
-
-  const scoreBadgeSize = typeof size === 'string' ? parseInt(size) * 0.33 : size * 0.33;
-  const fontSize = scoreBadgeSize * 0.5;
-
+  // We no longer fetch from useAuth or profileData.
+  // Just display the provided src or a default image.
+  
   return (
     <div
       onClick={onClick}
@@ -32,7 +26,7 @@ function Profile({ src = '', onClick, size = '50%', score }) {
         }}
       >
         <img
-          src={src || profileData?.profileImage || profileDefault}
+          src={src || profileDefault}
           alt="Profile"
           className="w-full h-full object-cover"
         />

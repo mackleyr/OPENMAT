@@ -1,52 +1,23 @@
-// src/components/Buttons.js
-
 import React, { useState } from 'react';
 import Button from './Button';
-import { useAuth } from '../contexts/AuthContext';
-import { useCoupon } from '../contexts/CouponContext';
 
 function Buttons() {
-  const { profileData, setProfileData, updateUserProfile } = useAuth();
-  const { couponData } = useCoupon();
   const [isCopyClicked, setIsCopyClicked] = useState(false);
   const [isShareClicked, setIsShareClicked] = useState(false);
-  const [actionsTaken, setActionsTaken] = useState({
-    copied: false,
-    shared: false,
-  });
 
   // Handle Copy Button Logic
   const handleCopyClick = async () => {
-    // Copy the link logic (implement as needed)
-    // ...
-
-    if (!actionsTaken.copied) {
-      // Increment score
-      const newScore = profileData.score + 1;
-      setProfileData((prev) => ({ ...prev, score: newScore }));
-      await updateUserProfile({ score: newScore });
-      setActionsTaken((prev) => ({ ...prev, copied: true }));
-    }
-
+    // Implement copy logic as needed
+    // For now, just simulate success
     setIsCopyClicked(true);
-    setTimeout(() => setIsCopyClicked(false), 5000); // Reset after 5 seconds
+    setTimeout(() => setIsCopyClicked(false), 5000);
   };
 
   // Handle Share Button Logic
   const handleShareClick = async () => {
-    // Share deal logic (implement as needed)
-    // ...
-
-    if (!actionsTaken.shared) {
-      // Increment score
-      const newScore = profileData.score + 1;
-      setProfileData((prev) => ({ ...prev, score: newScore }));
-      await updateUserProfile({ score: newScore });
-      setActionsTaken((prev) => ({ ...prev, shared: true }));
-    }
-
+    // Implement share logic as needed
     setIsShareClicked(true);
-    setTimeout(() => setIsShareClicked(false), 5000); // Reset after 5 seconds
+    setTimeout(() => setIsShareClicked(false), 5000);
   };
 
   return (
@@ -57,12 +28,12 @@ function Buttons() {
       }}
     >
       <Button
-        label={isCopyClicked ? 'Copied!' : '2. Copy Link'}
+        label={isCopyClicked ? 'Claimed!' : 'Claim'}
         type="secondary"
         onClick={handleCopyClick}
       />
       <Button
-        label={isShareClicked ? 'Shared!' : '3. Share Deal'}
+        label={isShareClicked ? 'Shared!' : 'Share'}
         type="secondary"
         onClick={handleShareClick}
       />

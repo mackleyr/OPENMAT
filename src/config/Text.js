@@ -5,8 +5,8 @@ import PropTypes from 'prop-types';
 import { mainColor, textColors } from './Colors';
 
 const textStyles = {
-  large: 'text-lg sm:text-1xl md:text-2xl lg:text-3xl font-semibold',
-  medium: 'text-md sm:text-1xl md:text-xl lg:text-2xl font-medium',
+  large: 'text-lg sm:text-xl md:text-2xl lg:text-3xl font-semibold',
+  medium: 'text-md sm:text-lg md:text-xl lg:text-2xl font-medium',
   small: 'text-sm sm:text-md md:text-lg lg:text-1xl font-medium',
 };
 

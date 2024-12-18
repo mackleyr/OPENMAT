@@ -4,6 +4,7 @@ import Text from "../config/Text";
 
 function Button({
   label,
+  children, // Added children prop
   type = "primary",
   icon,
   iconRole = "primary",
@@ -45,9 +46,9 @@ function Button({
       className="flex items-center justify-center gap-2 rounded-full transition-all duration-200"
       style={{
         backgroundColor,
-        border: `3px solid ${isPrimary ? "transparent" : colorScheme.secondary.border}`,
+        border: `4px solid ${isPrimary ? "transparent" : colorScheme.secondary.border}`,
         width: "100%",
-        paddingBlock: "10%",
+        paddingBlock: "5%",
         cursor: disabled ? "not-allowed" : "pointer",
       }}
     >
@@ -66,7 +67,7 @@ function Button({
         style={{ color: currentTextColor }}
         className="text-center"
       >
-        {label}
+        {children || label} {/* Use children if present, otherwise fallback to label */}
       </Text>
     </button>
   );

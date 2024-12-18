@@ -1,4 +1,3 @@
-// AuthContext.js
 import React, { createContext, useState, useEffect, useContext, useCallback } from "react";
 import { supabase } from "../supabaseClient";
 import defaultProfile from "../assets/profile.svg";
@@ -10,7 +9,7 @@ export const AuthProvider = ({ children }) => {
   const [isVerified, setIsVerified] = useState(false);
   const [isOnboarded, setIsOnboarded] = useState(false);
   const [profileData, setProfileData] = useState({
-    phoneNumber: "",
+    email: "",
     name: "",
     profileImage: defaultProfile,
     userId: null,
@@ -20,7 +19,7 @@ export const AuthProvider = ({ children }) => {
   const resetProfileData = useCallback(() => {
     console.log("AuthContext.resetProfileData(): Resetting profile data.");
     setProfileData({
-      phoneNumber: "",
+      email: "",
       name: "",
       profileImage: defaultProfile,
       userId: null,
@@ -31,12 +30,12 @@ export const AuthProvider = ({ children }) => {
     setProfileLoading(false);
   }, []);
 
-  const createUserIfNotExists = useCallback(async (userId, phone_number) => {
+  const createUserIfNotExists = useCallback(async (userId, email) => {
     console.log("AuthContext.createUserIfNotExists(): Checking user existence:", userId);
     try {
       const { data: existingUser, error: fetchError } = await supabase
         .from("users")
-        .select("id, phone_number, name, profile_image_url")
+        .select("id, email, name, profile_image_url")
         .eq("id", userId)
         .maybeSingle();
 
@@ -51,11 +50,11 @@ export const AuthProvider = ({ children }) => {
           .from("users")
           .upsert({
             id: userId,
-            phone_number: phone_number || "",
+            email: email || "",
             name: "",
             profile_image_url: "",
           })
-          .select("id, phone_number, name, profile_image_url")
+          .select("id, email, name, profile_image_url")
           .single();
 
         if (upsertError) {
@@ -87,7 +86,7 @@ export const AuthProvider = ({ children }) => {
     try {
       const { data, error } = await supabase
         .from("users")
-        .select("id, phone_number, name, profile_image_url")
+        .select("id, email, name, profile_image_url")
         .eq("id", identifier)
         .maybeSingle();
 
@@ -105,13 +104,13 @@ export const AuthProvider = ({ children }) => {
 
       console.log("Profile data fetched:", data);
       setProfileData({
-        phoneNumber: data.phone_number || "",
+        email: data.email || "",
         name: data.name || "",
         profileImage: data.profile_image_url || defaultProfile,
         userId: data.id || null,
       });
 
-      const onboarded = !!data.name && !!data.phone_number && !!data.profile_image_url;
+      const onboarded = !!data.name && !!data.email && !!data.profile_image_url;
       setIsOnboarded(onboarded);
       setProfileLoading(false);
       console.log("Profile updated in state:", profileData, "Onboarded:", onboarded);
@@ -146,7 +145,7 @@ export const AuthProvider = ({ children }) => {
           setAuthUser(session.user);
           setIsVerified(true);
           console.log("AuthUser after sign-in:", session.user.id);
-          const ensuredUser = await createUserIfNotExists(session.user.id, session.user.phone);
+          const ensuredUser = await createUserIfNotExists(session.user.id, session.user.email);
           if (!ensuredUser) {
             resetProfileData();
             return;
@@ -172,7 +171,7 @@ export const AuthProvider = ({ children }) => {
       }
     }
 
-    const phone_number = newProfileData.phone_number || profileData.phoneNumber || "";
+    const email = newProfileData.email || profileData.email || "";
     const name = newProfileData.name || profileData.name || "";
     const profile_image_url = newProfileData.profile_image_url || profileData.profileImage || "";
 
@@ -181,11 +180,11 @@ export const AuthProvider = ({ children }) => {
       .from("users")
       .upsert({
         id: profileData.userId || authUser.id,
-        phone_number,
+        email,
         name,
         profile_image_url,
       })
-      .select("id, phone_number, name, profile_image_url")
+      .select("id, email, name, profile_image_url")
       .single();
 
     console.log("updateUserProfile(): Upsert result:", { data, error });
@@ -195,13 +194,13 @@ export const AuthProvider = ({ children }) => {
     }
 
     setProfileData({
-      phoneNumber: data.phone_number,
+      email: data.email,
       name: data.name,
       profileImage: data.profile_image_url,
       userId: data.id,
     });
 
-    const onboarded = !!data.name && !!data.phone_number && !!data.profile_image_url;
+    const onboarded = !!data.name && !!data.email && !!data.profile_image_url;
     setIsOnboarded(onboarded);
 
     console.log("Profile updated successfully:", data, "Onboarded:", onboarded);

@@ -1,23 +1,15 @@
-import React, { useContext, useState } from 'react';
+import React, { useState } from 'react';
 import { colorScheme } from '../config/Colors';
-import { AuthContext } from '../contexts/AuthContext';
 import addIcon from '../assets/add.svg';
 
-function AddButton({ onOpenCouponForm, onOpenOnboarding }) {
-  const { isVerified, isOnboarded } = useContext(AuthContext);
+function AddButton({ onOpenCouponForm }) {
   const [isHovered, setIsHovered] = useState(false);
 
   const handleClick = () => {
-    if (isVerified && isOnboarded) {
-      if (onOpenCouponForm) {
-        onOpenCouponForm(null); // Pass null to create a new coupon
-      } else {
-        console.error('onOpenCouponForm is not defined');
-      }
-    } else if (onOpenOnboarding) {
-      onOpenOnboarding();
+    if (onOpenCouponForm) {
+      onOpenCouponForm(null); // Pass null to create a new coupon
     } else {
-      console.error('onOpenOnboarding is not defined');
+      console.error('onOpenCouponForm is not defined');
     }
   };
 
@@ -26,17 +18,18 @@ function AddButton({ onOpenCouponForm, onOpenOnboarding }) {
       onClick={handleClick}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
-      className="absolute rounded-full shadow-lg flex items-center justify-center hover:scale-110 transition-transform z-20"
+      className="absolute rounded-full shadow-lg flex items-center justify-center hover:scale-110 hover:brightness-150 transition-transform z-20"
       style={{
         aspectRatio: '1',
         height: '10%',
         bottom: '6%',
         right: '6%',
-        backgroundColor: isHovered
-          ? colorScheme.primary.hover
-          : colorScheme.primary.background,
+        backgroundColor: isHovered 
+          ? colorScheme.primary.background   // minorColor
+          : colorScheme.primary.background, // mainColor
         color: colorScheme.primary.text,
         transition: 'background-color 0.3s ease',
+        cursor: 'pointer',
       }}
       aria-label="Make a Deal"
     >
@@ -45,8 +38,8 @@ function AddButton({ onOpenCouponForm, onOpenOnboarding }) {
         alt="Add"
         className="h-1/2 w-1/2"
         style={{
-          filter: isHovered ? 'brightness(1.2)' : 'brightness(1)',
-          transition: 'filter 0.3s ease',
+          // No additional filter needed here
+          transition: 'none',
         }}
       />
     </button>

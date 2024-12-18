@@ -1,4 +1,4 @@
-// CouponContext.js
+// contexts/CouponContext.js
 import React, { createContext, useState, useContext } from 'react';
 
 const CouponContext = createContext();
@@ -7,10 +7,11 @@ export const CouponProvider = ({ children }) => {
   const initialCouponData = {
     id: null,
     title: '',
-    background: require('../assets/background-1.svg').default,
-    expires: null, 
+    expires: null,
     profileImage: null,
-    isCustomBackground: false,
+    dealType: 'coupon',
+    name: '',          // Add name field
+    profilePhoto: '',  // Add profilePhoto field
   };
 
   const [couponData, setCouponData] = useState(initialCouponData);

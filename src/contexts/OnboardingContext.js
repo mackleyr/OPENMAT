@@ -1,4 +1,3 @@
-// src/contexts/OnboardingContext.js
 import React, { createContext, useContext, useState, useCallback } from 'react';
 import { supabase } from '../supabaseClient';
 import { AuthContext } from './AuthContext';
@@ -8,7 +7,7 @@ export const OnboardingContext = createContext();
 const OnboardingProvider = ({ children }) => {
   const { authUser, fetchSession } = useContext(AuthContext);
 
-  const [phoneNumber, setPhoneNumber] = useState('');
+  const [email, setEmail] = useState('');
   const [name, setName] = useState('');
   const [photo, setPhoto] = useState('');
   const [isOnboarded, setIsOnboarded] = useState(false);
@@ -23,7 +22,7 @@ const OnboardingProvider = ({ children }) => {
     setProfileLoading(true);
     const { data, error } = await supabase
       .from('users')
-      .select('phone_number, name, profile_image_url')
+      .select('email, name, profile_image_url')
       .eq('id', userId)
       .maybeSingle();
 
@@ -34,10 +33,10 @@ const OnboardingProvider = ({ children }) => {
     }
 
     if (data) {
-      setPhoneNumber(data.phone_number || '');
+      setEmail(data.email || '');
       setName(data.name || '');
       setPhoto(data.profile_image_url || '');
-      const complete = !!data.phone_number && !!data.name && !!data.profile_image_url;
+      const complete = !!data.email && !!data.name && !!data.profile_image_url;
       setIsOnboarded(complete);
     } else {
       console.warn("OnboardingContext: No user record found for:", userId);
@@ -51,7 +50,7 @@ const OnboardingProvider = ({ children }) => {
     if (authUser?.id) {
       loadUserProfile(authUser.id);
     } else {
-      setPhoneNumber('');
+      setEmail('');
       setName('');
       setPhoto('');
       setIsOnboarded(false);
@@ -65,16 +64,16 @@ const OnboardingProvider = ({ children }) => {
       return;
     }
 
-    console.log("OnboardingContext: Updating user profile in DB with:", { phoneNumber, name, photo });
+    console.log("OnboardingContext: Updating user profile in DB with:", { email, name, photo });
     const { data, error } = await supabase
       .from('users')
       .upsert({
         id: authUser.id,
-        phone_number: phoneNumber,
-        name: name,
+        email,
+        name,
         profile_image_url: photo
       })
-      .select('id, phone_number, name, profile_image_url')
+      .select('id, email, name, profile_image_url')
       .single();
 
     if (error) {
@@ -82,14 +81,14 @@ const OnboardingProvider = ({ children }) => {
       throw error;
     }
 
-    const complete = !!data.phone_number && !!data.name && !!data.profile_image_url;
+    const complete = !!data.email && !!data.name && !!data.profile_image_url;
     setIsOnboarded(complete);
     console.log("OnboardingContext: Profile updated successfully. Onboarded:", complete);
   };
 
   const completeOnboarding = async () => {
     console.log("OnboardingContext: completeOnboarding() started");
-    if (!phoneNumber || !name || !photo) {
+    if (!email || !name || !photo) {
       console.warn("OnboardingContext: Missing data. Cannot complete onboarding.");
       return;
     }
@@ -112,8 +111,8 @@ const OnboardingProvider = ({ children }) => {
   return (
     <OnboardingContext.Provider
       value={{
-        phoneNumber,
-        setPhoneNumber,
+        email,
+        setEmail,
         name,
         setName,
         photo,

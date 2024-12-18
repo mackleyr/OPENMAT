@@ -1,56 +1,78 @@
-// src/components/Footer.js
-
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { mainColor } from '../config/Colors';
 import Text from '../config/Text';
+import logo2 from '../assets/logo-2.svg';
 
 function Footer() {
+  const [footerSize, setFooterSize] = useState({ width: 0, height: 0 });
+
+  useEffect(() => {
+    const footerElement = document.getElementById('footer-container');
+    if (!footerElement) return;
+
+    const resizeObserver = new ResizeObserver((entries) => {
+      for (let entry of entries) {
+        setFooterSize({
+          width: entry.contentRect.width,
+          height: entry.contentRect.height,
+        });
+      }
+    });
+
+    resizeObserver.observe(footerElement);
+
+    return () => {
+      resizeObserver.unobserve(footerElement);
+    };
+  }, []);
+
+  // Similar scaling logic as coupon side: 10% of container width
+  const dynamicSize = footerSize.width * 0.10;
+
   return (
     <div
-      className="w-full flex-shrink-0 bg-white border-t"
+      id="footer-container"
+      className="w-full flex-shrink-0 bg-white border-t flex items-center justify-between px-[5%] py-[2.5%]"
       style={{
-        height: '6%',
-        padding: '5%',
         boxSizing: 'border-box',
       }}
     >
-      <div className="flex justify-between items-center h-full">
-        {/* First Block - Left Aligned */}
-        <Text type="small" role="tertiary" className="text-left">
-          @ICEPOPCLUB 2024
-        </Text>
+      {/* Dynamically scaled logo similar to coupon scaling */}
+      <img
+        src={logo2}
+        alt="Logo"
+        style={{ height: dynamicSize || 'auto', width: 'auto', objectFit: 'contain' }}
+      />
 
-        {/* Second and Third Blocks - Grouped and Right Aligned */}
-        <div className="flex space-x-[5%]">
-          <a
-            href="https://wa.me/your-whatsapp-number"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center justify-center"
+      <div className="flex space-x-4">
+        <a
+          href="https://wa.me/your-whatsapp-number"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center justify-center"
+        >
+          <Text
+            type="small"
+            role="tertiary"
+            isClickable
+            className="hover:underline hover:font-semibold text-center"
           >
-            <Text
-              type="small"
-              role="tertiary"
-              isClickable
-              className="hover:underline hover:font-semibold text-center"
-            >
-              Message
-            </Text>
-          </a>
-          <a
-            href="/readme"
-            className="flex items-center justify-center"
+            Message
+          </Text>
+        </a>
+        <a
+          href="/readme"
+          className="flex items-center justify-center"
+        >
+          <Text
+            type="small"
+            role="tertiary"
+            isClickable
+            className="hover:underline hover:font-semibold text-center"
           >
-            <Text
-              type="small"
-              role="tertiary"
-              isClickable
-              className="hover:underline hover:font-semibold text-center"
-            >
-              README
-            </Text>
-          </a>
-        </div>
+            README
+          </Text>
+        </a>
       </div>
     </div>
   );

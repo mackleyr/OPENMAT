@@ -1,58 +1,39 @@
-import React, { useEffect, useState, useContext } from 'react';
+import React, { useEffect, useState } from 'react';
 import Profile from './Profile';
 import Text from '../config/Text';
 import { colorScheme } from '../config/Colors';
-import { AuthContext } from '../contexts/AuthContext';
-import editIcon from '../assets/edit.svg';
-import shareIcon from '../assets/share.svg';
-import checkIcon from '../assets/check.svg';
-import Button from './Button';
 
 function ProfileSheet({ onClose }) {
   const [isVisible, setIsVisible] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [isShareClicked, setIsShareClicked] = useState(false);
-  const { profileData, updateUserProfile, refreshProfile, deleteUser } = useContext(AuthContext);
 
-  // Local state for editing
-  const [name, setName] = useState(profileData?.name || '');
-  const [profileImage, setProfileImage] = useState(profileData?.profileImage || '');
+  // Just local states for name and image
+  const [name, setName] = useState('Anonymous');
+  const [profileImage, setProfileImage] = useState('');
 
   useEffect(() => {
     setIsVisible(true);
   }, []);
 
-  const handleClose = async () => {
+  const handleClose = () => {
     setIsVisible(false);
-    setTimeout(async () => {
-      await refreshProfile(); // Ensure latest profile data is fetched
+    setTimeout(() => {
       onClose();
     }, 300);
   };
 
-  const handleEditToggle = async () => {
-    if (isEditing) {
-      // Save profile changes (no bio or score anymore)
-      await updateUserProfile({ name, profile_image_url: profileImage });
-    }
-    setIsEditing(!isEditing); // Toggle editing mode
+  const handleEditToggle = () => {
+    // Normally, you'd update user profile here, but we've removed all user logic.
+    setIsEditing(!isEditing);
   };
 
   const handleShareProfile = () => {
     if (!isEditing) {
-      if (navigator.share) {
-        setIsShareClicked(true);
-        setTimeout(() => setIsShareClicked(false), 5000);
-        navigator
-          .share({
-            title: 'See my deals!',
-            text: `${name}'s profile on Friends & Family.`,
-            url: `https://and.deals/${name}/[uniqueid]`, // Example share URL
-          })
-          .catch((error) => console.error('Error sharing profile:', error));
-      } else {
-        alert('Sharing not supported on this browser.');
-      }
+      // Simulate share logic or remove if unnecessary.
+      setIsShareClicked(true);
+      setTimeout(() => setIsShareClicked(false), 5000);
+      alert('Profile shared (simulated).');
     }
   };
 
@@ -134,38 +115,22 @@ function ProfileSheet({ onClose }) {
 
           {/* Action Buttons */}
           <div className="grid grid-cols-2 gap-4 w-full">
-            {/* Share Profile Button */}
-            <Button
-              label={isShareClicked ? 'Shared!' : 'Share Profile'}
-              type="secondary"
+            <button
               onClick={handleShareProfile}
-              className="text-lg md:text-xl w-full"
-            />
+              className="py-2 px-4 rounded-lg bg-gray-600 text-white text-lg md:text-xl w-full"
+            >
+              {isShareClicked ? 'Shared!' : 'Share Profile'}
+            </button>
 
-            {/* Edit Profile Button */}
-            <Button
-              label={isEditing ? 'Save' : 'Edit Profile'}
-              type="secondary"
+            <button
               onClick={handleEditToggle}
-              className="text-lg md:text-xl w-full"
-            />
+              className="py-2 px-4 rounded-lg bg-gray-600 text-white text-lg md:text-xl w-full"
+            >
+              {isEditing ? 'Save' : 'Edit Profile'}
+            </button>
           </div>
           
-          <p
-            onClick={async () => {
-              if (window.confirm("Are you sure? All of your deals will disappear. This action cannot be undone.")) {
-                try {
-                  await deleteUser();
-                  onClose();
-                } catch (error) {
-                  console.error("Error deleting user:", error.message);
-                }
-              }
-            }}
-            className="text-md text-primary hover:text-gray-300 cursor-pointer mt-4 text-center"
-          >
-            Delete Account
-          </p>
+          {/* Remove Delete Account logic since no auth is present */}
         </div>
       </div>
     </>

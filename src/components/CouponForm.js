@@ -1,276 +1,174 @@
-import React, { useEffect, useContext, useState } from 'react';
-import { supabase } from '../supabaseClient';
-import FormHeader from './FormHeader';
-import Coupon from './Coupon';
-import { useCoupon } from '../contexts/CouponContext';
+import React, { useEffect, useState } from 'react';
 import { useActivity } from '../contexts/ActivityContext';
-import { useAuth } from '../contexts/AuthContext';
+import { useCoupon } from '../contexts/CouponContext';
+import Coupon from './Coupon';
 import Text from '../config/Text';
+import Button from './Button';
 
 function CouponForm({ onClose, onSave, initialData }) {
   const { setCouponData } = useCoupon();
   const { addActivity, resetActivitiesForDeal } = useActivity();
-  const { profileData, authUser, isOnboarded, profileLoading } = useAuth();
 
   const initialFormState = initialData || {
     id: null,
-    title: '',
-    background: require('../assets/background.svg').default,
     expiresHours: null,
-    isCustomBackground: false,
-    profileImage: null
+    dealType: 'coupon', // Default to "coupon"
+    dealValue: '',
+    dealDescription: '',
+    dealTitle: '',
+    dealImage: null,
   };
 
   const [formState, setFormState] = useState(initialFormState);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isUploading, setIsUploading] = useState(false);
-  const isEditing = !!formState.id;
-
-  const isUserDataReady = !!(
-    authUser && authUser.id && profileData && profileData.name && isOnboarded && !profileLoading
-  );
-
-  const isDoneEnabled = !isSubmitting &&
-    !isUploading &&
-    !!formState.title &&
-    !!formState.background &&
-    isUserDataReady;
-
-  console.log("CouponForm: Checking readiness:", {
-    authUserId: authUser?.id,
-    profileName: profileData?.name,
-    isOnboarded,
-    profileLoading,
-    formTitle: formState.title,
-    formBackground: formState.background,
-    isUserDataReady,
-    isDoneEnabled
-  });
 
   useEffect(() => {
-    // If user is not onboarded, we should request onboarding via parent callback
-    if (authUser && authUser.id && !isOnboarded) {
-      console.log("CouponForm: User not onboarded. Redirecting to onboarding...");
-      // Instead of navigate(), rely on App.js controlled modal
-      // We can pass a prop from App.js to do this or just close form and show onboarding
-      onClose(); // Close coupon form to avoid confusion
-      alert("You must complete onboarding first.");
-      // App.js will handle showing OnboardingForm if needed, so just rely on parent behavior.
-    }
-  }, [authUser, isOnboarded, onClose]);
-
-  useEffect(() => {
-    console.log("CouponForm: Syncing formState to couponData:", formState);
+    // Synchronize couponData with formState, now including dealValue
     setCouponData((prev) => ({
       ...prev,
       id: formState.id,
-      title: formState.title,
-      background: formState.background,
-      isCustomBackground: formState.isCustomBackground,
-      profileImage: formState.profileImage,
-      expires: formState.expiresHours
+      title: formState.dealTitle,
+      expires: formState.expiresHours,
+      dealType: formState.dealType,
+      image: formState.dealImage || null,
+      value: formState.dealValue,
     }));
   }, [formState, setCouponData]);
 
-  const handleChange = (field, value) => {
-    setFormState((prev) => ({ ...prev, [field]: value }));
-  };
-
-  const handleImageUpload = async (e) => {
-    const file = e.target.files[0];
-    if (!file) {
-      alert("No file selected.");
-      return;
-    }
-
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) {
-      alert("You must be signed in to upload an image.");
-      return;
-    }
-
-    setIsUploading(true);
-
-    try {
-      const cleanedFileName = file.name.replace(/[^a-zA-Z0-9.\-_]/g, '_');
-      const uniqueFileName = `${crypto.randomUUID()}-${cleanedFileName}`;
-      console.log("Uploading image to:", uniqueFileName);
-
-      const { error: uploadError } = await supabase.storage
-        .from("deal-images")
-        .upload(uniqueFileName, file, { upsert: true });
-
-      if (uploadError) {
-        console.error("Upload error:", uploadError.message);
-        throw new Error("Failed to upload the image. Please try again.");
-      }
-
-      const { data: publicUrlData, error: publicUrlError } = await supabase.storage
-        .from("deal-images")
-        .getPublicUrl(uniqueFileName);
-
-      if (publicUrlError) {
-        console.error("Public URL error:", publicUrlError.message);
-        throw new Error("Failed to retrieve the public URL. Please try again.");
-      }
-
-      console.log("Image uploaded successfully. Public URL:", publicUrlData.publicUrl);
-      setFormState((prev) => ({
-        ...prev,
-        background: publicUrlData.publicUrl + `?t=${Date.now()}`,
-        isCustomBackground: true
-      }));
-    } catch (err) {
-      console.error("Image upload failed:", err.message);
-      alert(err.message);
-    } finally {
-      setIsUploading(false);
-    }
-  };
-
   const handleDone = async () => {
-    console.log("handleDone(): Checking form requirements.", {
-      title: formState.title,
-      background: formState.background,
-      isUserDataReady,
-      authUserId: authUser?.id,
-      isSubmitting,
-      isDoneEnabled
-    });
-
-    if (!formState.title || !formState.background) {
-      alert('Please provide a title and background image.');
-      return;
-    }
-
-    if (!isUserDataReady) {
-      alert('User data not ready. Complete onboarding or check your profile.');
-      return;
-    }
-
-    setIsSubmitting(true);
-
     try {
-      let expires_at = null;
-      if (formState.expiresHours) {
-        expires_at = new Date(Date.now() + parseInt(formState.expiresHours, 10) * 3600000).toISOString();
-      }
-
-      const dealData = {
-        creator_id: authUser.id,
-        title: formState.title,
-        background: formState.background,
-        expires_at,
-        creatorName: profileData.name,
-      };
-
-      console.log("handleDone(): Creating deal with data:", dealData);
-      const { createDeal } = await import('../services/dealsService');
-      const deal = await createDeal(dealData);
-
-      if (!deal || !deal.id) {
-        throw new Error("No deal returned. Please check createDeal function.");
-      }
-
-      console.log("handleDone(): Deal created:", deal);
-
-      if (!isEditing) {
-        console.log("handleDone(): Logging activity for new deal.");
-        resetActivitiesForDeal(deal.id);
-        addActivity({
-          name: profileData.name,
-          action: 'made deal',
-          recency: 'Just now',
-          profileImage: profileData.profileImage,
-          timestamp: new Date(),
-          dealId: deal.id,
-          userId: authUser.id,
-        });
-      }
-
-      alert(`Deal created! Share your link: ${deal.share_link}`);
-      onSave(deal);
-    } catch (error) {
-      console.error('Error creating deal:', error.message);
-      alert('Failed to create the deal. Please try again. ' + error.message);
-    } finally {
-      setIsSubmitting(false);
       onClose();
+    } catch (error) {
+      console.error('Error:', error.message);
+      alert('Failed. ' + error.message);
     }
   };
+
+  const handleTypeChange = (e) =>
+    setFormState((prev) => ({ ...prev, dealType: e.target.value }));
+  const handleValueChange = (e) =>
+    setFormState((prev) => ({ ...prev, dealValue: e.target.value }));
+  const handleDescriptionChange = (e) =>
+    setFormState((prev) => ({ ...prev, dealDescription: e.target.value }));
+  const handleDealTitleChange = (e) =>
+    setFormState((prev) => ({ ...prev, dealTitle: e.target.value }));
+
+  const handleImageUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      setFormState((prev) => ({ ...prev, dealImage: reader.result }));
+    };
+    reader.readAsDataURL(file);
+  };
+
+  let dealSymbol = '';
+  if (formState.dealType === 'gift card') dealSymbol = '$';
+  else if (formState.dealType === 'coupon') dealSymbol = '%';
 
   return (
     <div
-      className="w-full h-full flex flex-col items-center bg-white"
+      className="relative w-full h-full flex flex-col items-center"
       style={{
-        maxWidth: '100%',
-        maxHeight: '85vh',
+        backgroundColor: 'transparent',
         boxShadow: '0 4px 10px rgba(0, 0, 0, 0.2)',
+        padding: '4%',
       }}
     >
-      <FormHeader
-        title={isEditing ? 'Edit Coupon' : 'Create Coupon'}
-        onBackClick={onClose}
-        onDoneClick={handleDone}
-        isDoneEnabled={isDoneEnabled}
-      />
+      {/* Scrollable Content Area */}
+      <div className="flex flex-col w-full flex-grow items-start overflow-auto"> 
+        {/* Changed to items-start and removed centering classes */}
+        <Coupon isInForm={true} couponData={formState} />
 
-      <Coupon isInForm={true} couponData={formState} />
+        <div
+          className="flex flex-col bg-white rounded-lg overflow-hidden px-[5%] box-border w-full max-w-lg mt-4"
+          style={{ height: 'auto' }}
+        >
+          <div className="flex justify-between items-center mb-4 border-b border-gray-300 pb-4">
+            <Text type="large" role="primary" className="text-left">
+              Create
+            </Text>
+          </div>
 
-      <div className="w-full max-w-lg mt-4 px-4">
-        <form className="space-y-4">
-          <div className="flex items-center pb-2">
-            <Text type="small" role="secondary" className="w-1/3">
+          {/* Using a grid for form layout: 2 columns (label | input) */}
+          <div className="grid grid-cols-[auto_1fr] gap-y-4 gap-x-4 text-left">
+
+            {/* Type */}
+            <Text type="medium" role="tertiary">
+              Type
+            </Text>
+            <select
+              value={formState.dealType}
+              onChange={handleTypeChange}
+              className="border border-gray-300 rounded-md px-2 py-1 text-black bg-white focus:ring-1 focus:ring-[#1A1A1A] focus:outline-none"
+            >
+              <option value="coupon">Coupon</option>
+              <option value="gift card">Gift Card</option>
+            </select>
+
+            {/* Value */}
+            <Text type="medium" role="tertiary">
+              Value
+            </Text>
+            <div className="flex items-center">
+              {formState.dealType === 'gift card' && (
+                <span className="text-black mr-2 font-medium">$</span>
+              )}
+              <input
+                type="text"
+                placeholder={
+                  formState.dealType === 'gift card' ? 'Dollars' : 'Percent'
+                }
+                value={formState.dealValue}
+                onChange={handleValueChange}
+                className="border border-gray-300 rounded-md px-2 py-1 text-black focus:ring-1 focus:ring-[#1A1A1A] focus:outline-none flex-1"
+              />
+              {formState.dealType === 'coupon' && (
+                <span className="text-black ml-2 font-medium">{dealSymbol}</span>
+              )}
+            </div>
+
+            {/* Title */}
+            <Text type="medium" role="tertiary">
               Title
             </Text>
             <input
               type="text"
-              placeholder="Make a deal"
-              value={formState.title}
-              onChange={(e) => handleChange('title', e.target.value)}
-              className="flex-1 border border-gray-300 rounded-md px-2 py-1 text-sm focus:ring-1 focus:ring-main focus:outline-none"
-              disabled={isSubmitting || isUploading}
+              placeholder="Add a title"
+              value={formState.dealTitle}
+              onChange={handleDealTitleChange}
+              className="border border-gray-300 rounded-md px-2 py-1 text-black focus:ring-1 focus:ring-[#1A1A1A] focus:outline-none"
+            />
+
+            {/* Image Upload */}
+            <Text type="medium" role="tertiary">
+              Image
+            </Text>
+            <input
+              type="file"
+              accept="image/*"
+              onChange={handleImageUpload}
+              className="text-black focus:ring-1 focus:ring-[#1A1A1A] focus:outline-none"
             />
           </div>
+        </div>
+      </div>
 
-          <div className="flex items-center pb-2">
-            <Text type="small" role="secondary" className="w-1/3">
-              Background
-            </Text>
-            <div className="flex-1 flex items-center space-x-2">
-              <label
-                className={`py-2 px-4 rounded-lg font-medium text-sm cursor-pointer ${isUploading ? 'bg-gray-400' : 'bg-blue-500'} text-white hover:bg-blue-600 focus:ring-2 focus:ring-blue-300 transition-colors inline-flex justify-center items-center`}
-              >
-                {isUploading ? 'Uploading...' : 'Add File'}
-                <input
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={handleImageUpload}
-                  disabled={isSubmitting || isUploading}
-                />
-              </label>
-              {isUploading && <span className="text-sm text-gray-600">Uploading, please wait...</span>}
-            </div>
-          </div>
-
-          <div className="flex items-center pb-2">
-            <Text type="small" role="secondary" className="w-1/3">
-              Expires (hours)
-            </Text>
-            <span>x</span>
-            <div className="flex-1 flex items-center space-x-2">
-              <input
-                type="number"
-                placeholder="24"
-                value={formState.expiresHours || ''}
-                onChange={(e) => handleChange('expiresHours', e.target.value)}
-                className="w-[40%] text-sm border border-gray-300 rounded-md px-2 py-1 focus:ring-1 focus:ring-main focus:outline-none"
-                disabled={isSubmitting || isUploading}
-              />
-            </div>
-          </div>
-        </form>
+      {/* Bottom Button */}
+      <div className="w-full max-w-md mt-auto">
+        <Button
+          onClick={handleDone}
+          type="secondary"
+          className="w-full rounded-full font-semibold transition-all duration-150"
+          style={{
+            padding: 'clamp(1.25rem, 2.5%, 3rem)',
+            fontSize: 'clamp(1.25rem, 2vw, 3rem)',
+            textAlign: 'center',
+          }}
+        >
+          Complete
+        </Button>
       </div>
     </div>
   );
