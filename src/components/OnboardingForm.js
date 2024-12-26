@@ -4,10 +4,10 @@ import Progress from './Progress';
 import Text from '../config/Text';
 import Profile from './Profile';
 import { mainColor, textColors } from '../config/Colors';
-import { useCoupon } from '../contexts/CouponContext';
+import { useCard } from '../contexts/CardContext';
 
 function OnboardingForm({ onComplete }) {
-  const { setCouponData } = useCoupon(); // Access coupon context
+  const { setCardData } = useCard(); // Access card context
   const [currentStep, setCurrentStep] = useState(1);
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
@@ -15,7 +15,7 @@ function OnboardingForm({ onComplete }) {
   const [isUploading, setIsUploading] = useState(false);
 
   const nameValidation = (value) => /^[A-Za-z ]{2,}$/.test(value.trim());
-  
+
   const formatPhone = (value) => {
     const digits = value.replace(/\D/g, '');
     const clipped = digits.slice(0, 10);
@@ -31,23 +31,23 @@ function OnboardingForm({ onComplete }) {
 
   const steps = [
     { 
-      title: "What's your Name?", 
-      subtext: 'Your name appears on deals.', 
-      placeholder: 'Name', 
-      inputType: 'text', 
-      validation: nameValidation
+      title: "What's your Name?",
+      subtext: 'Your name appears on deals.',
+      placeholder: 'Name',
+      inputType: 'text',
+      validation: nameValidation,
     },
     { 
-      title: "What's your Phone Number?", 
-      subtext: 'Your number unlocks deals.', 
-      placeholder: '(123) 456-7890', 
-      inputType: 'phone', 
-      validation: phoneValidation 
+      title: "What's your Phone Number?",
+      subtext: 'Your number unlocks deals.',
+      placeholder: '(123) 456-7890',
+      inputType: 'phone',
+      validation: phoneValidation,
     },
     { 
-      title: 'Add your Profile Photo', 
-      subtext: 'Your photo appears on deals.', 
-      inputType: 'photo' 
+      title: 'Add your Profile Photo',
+      subtext: 'Your photo appears on deals.',
+      inputType: 'photo',
     },
   ];
 
@@ -82,20 +82,24 @@ function OnboardingForm({ onComplete }) {
       // Completed all steps
       const cleanName = name.trim();
       const cleanPhoneDigits = phone.replace(/\D/g, '');
+
       const userData = {
         name: cleanName,
         phone: cleanPhoneDigits,
         profilePhoto,
       };
 
-      // Store userData in couponContext
-      setCouponData((prev) => ({
+      // Merge user name + photo into context
+      setCardData((prev) => ({
         ...prev,
         name: userData.name,
-        profilePhoto: userData.profilePhoto
+        profilePhoto: userData.profilePhoto,
       }));
 
-      onComplete(userData);
+      // Let parent know
+      if (onComplete) {
+        onComplete(userData);
+      }
     }
   };
 
@@ -111,12 +115,18 @@ function OnboardingForm({ onComplete }) {
   };
 
   return (
-    <div className="w-full h-full flex flex-col items-center py-[7.5%]" style={{ backgroundColor: mainColor }}>
+    <div
+      className="w-full h-full flex flex-col items-center py-[7.5%]"
+      style={{ backgroundColor: mainColor }}
+    >
       <div className="w-full">
         <Progress currentStep={currentStep} totalSteps={steps.length} />
       </div>
+
       <div className="flex flex-col items-center justify-center flex-1 w-full max-w-lg">
-        <Text type="large" role="white" className="text-center">{currentStepData.title}</Text>
+        <Text type="large" role="white" className="text-center">
+          {currentStepData.title}
+        </Text>
         {currentStepData.subtext && (
           <Text type="small" role="white" className="text-center py-[2.5%]">
             {currentStepData.subtext}
@@ -141,11 +151,20 @@ function OnboardingForm({ onComplete }) {
         {currentStepData.inputType === 'photo' && (
           <div
             className="flex items-center justify-center mt-4 relative cursor-pointer"
-            style={{ height: '20vh', width: '20vh', borderRadius: '50%', overflow: 'hidden' }}
+            style={{
+              height: '20vh',
+              width: '20vh',
+              borderRadius: '50%',
+              overflow: 'hidden',
+            }}
             onClick={() => document.getElementById('photoInput').click()}
           >
             {profilePhoto ? (
-              <img src={profilePhoto} alt="Profile" style={{ objectFit: 'cover', height: '100%', width: '100%' }} />
+              <img
+                src={profilePhoto}
+                alt="Profile"
+                style={{ objectFit: 'cover', height: '100%', width: '100%' }}
+              />
             ) : (
               <Profile size={window.innerHeight / 4} src={profilePhoto} />
             )}
@@ -167,8 +186,14 @@ function OnboardingForm({ onComplete }) {
             disabled={!isValid() || isUploading}
             className="w-full rounded-full font-semibold transition-all duration-150"
             style={{
-              backgroundColor: isValid() && !isUploading ? textColors.white : 'rgba(255, 255, 255, 0.2)',
-              color: isValid() && !isUploading ? textColors.primary : 'rgba(255, 255, 255, 0.2)',
+              backgroundColor:
+                isValid() && !isUploading
+                  ? textColors.white
+                  : 'rgba(255, 255, 255, 0.2)',
+              color:
+                isValid() && !isUploading
+                  ? textColors.primary
+                  : 'rgba(255, 255, 255, 0.2)',
               padding: 'clamp(1.25rem, 2.5%, 3rem)',
               fontSize: 'clamp(1.25rem, 2vw, 3rem)',
               textAlign: 'center',

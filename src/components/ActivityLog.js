@@ -1,14 +1,15 @@
-import React, { useEffect, useState } from 'react';
-import { useActivity } from '../contexts/ActivityContext';
-import { useCoupon } from '../contexts/CouponContext';
-import Profile from './Profile';
-import defaultProfile from '../assets/profile.svg';
-import Text from '../config/Text';
-import { textColors } from '../config/Colors'; // Import textColors
+// ActivityLog.jsx
+import React, { useEffect, useState } from "react";
+import { useActivity } from "../contexts/ActivityContext";
+import { useCard } from "../contexts/CardContext";
+import Profile from "./Profile";
+import defaultProfile from "../assets/profile.svg";
+import Text from "../config/Text";
+import { textColors } from "../config/Colors"; // Import textColors
 
 function ActivityLog({ onProfileClick, dealId, userId }) {
   const { getActivitiesByDealId, getActivitiesByUser, activities } = useActivity();
-  const { couponData } = useCoupon();
+  const { cardData } = useCard();
   const [filteredActivities, setFilteredActivities] = useState([]);
 
   useEffect(() => {
@@ -25,7 +26,7 @@ function ActivityLog({ onProfileClick, dealId, userId }) {
     <div
       className="flex flex-col flex-1 bg-gray-50 rounded-lg overflow-hidden px-[5%] py-[5%] box-border"
       style={{
-        height: '100%', // Stretch to full available height
+        height: "100%", // Stretch to full available height
       }}
     >
       {/* Header */}
@@ -54,13 +55,13 @@ function ActivityLog({ onProfileClick, dealId, userId }) {
                   <span
                     onClick={onProfileClick}
                     style={{
-                      cursor: 'pointer',
+                      cursor: "pointer",
                       color: textColors.primary,
                     }}
                   >
                     {activity.name}
-                  </span>{' '}
-                  {activity.action}{' '}
+                  </span>{" "}
+                  {activity.action}{" "}
                   <span style={{ color: textColors.tertiary }}>
                     {activity.recency}
                   </span>

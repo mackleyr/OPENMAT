@@ -94,7 +94,7 @@ const OnboardingProvider = ({ children }) => {
     }
 
     await updateUserProfileInDB();
-    await fetchSession(); 
+    await fetchSession();
     await loadUserProfile(authUser.id);
     console.log("OnboardingContext: Onboarding complete. isOnboarded:", isOnboarded);
   };

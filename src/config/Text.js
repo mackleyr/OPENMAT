@@ -10,18 +10,30 @@ const textStyles = {
   small: 'text-sm sm:text-md md:text-lg lg:text-1xl font-medium',
 };
 
-const Text = ({ type, role = 'primary', isClickable = false, children, className, ...props }) => {
+function Text({
+  type,
+  role = 'primary',
+  isClickable = false,
+  children,
+  className = '',
+  style = {},
+  ...props
+}) {
   const [isHovered, setIsHovered] = useState(false);
 
   const baseStyle = textStyles[type] || '';
-  const roleColor = isHovered && isClickable ? mainColor : textColors[role] || textColors.primary;
+  // If role is invalid, fall back to primary
+  const roleColor = isHovered && isClickable
+    ? mainColor // Hover color for clickable text
+    : textColors[role] || textColors.primary; // fallback black
 
   return (
     <span
-      className={`${baseStyle} ${className || ''}`}
+      className={`${baseStyle} ${className}`}
       style={{
-        color: roleColor,
-        cursor: isClickable ? 'pointer' : 'default', // Add pointer cursor for clickable text
+        color: roleColor, // Inline color => show up in DevTools
+        cursor: isClickable ? 'pointer' : 'default',
+        ...style,         // Spread any inline style override
       }}
       onMouseEnter={() => isClickable && setIsHovered(true)}
       onMouseLeave={() => isClickable && setIsHovered(false)}
@@ -30,7 +42,7 @@ const Text = ({ type, role = 'primary', isClickable = false, children, className
       {children}
     </span>
   );
-};
+}
 
 Text.propTypes = {
   type: PropTypes.oneOf(['large', 'medium', 'small']).isRequired,
@@ -38,6 +50,7 @@ Text.propTypes = {
   isClickable: PropTypes.bool,
   children: PropTypes.node.isRequired,
   className: PropTypes.string,
+  style: PropTypes.object,
 };
 
 export default Text;

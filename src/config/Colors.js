@@ -1,7 +1,7 @@
 // src/config/Colors.js
 
-// Define the main color for the app (primary color)
-export const mainColor = '#1A1A1A'; // Black
+// Define the main color for the app
+export const mainColor = '#1A1A1A'; // black
 export const minorColor = '#EBEBEB'; // White
 
 // Define the color scheme for different button and component states
@@ -37,14 +37,13 @@ export const colorScheme = {
 
 // Define text colors for different roles
 export const textColors = {
-  mainColor: mainColor, // Main color
-  primary: '#000000',   // Black text
-  secondary: '#6B7280', // Gray text
-  tertiary: '#D1D5DB',  // Light gray
-  white: '#FFFFFF', // White text
+  mainColor,         // e.g. '#1A1A1A'
+  primary: '#000000', 
+  secondary: '#6B7280', 
+  tertiary: '#D1D5DB', 
+  white: '#FFFFFF',   // <-- Critical key
 };
 
-// Export color scheme and text colors
 export default {
   mainColor,
   colorScheme,

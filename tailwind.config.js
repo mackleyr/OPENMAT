@@ -2,18 +2,21 @@
 const colors = require('tailwindcss/colors');
 
 module.exports = {
-  purge: ['./src/**/*.{js,jsx,ts,tsx}', './public/index.html'],
-  darkMode: false,
+  // Tailwind v3+ uses 'content' instead of 'purge'
+  content: [
+    './src/**/*.{js,jsx,ts,tsx}',
+    './public/index.html',
+  ],
   theme: {
     extend: {
       colors: {
-        main: '#3182ce',       // Your main color
+        main: '#3182ce',
         inactiveBg: colors.gray[100],
         inactiveText: colors.gray[300],
       },
       borderRadius: {
         xl: '1.25rem',
-        full: '9999px',        // Used for fully rounded corners
+        full: '9999px',
       },
     },
   },

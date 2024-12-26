@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import Profile from './Profile';
-import defaultProfile from '../assets/profile.svg';
-import Text from '../config/Text';
-import { textColors } from '../config/Colors';
+import Profile from '../Profile';
+import defaultProfile from '../../assets/profile.svg';
+import Text from '../../config/Text';
+import { textColors } from '../../config/Colors';
 
 function ProfileForm({ onClose, onSave }) {
   const [formData, setFormData] = useState({
