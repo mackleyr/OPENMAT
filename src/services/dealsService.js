@@ -19,7 +19,7 @@ export const createDeal = async ({
   });
 
   try {
-    // Force lowercase
+    // Force lowercase for the name
     const nameLower = (creatorName || '').toLowerCase().trim();
 
     const uniqueUrl = crypto.randomUUID();
@@ -66,12 +66,14 @@ export const updateDeal = async ({
   });
 
   try {
-    // Force lowercase
+    // Force lowercase for the name
     const nameLower = (creatorName || '').toLowerCase().trim();
 
     const uniqueUrl = crypto.randomUUID();
     const encodedName = encodeURIComponent(nameLower);
     const share_link = `https://and.deals/share/${encodedName}/${uniqueUrl}`;
+
+    console.log("updateDeal(): final share_link =>", share_link);
 
     const { data: updatedDeal, error: updateError } = await supabase
       .from('deals')
