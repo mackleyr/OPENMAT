@@ -2,8 +2,8 @@
 
 import React from "react";
 import { Routes, Route } from "react-router-dom";
-import ShareCard from "./pages/ShareCard"; // Our main/home page
-import ClaimCard from "./pages/ClaimCard"; // The share link page
+import ShareCard from "./pages/ShareCard";
+import ClaimCard from "./pages/ClaimCard";
 
 function App() {
   return (

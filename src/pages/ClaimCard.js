@@ -15,7 +15,9 @@ import SaveCard from "../components/SaveCard";
 import "../index.css";
 
 function ClaimCard() {
+  // The URL pattern is /share/:creatorName/:dealId
   const { creatorName, dealId } = useParams();
+
   const [dealData, setDealData] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -25,34 +27,52 @@ function ClaimCard() {
   const [showSaveCard, setShowSaveCard] = useState(false);
   const [userOnboarded, setUserOnboarded] = useState(false);
 
-  // For ActivityLog
+  // For ActivityLog, etc.
   const [currentDealId, setCurrentDealId] = useState(null);
 
-  // 1) Fetch the deal from Supabase
   useEffect(() => {
     const fetchDeal = async () => {
       try {
+        // LOG #1: Show what we got from React Router
+        console.log("[ClaimCard] useParams =>", { creatorName, dealId });
+
+        // 1) Force to lowercase
+        const lowerName = creatorName.toLowerCase().trim();
+        console.log("[ClaimCard] lowerName =>", lowerName);
+
+        // 2) Build the EXACT share link we store in DB
+        const shareURL = `https://and.deals/share/${lowerName}/${dealId}`;
+        console.log("[ClaimCard] shareURL =>", shareURL);
+
+        // 3) Make the Supabase query
+        console.log("[ClaimCard] Querying deals where share_link =", shareURL);
         const { data, error } = await supabase
           .from("deals")
           .select("*")
-          .eq("id", dealId)
+          .eq("share_link", shareURL)
           .single();
 
+        // LOG #2: Check the response
         if (error) {
-          console.error("Error fetching deal:", error);
+          console.error("[ClaimCard] Error fetching deal:", error);
           setDealData(null);
         } else {
+          console.log("[ClaimCard] Found deal =>", data);
           setDealData(data);
           setCurrentDealId(data.id);
         }
       } catch (err) {
-        console.error("Unexpected error fetching deal:", err);
+        console.error("[ClaimCard] Unexpected error in fetchDeal():", err);
       } finally {
         setLoading(false);
       }
     };
+
     fetchDeal();
-  }, [dealId]);
+  }, [creatorName, dealId]);
+
+  // LOG #3: Let’s see if we got anything
+  console.log("[ClaimCard] dealData =>", dealData);
 
   if (loading) {
     return <div className="text-center mt-8 text-white">Loading deal...</div>;
@@ -62,73 +82,67 @@ function ClaimCard() {
     return <div className="text-center mt-8 text-white">Deal not found.</div>;
   }
 
-  // 2) Handle “Claim” from the Buttons
+  // If user taps “Claim,” we show onboarding if not done,
+  // otherwise we show the "SaveCard" overlay.
   const handleClaim = () => {
+    console.log("[ClaimCard] handleClaim() called");
     if (!userOnboarded) {
+      console.log("[ClaimCard] user not onboarded -> show Onboarding");
       setShowOnboardingForm(true);
     } else {
-      // If onboarded, go to "SaveCard"
+      console.log("[ClaimCard] user already onboarded -> show SaveCard");
       setShowSaveCard(true);
     }
   };
 
-  // 3) Onboarding complete => now show SaveCard
   const handleOnboardingComplete = (userData) => {
-    console.log("ClaimCard => Onboarding complete for Parker:", userData);
+    console.log("[ClaimCard] Onboarding complete =>", userData);
     setUserOnboarded(true);
     setShowOnboardingForm(false);
-    // Show “SaveCard” overlay
     setShowSaveCard(true);
   };
 
-  // 4) Profile sheet if needed
   const handleProfileClick = () => {
+    console.log("[ClaimCard] handleProfileClick() -> showProfileSheet");
     setShowProfileSheet(true);
   };
 
   return (
     <div className="min-h-screen flex flex-col bg-black relative">
       <MainContainer className="relative flex flex-col justify-between h-full">
-        {/* Main Content */}
         <div className="flex-1 flex flex-col items-center justify-start w-full px-[4%] py-[4%]">
-          <h1 className="text-2xl text-white mb-4">Deal shared by {creatorName}</h1>
+          <h1 className="text-2xl text-white mb-4">
+            Deal shared by {creatorName}
+          </h1>
           <div className="w-full max-w-[600px] mx-auto">
-            {/* Render the card with the deal data */}
             <Card
               cardData={{
-                value: dealData.title, 
+                value: dealData.title,
                 title: dealData.title,
                 image: dealData.background,
               }}
-              // We might keep this card non-editable
               isInForm={false}
             />
-
-            {/* “Claim” + “Share” Buttons */}
-            {/* Custom "Claim" function*/}
             <Buttons mode="claim" onClaim={handleClaim} />
           </div>
         </div>
 
         <Footer />
-        <AddButton onOpenCardForm={() => {}} /> 
+        <AddButton onOpenCardForm={() => {}} />
         <ActivityLog dealId={currentDealId} onProfileClick={handleProfileClick} />
 
-        {/* Profile sheet overlay */}
         {showProfileSheet && (
           <div className="absolute inset-0 z-50">
             <ProfileSheet onClose={() => setShowProfileSheet(false)} />
           </div>
         )}
 
-        {/* Onboarding overlay*/}
         {showOnboardingForm && (
           <div className="absolute inset-0 z-50 bg-white">
             <OnboardingForm onComplete={handleOnboardingComplete} />
           </div>
         )}
 
-        {/* SaveCard overlay*/}
         {showSaveCard && (
           <div className="absolute inset-0 z-50 bg-white">
             <SaveCard onClose={() => setShowSaveCard(false)} dealData={dealData} />

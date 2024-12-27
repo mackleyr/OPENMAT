@@ -1,8 +1,10 @@
 // src/services/dealsService.js
+
 import { supabase } from '../supabaseClient';
 
+// CREATE DEAL
 export const createDeal = async ({
-  creator_id,    // must be a valid UUID
+  creator_id,
   title,
   background,
   expires_at,
@@ -17,15 +19,16 @@ export const createDeal = async ({
   });
 
   try {
+    // Force lowercase
+    const nameLower = (creatorName || '').toLowerCase().trim();
+
     const uniqueUrl = crypto.randomUUID();
-    const encodedName = encodeURIComponent(creatorName || '');
+    const encodedName = encodeURIComponent(nameLower);
     const share_link = `https://and.deals/share/${encodedName}/${uniqueUrl}`;
 
     const { data: deal, error: dealError } = await supabase
       .from('deals')
-      .insert([
-        { creator_id, title, background, expires_at, share_link }
-      ])
+      .insert([{ creator_id, title, background, expires_at, share_link }])
       .select('*')
       .single();
 
@@ -44,6 +47,7 @@ export const createDeal = async ({
   }
 };
 
+// UPDATE DEAL
 export const updateDeal = async ({
   dealId,
   title,
@@ -60,8 +64,11 @@ export const updateDeal = async ({
   });
 
   try {
+    // Force lowercase
+    const nameLower = (creatorName || '').toLowerCase().trim();
+
     const uniqueUrl = crypto.randomUUID();
-    const encodedName = encodeURIComponent(creatorName);
+    const encodedName = encodeURIComponent(nameLower);
     const share_link = `https://and.deals/share/${encodedName}/${uniqueUrl}`;
 
     const { data: updatedDeal, error: updateError } = await supabase
