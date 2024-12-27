@@ -26,6 +26,8 @@ export const createDeal = async ({
     const encodedName = encodeURIComponent(nameLower);
     const share_link = `https://and.deals/share/${encodedName}/${uniqueUrl}`;
 
+    console.log("createDeal(): final share_link =>", share_link);
+
     const { data: deal, error: dealError } = await supabase
       .from('deals')
       .insert([{ creator_id, title, background, expires_at, share_link }])
