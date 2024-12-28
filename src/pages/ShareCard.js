@@ -36,6 +36,10 @@ function ShareCard() {
       dealTitle: cardData.title,
       dealDescription: cardData.description || "",
       dealImage: cardData.image,
+
+      // Also pass name + profilePhoto into the form
+      name: cardData.name,
+      profilePhoto: cardData.profilePhoto,
     });
     setCurrentDealId(cardData?.id || null);
 
@@ -47,7 +51,7 @@ function ShareCard() {
     }
   };
 
-  // Called if user finishes the onboarding form
+  // Called if user finishes onboarding
   const handleOnboardingComplete = (userData) => {
     setUserOnboarded(true);
     setShowOnboardingForm(false);
@@ -58,7 +62,7 @@ function ShareCard() {
   const handleSaveCard = (formData) => {
     console.log("ShareCard -> handleSaveCard -> final form data:", formData);
 
-    // Merge form fields into global cardData
+    // Merge form fields into global cardData, including name/profilePhoto
     setCardData((prev) => ({
       ...prev,
       id: formData.id,
@@ -67,6 +71,10 @@ function ShareCard() {
       value: formData.dealValue,
       title: formData.dealTitle,
       description: formData.dealDescription,
+
+      // CRITICAL: store user name + photo from the form
+      name: formData.name,
+      profilePhoto: formData.profilePhoto,
     }));
 
     // Close the form
@@ -82,12 +90,11 @@ function ShareCard() {
       <MainContainer className="relative flex flex-col justify-between h-full">
         {/* Main Content */}
         <div className="flex-1 flex flex-col items-center justify-start w-full px-[4%] py-[4%]">
-          {/* "home screen"*/}
+          {/* The “home screen” card reading from context */}
           <Card onOpenCardForm={handleOpenCardForm} />
 
-          <div className="w-full max-w-[768px] py-[2%]">
-            {/* “Copy Link” + “Share” Buttons */}
-            <Buttons mode="share" /> 
+          <div className="w-full max-w-[768px]">
+            <Buttons mode="share" />
             <ActivityLog dealId={currentDealId} onProfileClick={handleProfileClick} />
           </div>
         </div>
