@@ -1,4 +1,4 @@
- // src/components/CardForm.jsx
+// src/components/CardForm.jsx
 
 import React, { useState } from 'react';
 import Card from './Card';
@@ -15,7 +15,7 @@ function CardForm({ onClose, onSave, initialData = {} }) {
   const [formState, setFormState] = useState({
     id: initialData.id ?? null,
     expiresHours: initialData.expiresHours ?? null,
-    dealValue: initialData.dealValue ?? '',
+    dealValue: initialData.dealValue ?? '',      // numeric string
     dealTitle: initialData.dealTitle ?? '',
     dealDescription: initialData.dealDescription ?? '',
     dealImage: initialData.dealImage ?? null,
@@ -25,7 +25,7 @@ function CardForm({ onClose, onSave, initialData = {} }) {
     profilePhoto: cardData?.profilePhoto || '',
   });
 
-  // Local handlers
+  // Handlers that update local state
   const handleValueChange = (e) => {
     setFormState((prev) => ({ ...prev, dealValue: e.target.value }));
   };
@@ -60,14 +60,13 @@ function CardForm({ onClose, onSave, initialData = {} }) {
         expires_at = now.toISOString();
       }
 
-      // 1) Upsert the user based on phoneNumber stored in cardData
+      // Upsert the user based on phoneNumber in cardData
       const phone = cardData?.phone;
       const userName = cardData?.name;
       const profilePhoto = cardData?.profilePhoto;
 
       if (!phone || !userName) {
         console.warn('[CardForm] No phone or userName in cardData. Possibly user skipped Onboarding?');
-        // handle gracefully or show error
       }
 
       console.log('[CardForm] => Upserting user with phone:', phone, 'name:', userName);
@@ -78,7 +77,7 @@ function CardForm({ onClose, onSave, initialData = {} }) {
       });
       console.log('[CardForm] => upserted user =>', user);
 
-      // 2) Create or update the deal
+      // Create or update the deal
       let dealResult;
       if (formState.id) {
         console.log('[CardForm]: Updating existing deal with ID:', formState.id);
@@ -88,15 +87,17 @@ function CardForm({ onClose, onSave, initialData = {} }) {
           background: formState.dealImage,
           expires_at,
           creatorName: formState.name,
+          deal_value: formState.dealValue,  // Pass numeric string
         });
       } else {
         console.log('[CardForm]: Creating new deal (no existing ID).');
         dealResult = await createDeal({
-          creator_id: user.id, // the critical fix: real UUID
+          creator_id: user.id,
           title: formState.dealTitle,
           background: formState.dealImage,
           expires_at,
           creatorName: formState.name,
+          deal_value: formState.dealValue,
         });
       }
 
@@ -108,6 +109,7 @@ function CardForm({ onClose, onSave, initialData = {} }) {
         ...formState,
         id: dealResult.id,
         share_link: dealResult.share_link,
+        value: formState.dealValue,   // keep in global context too
       }));
 
       // 4) Notify parent
@@ -124,6 +126,15 @@ function CardForm({ onClose, onSave, initialData = {} }) {
     }
   };
 
+  // For real-time preview, build a "previewCardData"
+  const previewCardData = {
+    value: formState.dealValue,
+    title: formState.dealTitle,
+    image: formState.dealImage,
+    creatorName: formState.name,
+    creatorPhoto: formState.profilePhoto,
+  };
+
   return (
     <div
       className="relative w-full h-full flex flex-col items-center"
@@ -135,8 +146,8 @@ function CardForm({ onClose, onSave, initialData = {} }) {
       }}
     >
       <div className="flex flex-col w-full flex-grow items-start">
-        {/* Live preview uses local formState */}
-        <Card isInForm={true} cardData={formState} />
+        {/* Live preview uses local formState -> previewCardData */}
+        <Card isInForm={true} cardData={previewCardData} />
 
         {/* Form fields */}
         <div

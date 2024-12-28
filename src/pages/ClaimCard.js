@@ -119,7 +119,7 @@ function ClaimCard() {
   // Here we reference "deal_value" for the numeric value field (if it exists).
   // If your DB uses "title" as the numeric, adjust accordingly.
   const cardDataForDisplay = {
-    value: dealData.deal_value || "",          // or dealData.title
+    value: dealData.deal_value || "",
     title: dealData.title || "",
     image: dealData.background || "",
     creatorName: creatorUser?.name || "",

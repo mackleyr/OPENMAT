@@ -30,8 +30,8 @@ function CardSide({ cardData }) {
 
   // Extract fields from cardData
   const {
-    value,          // e.g. "500" as a string or number
-    title,          // e.g. "My Gift"
+    value,          // "690""
+    title,          // "1 Session"
     image,          // background
     creatorName,    // "Athena"
     creatorPhoto,   // data:image/...
