@@ -110,10 +110,10 @@ function ClaimCard() {
   return (
     <div className="min-h-screen flex flex-col bg-black relative">
       <MainContainer className="relative flex flex-col justify-between h-full">
+        
+        {/* Main content (flex-1) */}
         <div className="flex-1 flex flex-col items-center justify-start w-full px-[4%] py-[4%]">
-          <h1 className="text-2xl text-white mb-4">
-            Deal shared by {creatorName}
-          </h1>
+          <h1 className="text-2xl text-white mb-4">Deal shared by {creatorName}</h1>
           <div className="w-full max-w-[600px] mx-auto">
             <Card
               cardData={{
@@ -124,25 +124,29 @@ function ClaimCard() {
               isInForm={false}
             />
             <Buttons mode="claim" onClaim={handleClaim} />
+            
+            {/* Keep ActivityLog in the main content flow */}
+            <ActivityLog dealId={currentDealId} onProfileClick={handleProfileClick} />
           </div>
         </div>
 
+        {/* Footer at the bottom */}
         <Footer />
-        <AddButton onOpenCardForm={() => {}} />
-        <ActivityLog dealId={currentDealId} onProfileClick={handleProfileClick} />
 
+        {/* Add button floating above footer */}
+        <AddButton onOpenCardForm={() => {}} />
+
+        {/* Overlays */}
         {showProfileSheet && (
           <div className="absolute inset-0 z-50">
             <ProfileSheet onClose={() => setShowProfileSheet(false)} />
           </div>
         )}
-
         {showOnboardingForm && (
           <div className="absolute inset-0 z-50 bg-white">
             <OnboardingForm onComplete={handleOnboardingComplete} />
           </div>
         )}
-
         {showSaveCard && (
           <div className="absolute inset-0 z-50 bg-white">
             <SaveCard onClose={() => setShowSaveCard(false)} dealData={dealData} />
@@ -150,6 +154,7 @@ function ClaimCard() {
         )}
       </MainContainer>
     </div>
+
   );
 }
 
