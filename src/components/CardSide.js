@@ -1,17 +1,16 @@
 // src/components/CardSide.jsx
 
 import React, { useEffect, useRef, useState } from 'react';
-import Profile from './Profile';        // or wherever your <Profile> is
-import Text from '../config/Text';      // <--- optional text component
+import Profile from './Profile';
+import Text from '../config/Text';
 import defaultProfile from '../assets/profile.svg';
 import defaultBackground from '../assets/background.svg';
-import logo from '../assets/logo.svg';  // your logo
+import logo from '../assets/logo.svg';
 
 function CardSide({ cardData }) {
   const containerRef = useRef(null);
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
 
-  // Monitor size for dynamic scaling
   useEffect(() => {
     if (!containerRef.current) return;
     const observer = new ResizeObserver(([entry]) => {
@@ -24,17 +23,16 @@ function CardSide({ cardData }) {
     return () => observer.disconnect();
   }, []);
 
-  // Scale factor for text sizing
   const baseWidth = 400;
   const scale = dimensions.width ? dimensions.width / baseWidth : 1;
 
-  // Extract fields from cardData
+  // We read data from cardData
   const {
-    value,          // "690""
-    title,          // "1 Session"
-    image,          // background
-    creatorName,    // "Athena"
-    creatorPhoto,   // data:image/...
+    value,
+    title,
+    image,
+    creatorName,
+    creatorPhoto,
   } = cardData || {};
 
   const profileImageSrc = creatorPhoto || defaultProfile;
@@ -47,7 +45,7 @@ function CardSide({ cardData }) {
       style={{
         borderRadius: '12px',
         padding: '5%',
-        boxShadow: '0px 6px 10px rgba(0, 0, 0, 0.4)',
+        boxShadow: '0px 6px 10px rgba(0,0,0,0.4)',
         background: `url(${backgroundSrc}) center/cover no-repeat`,
       }}
     >
@@ -73,7 +71,7 @@ function CardSide({ cardData }) {
         }}
       />
 
-      {/* PROFILE + NAME (top-left) */}
+      {/* Profile + name (top-left) */}
       <div
         className="absolute flex items-center"
         style={{
@@ -97,14 +95,14 @@ function CardSide({ cardData }) {
         )}
       </div>
 
-      {/* VALUE (top-right) */}
+      {/* Value (top-right) */}
       {value && (
         <div
           className="absolute flex flex-col items-center"
           style={{
             top: '5%',
             right: '5%',
-            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            backgroundColor: 'rgba(0,0,0,0.5)',
             padding: '4px 8px',
             borderRadius: '8px',
             textAlign: 'center',
@@ -130,7 +128,7 @@ function CardSide({ cardData }) {
         </div>
       )}
 
-      {/* TITLE (center) */}
+      {/* Title (center) */}
       {title && (
         <div
           className="absolute flex flex-col items-center text-center"
@@ -138,7 +136,7 @@ function CardSide({ cardData }) {
             top: '50%',
             left: '50%',
             transform: 'translate(-50%, -50%)',
-            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            backgroundColor: 'rgba(0,0,0,0.5)',
             padding: '8px 12px',
             borderRadius: '12px',
             maxWidth: '75%',
@@ -160,7 +158,7 @@ function CardSide({ cardData }) {
         </div>
       )}
 
-      {/* LOGO (bottom-right) */}
+      {/* Logo (bottom-right) */}
       <img
         src={logo}
         alt="Logo"

@@ -16,17 +16,17 @@ import "../index.css";
 function ShareCard() {
   const { cardData, setCardData } = useCard();
 
-  // Show/hide modals
+  // Modal flags
   const [showCardForm, setShowCardForm] = useState(false);
   const [showProfileSheet, setShowProfileSheet] = useState(false);
   const [showOnboardingForm, setShowOnboardingForm] = useState(false);
   const [userOnboarded, setUserOnboarded] = useState(false);
 
-  // Prefill data for the form
+  // Prefill data for form
   const [cardFormData, setCardFormData] = useState(null);
   const [currentDealId, setCurrentDealId] = useState(null);
 
-  // Called when user taps “Open” or the add button
+  // Called when user taps "Open" or plus button
   const handleOpenCardForm = () => {
     // Pre-fill from context
     setCardFormData({
@@ -36,14 +36,13 @@ function ShareCard() {
       dealTitle: cardData.title,
       dealDescription: cardData.description || "",
       dealImage: cardData.image,
-
-      // Also pass name + profilePhoto into the form
+      // Also pass name + profilePhoto
       name: cardData.name,
       profilePhoto: cardData.profilePhoto,
     });
     setCurrentDealId(cardData?.id || null);
 
-    // Onboarding check
+    // If not onboarded, show onboarding first
     if (!userOnboarded) {
       setShowOnboardingForm(true);
     } else {
@@ -51,18 +50,17 @@ function ShareCard() {
     }
   };
 
-  // Called if user finishes onboarding
+  // If user finishes onboarding
   const handleOnboardingComplete = (userData) => {
     setUserOnboarded(true);
     setShowOnboardingForm(false);
     setShowCardForm(true);
   };
 
-  // Called after user taps “Complete” in <CardForm>
+  // After user taps “Complete” in CardForm
   const handleSaveCard = (formData) => {
     console.log("ShareCard -> handleSaveCard -> final form data:", formData);
 
-    // Merge form fields into global cardData, including name/profilePhoto
     setCardData((prev) => ({
       ...prev,
       id: formData.id,
@@ -71,13 +69,10 @@ function ShareCard() {
       value: formData.dealValue,
       title: formData.dealTitle,
       description: formData.dealDescription,
-
-      // CRITICAL: store user name + photo from the form
       name: formData.name,
       profilePhoto: formData.profilePhoto,
     }));
 
-    // Close the form
     setShowCardForm(false);
   };
 
@@ -90,7 +85,7 @@ function ShareCard() {
       <MainContainer className="relative flex flex-col justify-between h-full">
         {/* Main Content */}
         <div className="flex-1 flex flex-col items-center justify-start w-full px-[4%] py-[4%]">
-          {/* The “home screen” card reading from context */}
+          {/* “home screen” card reading from context */}
           <Card onOpenCardForm={handleOpenCardForm} />
 
           <div className="w-full max-w-[768px]">
@@ -102,7 +97,7 @@ function ShareCard() {
         <Footer />
         <AddButton onOpenCardForm={handleOpenCardForm} />
 
-        {/* Onboarding form overlay */}
+        {/* Onboarding overlay */}
         {showOnboardingForm && (
           <div className="absolute inset-0 z-50 bg-white">
             <OnboardingForm onComplete={handleOnboardingComplete} />

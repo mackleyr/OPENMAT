@@ -1,4 +1,5 @@
-// OnboardingForm.jsx
+// src/components/OnboardingForm.jsx
+
 import React, { useState } from 'react';
 import Progress from './Progress';
 import Text from '../config/Text';
@@ -14,7 +15,12 @@ function OnboardingForm({ onComplete }) {
   const [profilePhoto, setProfilePhoto] = useState('');
   const [isUploading, setIsUploading] = useState(false);
 
+  // Simple validations
   const nameValidation = (value) => /^[A-Za-z ]{2,}$/.test(value.trim());
+  const phoneValidation = (value) => {
+    const digits = value.replace(/\D/g, '');
+    return digits.length === 10;
+  };
 
   const formatPhone = (value) => {
     const digits = value.replace(/\D/g, '');
@@ -24,27 +30,23 @@ function OnboardingForm({ onComplete }) {
     return `(${clipped.slice(0, 3)}) ${clipped.slice(3, 6)}-${clipped.slice(6)}`;
   };
 
-  const phoneValidation = (value) => {
-    const digits = value.replace(/\D/g, '');
-    return digits.length === 10;
-  };
-
+  // Steps array
   const steps = [
-    { 
+    {
       title: "What's your Name?",
       subtext: 'Your name appears on deals.',
       placeholder: 'Name',
       inputType: 'text',
       validation: nameValidation,
     },
-    { 
+    {
       title: "What's your Phone Number?",
       subtext: 'Your number unlocks deals.',
       placeholder: '(123) 456-7890',
       inputType: 'phone',
       validation: phoneValidation,
     },
-    { 
+    {
       title: 'Add your Profile Photo',
       subtext: 'Your photo appears on deals.',
       inputType: 'photo',
@@ -53,6 +55,7 @@ function OnboardingForm({ onComplete }) {
 
   const currentStepData = steps[currentStep - 1];
 
+  // Input change handling
   const handleInputChange = (e) => {
     const value = e.target.value;
     if (currentStepData.inputType === 'text') {
@@ -62,6 +65,7 @@ function OnboardingForm({ onComplete }) {
     }
   };
 
+  // Photo upload
   const handlePhotoUpload = (e) => {
     const file = e.target.files[0];
     if (file) {
@@ -75,34 +79,6 @@ function OnboardingForm({ onComplete }) {
     }
   };
 
-  const handleNext = () => {
-    if (currentStep < steps.length) {
-      setCurrentStep(currentStep + 1);
-    } else {
-      // Completed all steps
-      const cleanName = name.trim();
-      const cleanPhoneDigits = phone.replace(/\D/g, '');
-
-      const userData = {
-        name: cleanName,
-        phone: cleanPhoneDigits,
-        profilePhoto,
-      };
-
-      // Merge user name + photo into context
-      setCardData((prev) => ({
-        ...prev,
-        name: userData.name,
-        profilePhoto: userData.profilePhoto,
-      }));
-
-      // Let parent know
-      if (onComplete) {
-        onComplete(userData);
-      }
-    }
-  };
-
   const isValid = () => {
     if (currentStepData.inputType === 'text') {
       return currentStepData.validation ? currentStepData.validation(name) : false;
@@ -112,6 +88,32 @@ function OnboardingForm({ onComplete }) {
       return !!profilePhoto;
     }
     return false;
+  };
+
+  const handleNext = () => {
+    if (currentStep < steps.length) {
+      setCurrentStep(currentStep + 1);
+    } else {
+      // Completed all steps
+      const cleanName = name.trim();
+      const cleanPhoneDigits = phone.replace(/\D/g, '');
+      const userData = {
+        name: cleanName,
+        phone: cleanPhoneDigits,
+        profilePhoto,
+      };
+
+      // Merge user name + photo into global cardData
+      setCardData((prev) => ({
+        ...prev,
+        name: userData.name,
+        profilePhoto: userData.profilePhoto,
+        phone: userData.phone, // optional if you want phone stored
+      }));
+
+      // Notify parent
+      onComplete?.(userData);
+    }
   };
 
   return (

@@ -5,12 +5,11 @@ import CardSide from './CardSide';
 import { useCard } from '../contexts/CardContext';
 
 function Card({ onOpenCardForm, isInForm = false, cardData: overrideData }) {
-  // If a cardData override is passed, use that; else use globalCardData
+  // If overrideData is provided, use it; else use globalCardData
   const { cardData: globalCardData } = useCard();
   const displayedData = overrideData || globalCardData;
 
   const handleClick = () => {
-    // Only open if not inside the form
     if (!isInForm && onOpenCardForm) {
       onOpenCardForm(globalCardData);
     }

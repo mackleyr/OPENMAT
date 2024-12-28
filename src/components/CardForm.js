@@ -15,29 +15,24 @@ function CardForm({ onClose, onSave, initialData = {} }) {
   const [formState, setFormState] = useState({
     id: initialData.id ?? null,
     expiresHours: initialData.expiresHours ?? null,
-    dealValue: initialData.dealValue ?? '',      // numeric string
+    dealValue: initialData.dealValue ?? '',
     dealTitle: initialData.dealTitle ?? '',
     dealDescription: initialData.dealDescription ?? '',
     dealImage: initialData.dealImage ?? null,
-
-    // We also carry over name + profilePhoto from global context
     name: cardData?.name || '',
     profilePhoto: cardData?.profilePhoto || '',
   });
 
-  // Handlers that update local state
+  // Handlers
   const handleValueChange = (e) => {
     setFormState((prev) => ({ ...prev, dealValue: e.target.value }));
   };
-
   const handleDealTitleChange = (e) => {
     setFormState((prev) => ({ ...prev, dealTitle: e.target.value }));
   };
-
   const handleDescriptionChange = (e) => {
     setFormState((prev) => ({ ...prev, dealDescription: e.target.value }));
   };
-
   const handleImageUpload = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -48,11 +43,9 @@ function CardForm({ onClose, onSave, initialData = {} }) {
     reader.readAsDataURL(file);
   };
 
-  // Called when user presses “Complete”
   const handleDone = async () => {
     console.log('[CardForm]: handleDone() called with formState:', formState);
     try {
-      // Convert expiresHours -> expires_at if needed
       let expires_at = null;
       if (formState.expiresHours) {
         const now = new Date();
@@ -60,7 +53,7 @@ function CardForm({ onClose, onSave, initialData = {} }) {
         expires_at = now.toISOString();
       }
 
-      // Upsert the user based on phoneNumber in cardData
+      // Upsert the user row
       const phone = cardData?.phone;
       const userName = cardData?.name;
       const profilePhoto = cardData?.profilePhoto;
@@ -77,7 +70,7 @@ function CardForm({ onClose, onSave, initialData = {} }) {
       });
       console.log('[CardForm] => upserted user =>', user);
 
-      // Create or update the deal
+      //  Create or update
       let dealResult;
       if (formState.id) {
         console.log('[CardForm]: Updating existing deal with ID:', formState.id);
@@ -87,7 +80,7 @@ function CardForm({ onClose, onSave, initialData = {} }) {
           background: formState.dealImage,
           expires_at,
           creatorName: formState.name,
-          deal_value: formState.dealValue,  // Pass numeric string
+          deal_value: formState.dealValue,
         });
       } else {
         console.log('[CardForm]: Creating new deal (no existing ID).');
@@ -103,16 +96,16 @@ function CardForm({ onClose, onSave, initialData = {} }) {
 
       console.log('[CardForm]: Supabase returned dealResult:', dealResult);
 
-      // 3) Update global cardData with the new deal fields
+      // Update global cardData
       setCardData((prev) => ({
         ...prev,
         ...formState,
         id: dealResult.id,
         share_link: dealResult.share_link,
-        value: formState.dealValue,   // keep in global context too
+        value: formState.dealValue,
       }));
 
-      // 4) Notify parent
+      // Notify parent
       onSave?.({
         ...formState,
         id: dealResult.id,
@@ -122,11 +115,11 @@ function CardForm({ onClose, onSave, initialData = {} }) {
       onClose?.();
     } catch (err) {
       console.error('[CardForm]: Error completing deal creation/update:', err);
-      // optional: show a UI toast or error message
+      // optional: show a UI message
     }
   };
 
-  // For real-time preview, build a "previewCardData"
+  // Live preview data
   const previewCardData = {
     value: formState.dealValue,
     title: formState.dealTitle,
@@ -146,10 +139,8 @@ function CardForm({ onClose, onSave, initialData = {} }) {
       }}
     >
       <div className="flex flex-col w-full flex-grow items-start">
-        {/* Live preview uses local formState -> previewCardData */}
         <Card isInForm={true} cardData={previewCardData} />
 
-        {/* Form fields */}
         <div
           className="flex flex-col bg-white rounded-lg overflow-hidden px-[5%] box-border w-full max-w-lg mt-4"
           style={{ height: 'auto' }}
