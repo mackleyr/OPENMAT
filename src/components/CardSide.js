@@ -1,17 +1,17 @@
 // src/components/CardSide.jsx
 
 import React, { useEffect, useRef, useState } from 'react';
-import Profile from './Profile';            // or wherever your <Profile> is
-import Text from '../config/Text';          // <--- points to the Text.js above
+import Profile from './Profile';        // or wherever your <Profile> is
+import Text from '../config/Text';      // <--- optional text component
 import defaultProfile from '../assets/profile.svg';
 import defaultBackground from '../assets/background.svg';
-import logo from '../assets/logo.svg';      // or your own logo path
+import logo from '../assets/logo.svg';  // your logo
 
 function CardSide({ cardData }) {
   const containerRef = useRef(null);
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
 
-  // Monitor the container size for dynamic scaling
+  // Monitor size for dynamic scaling
   useEffect(() => {
     if (!containerRef.current) return;
     const observer = new ResizeObserver(([entry]) => {
@@ -24,14 +24,21 @@ function CardSide({ cardData }) {
     return () => observer.disconnect();
   }, []);
 
-  // Scale factor for responsive text sizing
+  // Scale factor for text sizing
   const baseWidth = 400;
   const scale = dimensions.width ? dimensions.width / baseWidth : 1;
 
-  // Fallback images
-  const profileImageSrc = cardData?.profilePhoto || defaultProfile;
-  const backgroundSrc =
-    cardData?.dealImage || cardData?.image || defaultBackground;
+  // Extract fields from cardData
+  const {
+    value,          // e.g. "500" as a string or number
+    title,          // e.g. "My Gift"
+    image,          // background
+    creatorName,    // "Athena"
+    creatorPhoto,   // data:image/...
+  } = cardData || {};
+
+  const profileImageSrc = creatorPhoto || defaultProfile;
+  const backgroundSrc = image || defaultBackground;
 
   return (
     <div
@@ -44,7 +51,7 @@ function CardSide({ cardData }) {
         background: `url(${backgroundSrc}) center/cover no-repeat`,
       }}
     >
-      {/* TOP GRADIENT OVERLAY */}
+      {/* TOP GRADIENT */}
       <div
         className="absolute top-0 left-0 w-full"
         style={{
@@ -55,7 +62,7 @@ function CardSide({ cardData }) {
         }}
       />
 
-      {/* BOTTOM GRADIENT OVERLAY */}
+      {/* BOTTOM GRADIENT */}
       <div
         className="absolute bottom-0 left-0 w-full"
         style={{
@@ -77,21 +84,21 @@ function CardSide({ cardData }) {
         }}
       >
         <Profile size={50 * scale} src={profileImageSrc} />
-        {cardData?.name && (
+        {creatorName && (
           <div className="ml-2">
             <Text
               type="large"
               role="white"
               style={{ fontSize: `${0.9 * scale}rem` }}
             >
-              {cardData.name}
+              {creatorName}
             </Text>
           </div>
         )}
       </div>
 
       {/* VALUE (top-right) */}
-      {cardData?.dealValue && (
+      {value && (
         <div
           className="absolute flex flex-col items-center"
           style={{
@@ -110,7 +117,7 @@ function CardSide({ cardData }) {
             role="white"
             style={{ fontSize: `${1.3 * scale}rem` }}
           >
-            ${cardData.dealValue}
+            ${value}
           </Text>
           <Text
             type="large"
@@ -124,7 +131,7 @@ function CardSide({ cardData }) {
       )}
 
       {/* TITLE (center) */}
-      {cardData?.dealTitle && (
+      {title && (
         <div
           className="absolute flex flex-col items-center text-center"
           style={{
@@ -148,7 +155,7 @@ function CardSide({ cardData }) {
               fontWeight: 'bold',
             }}
           >
-            {cardData.dealTitle}
+            {title}
           </Text>
         </div>
       )}

@@ -1,9 +1,11 @@
-// Card.jsx
+// src/components/Card.jsx
+
 import React from 'react';
 import CardSide from './CardSide';
 import { useCard } from '../contexts/CardContext';
 
 function Card({ onOpenCardForm, isInForm = false, cardData: overrideData }) {
+  // If a cardData override is passed, use that; else use globalCardData
   const { cardData: globalCardData } = useCard();
   const displayedData = overrideData || globalCardData;
 
@@ -19,7 +21,6 @@ function Card({ onOpenCardForm, isInForm = false, cardData: overrideData }) {
       onClick={handleClick}
       className="relative flex flex-col justify-between items-center w-full h-auto bg-white cursor-pointer rounded-lg"
       style={{
-        padding: '%',
         boxSizing: 'border-box',
       }}
     >
