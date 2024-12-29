@@ -1,6 +1,5 @@
-// ---------------------
-// src/pages/ShareCard.js
-// ---------------------
+// src/pages/ShareCard.jsx
+
 import React, { useState } from "react";
 import { useCard } from "../contexts/CardContext";
 import MainContainer from "../components/MainContainer";
@@ -23,11 +22,11 @@ function ShareCard() {
   const [showOnboardingForm, setShowOnboardingForm] = useState(false);
   const [userOnboarded, setUserOnboarded] = useState(false);
 
-  // Prefill data for form
+  // Prefill data for the form
   const [cardFormData, setCardFormData] = useState(null);
   const [currentDealId, setCurrentDealId] = useState(null);
 
-  // When user taps “Open” or plus button
+  // Called when user taps “Open” or the plus button
   const handleOpenCardForm = () => {
     // Pre-fill from context
     setCardFormData({
@@ -37,13 +36,13 @@ function ShareCard() {
       dealTitle: cardData.title,
       dealDescription: cardData.description || "",
       dealImage: cardData.image,
-      // Also pass name + profilePhoto from global context
+      // Also pass name + photo from context
       name: cardData.name,
       profilePhoto: cardData.profilePhoto,
     });
     setCurrentDealId(cardData?.id || null);
 
-    // If not onboarded, show onboarding first
+    // Show onboarding first if user not onboarded
     if (!userOnboarded) {
       setShowOnboardingForm(true);
     } else {
@@ -51,29 +50,18 @@ function ShareCard() {
     }
   };
 
-  // If user finishes onboarding
+  // Called if user finishes onboarding
   const handleOnboardingComplete = (userData) => {
-    // userData => { name, phone, profilePhoto }
     setUserOnboarded(true);
     setShowOnboardingForm(false);
-
-    // 1) Merge user’s name + photo into global context
-    setCardData((prev) => ({
-      ...prev,
-      name: userData.name,
-      phone: userData.phone, // if you want to store phone too
-      profilePhoto: userData.profilePhoto,
-    }));
-
-    // 2) Now open the CardForm
     setShowCardForm(true);
   };
 
-  // After user taps “Complete” in CardForm
+  // Called after user taps “Complete” in <CardForm>
   const handleSaveCard = (formData) => {
     console.log("ShareCard -> handleSaveCard -> final form data:", formData);
 
-    // Merge new deal fields (plus name/profilePhoto) into global
+    // Merge fields into global cardData, including name/photo
     setCardData((prev) => ({
       ...prev,
       id: formData.id,
@@ -82,8 +70,8 @@ function ShareCard() {
       value: formData.dealValue,
       title: formData.dealTitle,
       description: formData.dealDescription,
-      name: formData.name,             // ensure these remain!
-      profilePhoto: formData.profilePhoto,
+      name: formData.name,                 // <--
+      profilePhoto: formData.profilePhoto, // <--
     }));
 
     setShowCardForm(false);
@@ -96,11 +84,12 @@ function ShareCard() {
   return (
     <div className="min-h-screen flex flex-col bg-black relative">
       <MainContainer className="relative flex flex-col justify-between h-full">
-        {/* Main content */}
+        {/* Main Content */}
         <div className="flex-1 flex flex-col items-center justify-start w-full px-[4%] py-[4%]">
+          {/* The “home screen” card reading from context */}
           <Card onOpenCardForm={handleOpenCardForm} />
 
-          <div className="w-full max-w-[768px]">
+          <div className="w-full max-w-[768px] py-[2%]">
             <Buttons mode="share" />
             <ActivityLog dealId={currentDealId} onProfileClick={handleProfileClick} />
           </div>
@@ -127,7 +116,7 @@ function ShareCard() {
           </div>
         )}
 
-        {/* Profile overlay */}
+        {/* Profile sheet overlay */}
         {showProfileSheet && (
           <div className="absolute inset-0 z-50">
             <ProfileSheet onClose={() => setShowProfileSheet(false)} />

@@ -1,16 +1,17 @@
 // src/components/CardSide.jsx
 
 import React, { useEffect, useRef, useState } from 'react';
-import Profile from './Profile';
-import Text from '../config/Text';
+import Profile from './Profile'; // or your path
+import Text from '../config/Text'; // if you use a shared Text component
 import defaultProfile from '../assets/profile.svg';
 import defaultBackground from '../assets/background.svg';
-import logo from '../assets/logo.svg';
+import logo from '../assets/logo.svg'; // your logo path
 
 function CardSide({ cardData }) {
   const containerRef = useRef(null);
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
 
+  // Monitor size to compute scaling
   useEffect(() => {
     if (!containerRef.current) return;
     const observer = new ResizeObserver(([entry]) => {
@@ -26,16 +27,24 @@ function CardSide({ cardData }) {
   const baseWidth = 400;
   const scale = dimensions.width ? dimensions.width / baseWidth : 1;
 
-  // We read data from cardData
+  // Here we expect either "name" + "profilePhoto" from ShareCard 
+  // OR "creatorName" + "creatorPhoto" from ClaimCard
   const {
     value,
     title,
     image,
-    creatorName,
-    creatorPhoto,
+    name,           // for ShareCard
+    profilePhoto,   // for ShareCard
+    creatorName,    // for ClaimCard
+    creatorPhoto,   // for ClaimCard
   } = cardData || {};
 
-  const profileImageSrc = creatorPhoto || defaultProfile;
+  // If we have "creatorName", use that first; else use "name"
+  const displayName = creatorName || name || "";
+  // Likewise for photos
+  const displayPhoto = creatorPhoto || profilePhoto || "";
+
+  // For the background fallback
   const backgroundSrc = image || defaultBackground;
 
   return (
@@ -45,11 +54,11 @@ function CardSide({ cardData }) {
       style={{
         borderRadius: '12px',
         padding: '5%',
-        boxShadow: '0px 6px 10px rgba(0,0,0,0.4)',
+        boxShadow: '0px 6px 10px rgba(0, 0, 0, 0.4)',
         background: `url(${backgroundSrc}) center/cover no-repeat`,
       }}
     >
-      {/* TOP GRADIENT */}
+      {/* TOP gradient */}
       <div
         className="absolute top-0 left-0 w-full"
         style={{
@@ -60,7 +69,7 @@ function CardSide({ cardData }) {
         }}
       />
 
-      {/* BOTTOM GRADIENT */}
+      {/* BOTTOM gradient */}
       <div
         className="absolute bottom-0 left-0 w-full"
         style={{
@@ -71,7 +80,7 @@ function CardSide({ cardData }) {
         }}
       />
 
-      {/* Profile + name (top-left) */}
+      {/* Profile + Name (top-left) */}
       <div
         className="absolute flex items-center"
         style={{
@@ -81,15 +90,18 @@ function CardSide({ cardData }) {
           zIndex: 2,
         }}
       >
-        <Profile size={50 * scale} src={profileImageSrc} />
-        {creatorName && (
+        <Profile
+          size={50 * scale}
+          src={displayPhoto || defaultProfile}
+        />
+        {displayName && (
           <div className="ml-2">
             <Text
               type="large"
               role="white"
               style={{ fontSize: `${0.9 * scale}rem` }}
             >
-              {creatorName}
+              {displayName}
             </Text>
           </div>
         )}
@@ -102,7 +114,7 @@ function CardSide({ cardData }) {
           style={{
             top: '5%',
             right: '5%',
-            backgroundColor: 'rgba(0,0,0,0.5)',
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
             padding: '4px 8px',
             borderRadius: '8px',
             textAlign: 'center',
@@ -136,7 +148,7 @@ function CardSide({ cardData }) {
             top: '50%',
             left: '50%',
             transform: 'translate(-50%, -50%)',
-            backgroundColor: 'rgba(0,0,0,0.5)',
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
             padding: '8px 12px',
             borderRadius: '12px',
             maxWidth: '75%',
@@ -148,10 +160,7 @@ function CardSide({ cardData }) {
           <Text
             type="large"
             role="white"
-            style={{
-              fontSize: `${1.4 * scale}rem`,
-              fontWeight: 'bold',
-            }}
+            style={{ fontSize: `${1.4 * scale}rem`, fontWeight: 'bold' }}
           >
             {title}
           </Text>

@@ -1,4 +1,5 @@
 // src/pages/ClaimCard.jsx
+
 import React, { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { supabase } from "../supabaseClient";
@@ -20,6 +21,7 @@ function ClaimCard() {
   const [creatorUser, setCreatorUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  // Overlays
   const [showProfileSheet, setShowProfileSheet] = useState(false);
   const [showOnboardingForm, setShowOnboardingForm] = useState(false);
   const [showSaveCard, setShowSaveCard] = useState(false);
@@ -31,6 +33,13 @@ function ClaimCard() {
     const fetchDeal = async () => {
       try {
         console.log("[ClaimCard] useParams =>", { creatorName, dealId });
+
+        if (!creatorName || !dealId) {
+          console.warn("[ClaimCard] No route params -> skipping fetch");
+          setDealData(null);
+          setLoading(false);
+          return;
+        }
 
         // Lowercase the name
         const lowerName = creatorName.toLowerCase().trim();
@@ -112,12 +121,10 @@ function ClaimCard() {
   };
 
   const handleProfileClick = () => {
-    console.log("[ClaimCard] handleProfileClick() -> showProfileSheet");
     setShowProfileSheet(true);
   };
 
-  // Here we reference "deal_value" for the numeric value field (if it exists).
-  // If your DB uses "title" as the numeric, adjust accordingly.
+  // Build the final cardData for display
   const cardDataForDisplay = {
     value: dealData.deal_value || "",
     title: dealData.title || "",
@@ -131,10 +138,7 @@ function ClaimCard() {
       <MainContainer className="relative flex flex-col justify-between h-full">
         <div className="flex-1 flex flex-col items-center justify-start w-full px-[4%] py-[4%]">
           <div className="w-full max-w-[600px] mx-auto">
-            <Card 
-              cardData={cardDataForDisplay}
-              isInForm={false}
-            />
+            <Card cardData={cardDataForDisplay} isInForm={false} />
             <Buttons mode="claim" onClaim={handleClaim} />
             <ActivityLog dealId={currentDealId} onProfileClick={handleProfileClick} />
           </div>
