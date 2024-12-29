@@ -1,5 +1,4 @@
 // src/pages/ShareCard.js
-
 import React, { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { supabase } from "../supabaseClient";
@@ -16,15 +15,26 @@ import OnboardingForm from "../components/OnboardingForm";
 import "../index.css";
 
 function ShareCard() {
-  // If your route pattern is /share/:creatorName/:dealId
-  const { creatorName, dealId } = useParams();
-
   const { cardData, setCardData } = useCard();
 
-  // We’ll store the fetched “deal” from DB here
+  // Safely destructure params
+  const { creatorName = "", dealId = "" } = useParams();
+
+  // If either is missing, skip fetch
+  if (!creatorName || !dealId) {
+    return (
+      <div className="min-h-screen bg-black text-white flex items-center justify-center">
+        No share parameters in URL.
+      </div>
+    );
+  }
+
+  // Now safe to do .toLowerCase()
+  const lowerName = creatorName.toLowerCase().trim();
+
   const [dealData, setDealData] = useState(null);
-  // If we want to fetch the creator’s user row
   const [creatorUser, setCreatorUser] = useState(null);
+  const [loadingDeal, setLoadingDeal] = useState(true);
 
   // Overlays
   const [showCardForm, setShowCardForm] = useState(false);
@@ -32,23 +42,19 @@ function ShareCard() {
   const [showOnboardingForm, setShowOnboardingForm] = useState(false);
   const [userOnboarded, setUserOnboarded] = useState(false);
 
-  // Prefill data for CardForm
+  // For <CardForm>
   const [cardFormData, setCardFormData] = useState(null);
   const [currentDealId, setCurrentDealId] = useState(null);
-  const [loadingDeal, setLoadingDeal] = useState(true);
 
-  // 1) On page load => fetch the deal from DB
   useEffect(() => {
+    // Example fetch logic
     const fetchDeal = async () => {
       try {
-        console.log("[ShareCard] useParams =>", { creatorName, dealId });
-
-        // Build the share link we store in DB
-        const lowerName = creatorName.toLowerCase().trim();
+        console.log("[ShareCard] => useParams:", { creatorName, dealId });
         const shareURL = `https://and.deals/share/${lowerName}/${dealId}`;
-        console.log("[ShareCard] shareURL =>", shareURL);
+        console.log("[ShareCard] => shareURL:", shareURL);
 
-        // Query supabase by share_link
+        // 1) Lookup the deal
         const { data: dealRow, error } = await supabase
           .from("deals")
           .select("*")
@@ -66,9 +72,8 @@ function ShareCard() {
         setDealData(dealRow);
         setCurrentDealId(dealRow.id);
 
-        // If the deal row has a creator_id => fetch user
+        // 2) If there's a creator_id, fetch user
         if (dealRow.creator_id) {
-          console.log("[ShareCard] deal has creator_id =>", dealRow.creator_id);
           const { data: userRow, error: userError } = await supabase
             .from("users")
             .select("*")
@@ -76,7 +81,7 @@ function ShareCard() {
             .single();
 
           if (userError) {
-            console.error("[ShareCard] Error fetching user row:", userError);
+            console.error("[ShareCard] Error fetching userRow:", userError);
           } else {
             console.log("[ShareCard] Found creatorUser =>", userRow);
             setCreatorUser(userRow);
@@ -88,91 +93,36 @@ function ShareCard() {
         setLoadingDeal(false);
       }
     };
-
     fetchDeal();
-  }, [creatorName, dealId]);
+  }, [creatorName, dealId, lowerName]);
 
-  // Called when user taps “Open” or the plus button
-  const handleOpenCardForm = () => {
-    // Pre-fill from local context in case we want to keep that in sync
-    setCardFormData({
-      id: cardData.id,
-      expiresHours: cardData.expires,
-      dealValue: cardData.value,
-      dealTitle: cardData.title,
-      dealDescription: cardData.description || "",
-      dealImage: cardData.image,
-      name: cardData.name,
-      profilePhoto: cardData.profilePhoto,
-    });
-    setCurrentDealId(cardData?.id || null);
-
-    // Onboarding check
-    if (!userOnboarded) {
-      setShowOnboardingForm(true);
-    } else {
-      setShowCardForm(true);
-    }
-  };
-
-  // Called if user finishes onboarding
-  const handleOnboardingComplete = (userData) => {
-    setUserOnboarded(true);
-    setShowOnboardingForm(false);
-    setShowCardForm(true);
-  };
-
-  // Called after user taps “Complete” in <CardForm>
-  const handleSaveCard = (formData) => {
-    console.log("[ShareCard] => handleSaveCard => final form data:", formData);
-
-    // Merge form fields into global cardData
-    setCardData((prev) => ({
-      ...prev,
-      id: formData.id,
-      expires: formData.expiresHours,
-      image: formData.dealImage,
-      value: formData.dealValue,
-      title: formData.dealTitle,
-      description: formData.dealDescription,
-      name: formData.name,
-      profilePhoto: formData.profilePhoto,
-    }));
-
-    setShowCardForm(false);
-  };
-
-  const handleProfileClick = () => {
-    setShowProfileSheet(true);
-  };
+  // Then your card + form logic, etc.
+  // ...
 
   if (loadingDeal) {
     return (
-      <div className="min-h-screen flex flex-col bg-black">
-        <div className="text-white mt-8 text-center">Loading deal...</div>
+      <div className="min-h-screen bg-black text-white flex items-center justify-center">
+        Loading deal...
       </div>
     );
   }
-
-  // If no deal found, show “Deal not found”
   if (!dealData) {
     return (
-      <div className="min-h-screen flex flex-col bg-black">
-        <div className="text-white mt-8 text-center">
-          Deal not found.
-        </div>
+      <div className="min-h-screen bg-black text-white flex items-center justify-center">
+        Deal not found.
       </div>
     );
   }
 
-  // Combine the fetched deal and fetched user
+  // Combine fetched data for the display card
   const cardDataForDisplay = {
-    value: dealData.deal_value || "",  // or dealData.title if numeric
+    value: dealData.deal_value || "",
     title: dealData.title || "",
     image: dealData.background || "",
     creatorName: creatorUser?.name || "",
     creatorPhoto: creatorUser?.profile_image_url || "",
   };
+
 
   return (
     <div className="min-h-screen flex flex-col bg-black relative">
