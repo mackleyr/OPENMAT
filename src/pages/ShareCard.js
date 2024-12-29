@@ -1,8 +1,6 @@
 // src/pages/ShareCard.js
 
-import React, { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
-import { supabase } from "../supabaseClient";
+import React, { useState } from "react";
 import { useCard } from "../contexts/CardContext";
 import MainContainer from "../components/MainContainer";
 import Footer from "../components/Footer";
@@ -16,161 +14,98 @@ import OnboardingForm from "../components/OnboardingForm";
 import "../index.css";
 
 function ShareCard() {
-  const { cardData } = useCard();
-  const { creatorName = "", dealId = "" } = useParams(); // Safe destructuring
+  const { cardData, setCardData } = useCard();
 
-  // If either param is missing, gracefully show a fallback
-  if (!creatorName || !dealId) {
-    return (
-      <div className="min-h-screen bg-black text-white flex items-center justify-center">
-        <h1 className="text-2xl">No share parameters in URL.</h1>
-      </div>
-    );
-  }
-
-  // Now safe to do .toLowerCase()
-  const lowerName = creatorName.toLowerCase().trim();
-
-  // Local states for fetching
-  const [dealData, setDealData] = useState(null);
-  const [creatorUser, setCreatorUser] = useState(null);
-  const [loadingDeal, setLoadingDeal] = useState(true);
-
-  // Overlays
+  // Modal flags
   const [showCardForm, setShowCardForm] = useState(false);
   const [showProfileSheet, setShowProfileSheet] = useState(false);
   const [showOnboardingForm, setShowOnboardingForm] = useState(false);
   const [userOnboarded, setUserOnboarded] = useState(false);
 
-  // For <CardForm>
+  // Prefill data for form
   const [cardFormData, setCardFormData] = useState(null);
   const [currentDealId, setCurrentDealId] = useState(null);
 
-  useEffect(() => {
-    const fetchDeal = async () => {
-      try {
-        console.log("[ShareCard] useParams =>", { creatorName, dealId });
-        const shareURL = `https://and.deals/share/${lowerName}/${dealId}`;
-        console.log("[ShareCard] shareURL =>", shareURL);
-
-        // 1) Query the "deals" table by share_link
-        const { data: dealRow, error } = await supabase
-          .from("deals")
-          .select("*")
-          .eq("share_link", shareURL)
-          .single();
-
-        if (error || !dealRow) {
-          console.error("[ShareCard] error fetching deal or no rows:", error);
-          setDealData(null);
-          setLoadingDeal(false);
-          return;
-        }
-
-        console.log("[ShareCard] Found deal =>", dealRow);
-        setDealData(dealRow);
-        setCurrentDealId(dealRow.id);
-
-        // 2) If there's a creator_id, also fetch the user record
-        if (dealRow.creator_id) {
-          const { data: userRow, error: userError } = await supabase
-            .from("users")
-            .select("*")
-            .eq("id", dealRow.creator_id)
-            .single();
-
-          if (userError) {
-            console.error("[ShareCard] user fetch error =>", userError);
-          } else {
-            console.log("[ShareCard] Found creatorUser =>", userRow);
-            setCreatorUser(userRow);
-          }
-        }
-      } catch (err) {
-        console.error("[ShareCard] Unexpected error in fetchDeal():", err);
-      } finally {
-        setLoadingDeal(false);
-      }
-    };
-
-    fetchDeal();
-  }, [creatorName, dealId, lowerName]);
-
-  if (loadingDeal) {
-    return (
-      <div className="min-h-screen bg-black text-white flex items-center justify-center">
-        <h1 className="text-xl">Loading deal...</h1>
-      </div>
-    );
-  }
-
-  if (!dealData) {
-    return (
-      <div className="min-h-screen bg-black text-white flex items-center justify-center">
-        <h1 className="text-xl">Deal not found.</h1>
-      </div>
-    );
-  }
-
-  // Combine DB fields + user for card display
-  const cardDataForDisplay = {
-    value: dealData.deal_value || "",
-    title: dealData.title || "",
-    image: dealData.background || "",
-    creatorName: creatorUser?.name || "",
-    creatorPhoto: creatorUser?.profile_image_url || "",
-  };
-
-  // “Open Card Form” logic as desired
+  // Called when user taps “Open” or the plus button
   const handleOpenCardForm = () => {
+    // Pre-fill from context
     setCardFormData({
-      // Possibly some prefill from dealData, or from global context, etc.
-      id: dealData.id,
-      dealValue: dealData.deal_value,
-      dealTitle: dealData.title,
-      dealImage: dealData.background,
-      // ...
+      id: cardData.id,
+      expiresHours: cardData.expires,
+      dealValue: cardData.value,
+      dealTitle: cardData.title,
+      dealDescription: cardData.description || "",
+      dealImage: cardData.image,
+      // Also pass name + profilePhoto
+      name: cardData.name,
+      profilePhoto: cardData.profilePhoto,
     });
-    setShowCardForm(true);
+    setCurrentDealId(cardData?.id || null);
+
+    // If not onboarded, show onboarding first
+    if (!userOnboarded) {
+      setShowOnboardingForm(true);
+    } else {
+      setShowCardForm(true);
+    }
   };
 
-  // Example “onboarding complete”
+  // If user finishes onboarding
   const handleOnboardingComplete = (userData) => {
-    console.log("[ShareCard] Onboarding complete =>", userData);
     setUserOnboarded(true);
     setShowOnboardingForm(false);
     setShowCardForm(true);
   };
 
-  // Example “save card” from CardForm
+  // After user taps “Complete” in <CardForm>
   const handleSaveCard = (formData) => {
-    console.log("[ShareCard] handleSaveCard => final form data:", formData);
-    // merge or set global cardData if needed, or reload from DB
+    console.log("ShareCard -> handleSaveCard -> final form data:", formData);
+
+    // Merge form fields into global cardData
+    setCardData((prev) => ({
+      ...prev,
+      id: formData.id,
+      expires: formData.expiresHours,
+      image: formData.dealImage,
+      value: formData.dealValue,
+      title: formData.dealTitle,
+      description: formData.dealDescription,
+      name: formData.name,
+      profilePhoto: formData.profilePhoto,
+    }));
+
     setShowCardForm(false);
+  };
+
+  const handleProfileClick = () => {
+    setShowProfileSheet(true);
   };
 
   return (
     <div className="min-h-screen flex flex-col bg-black relative">
       <MainContainer className="relative flex flex-col justify-between h-full">
-        {/* Content */}
+        {/* Main Content */}
         <div className="flex-1 flex flex-col items-center justify-start w-full px-[4%] py-[4%]">
-          <Card cardData={cardDataForDisplay} />
+          {/* “home screen” card reading from context */}
+          <Card onOpenCardForm={handleOpenCardForm} />
 
-          <div className="w-full max-w-[768px] py-4">
+          <div className="w-full max-w-[768px]">
             <Buttons mode="share" />
-            <ActivityLog dealId={currentDealId} onProfileClick={() => setShowProfileSheet(true)} />
+            <ActivityLog dealId={currentDealId} onProfileClick={handleProfileClick} />
           </div>
         </div>
 
         <Footer />
         <AddButton onOpenCardForm={handleOpenCardForm} />
 
-        {/* Overlays */}
+        {/* Onboarding overlay */}
         {showOnboardingForm && (
           <div className="absolute inset-0 z-50 bg-white">
             <OnboardingForm onComplete={handleOnboardingComplete} />
           </div>
         )}
+
+        {/* Card form overlay */}
         {showCardForm && !showOnboardingForm && (
           <div className="absolute inset-0 z-50 bg-white">
             <CardForm
@@ -180,8 +115,10 @@ function ShareCard() {
             />
           </div>
         )}
+
+        {/* Profile sheet overlay */}
         {showProfileSheet && (
-          <div className="absolute inset-0 z-50 bg-white">
+          <div className="absolute inset-0 z-50">
             <ProfileSheet onClose={() => setShowProfileSheet(false)} />
           </div>
         )}
