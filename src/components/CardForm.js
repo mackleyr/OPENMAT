@@ -1,5 +1,3 @@
-// src/components/CardForm.jsx
-
 import React, { useState } from 'react';
 import Card from './Card';
 import Text from '../config/Text';
@@ -7,9 +5,11 @@ import Button from './Button';
 import { useCard } from '../contexts/CardContext';
 import { createDeal, updateDeal } from '../services/dealsService';
 import { upsertUser } from '../services/usersService';
+import { useActivity } from '../contexts/ActivityContext'; // ADDED
 
 function CardForm({ onClose, onSave, initialData = {} }) {
   const { cardData, setCardData } = useCard();
+  const { addActivity } = useActivity(); // ADDED
 
   // Local form state for real-time preview
   const [formState, setFormState] = useState({
@@ -91,6 +91,16 @@ function CardForm({ onClose, onSave, initialData = {} }) {
           expires_at,
           creatorName: formState.name,
           deal_value: formState.dealValue,
+        });
+
+        // ADDED: Log "created" activity
+        addActivity({
+          userId: user.id,
+          name: user.name,
+          profileImage: user.profile_image_url,
+          action: `created "${formState.dealTitle}"`,
+          dealId: dealResult.id,
+          timestamp: new Date().toISOString(),
         });
       }
 

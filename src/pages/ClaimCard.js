@@ -14,6 +14,9 @@ import OnboardingForm from "../components/OnboardingForm";
 import SaveCard from "../components/SaveCard";
 import "../index.css";
 
+// 1) Import the activity context
+import { useActivity } from "../contexts/ActivityContext";
+
 function ClaimCard() {
   const { creatorName, dealId } = useParams();
 
@@ -28,6 +31,9 @@ function ClaimCard() {
   const [userOnboarded, setUserOnboarded] = useState(false);
 
   const [currentDealId, setCurrentDealId] = useState(null);
+
+  // 2) De-structure addActivity from our activity context
+  const { addActivity } = useActivity();
 
   useEffect(() => {
     const fetchDeal = async () => {
@@ -78,6 +84,17 @@ function ClaimCard() {
           } else {
             console.log("[ClaimCard] Found user =>", userRow);
             setCreatorUser(userRow);
+
+            // 3) As soon as we have the deal (and the creator),
+            //    log "Athena (or whoever) shared deal"
+            addActivity({
+              userId: userRow.id,
+              name: userRow.name,
+              profileImage: userRow.profile_image_url,
+              action: "shared deal",
+              dealId: dealRow.id,
+              timestamp: new Date().toISOString(),
+            });
           }
         }
       } catch (err) {
@@ -88,7 +105,7 @@ function ClaimCard() {
     };
 
     fetchDeal();
-  }, [creatorName, dealId]);
+  }, [creatorName, dealId, addActivity]);
 
   console.log("[ClaimCard] final dealData =>", dealData);
   console.log("[ClaimCard] final creatorUser =>", creatorUser);
@@ -113,11 +130,22 @@ function ClaimCard() {
     }
   };
 
+  // 4) When a user finishes onboarding, log "claimed a gift card"
   const handleOnboardingComplete = (userData) => {
     console.log("[ClaimCard] Onboarding complete =>", userData);
     setUserOnboarded(true);
     setShowOnboardingForm(false);
     setShowSaveCard(true);
+
+    // Here we assume we can reference dealData.id
+    addActivity({
+      userId: "new-visitor-id-or-similar", // or the ID from supabase if you do an upsert
+      name: userData.name,
+      profileImage: userData.profilePhoto,
+      action: "claimed a gift card",
+      dealId: dealData.id,
+      timestamp: new Date().toISOString(),
+    });
   };
 
   const handleProfileClick = () => {

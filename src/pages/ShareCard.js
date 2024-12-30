@@ -89,7 +89,7 @@ function ShareCard() {
           {/* The “home screen” card reading from context */}
           <Card onOpenCardForm={handleOpenCardForm} />
 
-          <div className="w-full max-w-[768px] py-[2%]">
+          <div className="w-full max-w-[768px]">
             <Buttons mode="share" />
             <ActivityLog dealId={currentDealId} onProfileClick={handleProfileClick} />
           </div>

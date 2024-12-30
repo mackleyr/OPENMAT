@@ -1,11 +1,23 @@
-// ActivityLog.jsx
 import React, { useEffect, useState } from "react";
 import { useActivity } from "../contexts/ActivityContext";
 import { useCard } from "../contexts/CardContext";
 import Profile from "./Profile";
 import defaultProfile from "../assets/profile.svg";
 import Text from "../config/Text";
-import { textColors } from "../config/Colors"; // Import textColors
+import { textColors } from "../config/Colors";
+
+// Helper function to display "time ago" (m, h, d)
+function timeAgo(timestamp) {
+  if (!timestamp) return "";
+  const diffMs = Date.now() - new Date(timestamp).getTime();
+  const diffMinutes = Math.floor(diffMs / 1000 / 60);
+  if (diffMinutes < 1) return "now";
+  if (diffMinutes < 60) return `${diffMinutes}m`;
+  const diffHours = Math.floor(diffMinutes / 60);
+  if (diffHours < 24) return `${diffHours}h`;
+  const diffDays = Math.floor(diffHours / 24);
+  return `${diffDays}d`;
+}
 
 function ActivityLog({ onProfileClick, dealId, userId }) {
   const { getActivitiesByDealId, getActivitiesByUser, activities } = useActivity();
@@ -63,7 +75,7 @@ function ActivityLog({ onProfileClick, dealId, userId }) {
                   </span>{" "}
                   {activity.action}{" "}
                   <span style={{ color: textColors.tertiary }}>
-                    {activity.recency}
+                    {timeAgo(activity.timestamp)}
                   </span>
                 </Text>
               </div>

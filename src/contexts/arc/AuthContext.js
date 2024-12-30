@@ -1,6 +1,6 @@
 import React, { createContext, useState, useEffect, useContext, useCallback } from "react";
-import { supabase } from "../supabaseClient";
-import defaultProfile from "../assets/profile.svg";
+import { supabase } from "../../supabaseClient";
+import defaultProfile from "../../assets/profile.svg";
 
 export const AuthContext = createContext();
 
