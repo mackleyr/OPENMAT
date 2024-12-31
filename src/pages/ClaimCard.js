@@ -1,7 +1,5 @@
-// src/pages/ClaimCard.jsx
-
 import React, { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useSearchParams } from "react-router-dom"; // <-- added useSearchParams
 import { supabase } from "../supabaseClient";
 import Card from "../components/Card";
 import Buttons from "../components/Buttons";
@@ -19,6 +17,8 @@ import { useActivity } from "../contexts/ActivityContext";
 
 function ClaimCard() {
   const { creatorName, dealId } = useParams();
+  const [searchParams] = useSearchParams(); // <-- for reading ?sharer=?
+  const sharerName = searchParams.get("sharer"); // e.g. Parker
 
   const [dealData, setDealData] = useState(null);
   const [creatorUser, setCreatorUser] = useState(null);
@@ -85,16 +85,28 @@ function ClaimCard() {
             console.log("[ClaimCard] Found user =>", userRow);
             setCreatorUser(userRow);
 
-            // 3) As soon as we have the deal (and the creator),
-            //    log "Athena (or whoever) shared deal"
-            addActivity({
-              userId: userRow.id,
-              name: userRow.name,
-              profileImage: userRow.profile_image_url,
-              action: "shared deal",
-              dealId: dealRow.id,
-              timestamp: new Date().toISOString(),
-            });
+            // 3) Distinguish "creator shares" vs. "non-creator shares"
+            if (sharerName && sharerName.toLowerCase() !== userRow.name.toLowerCase()) {
+              // Non-creator share scenario
+              addActivity({
+                userId: "non-creator-id", // or you can get from DB if you track Parker
+                name: sharerName,
+                profileImage: "",
+                action: "shared deal",
+                dealId: dealRow.id,
+                timestamp: new Date().toISOString(),
+              });
+            } else {
+              // Creator share scenario (or no ?sharer param)
+              addActivity({
+                userId: userRow.id,
+                name: userRow.name,
+                profileImage: userRow.profile_image_url,
+                action: "shared deal",
+                dealId: dealRow.id,
+                timestamp: new Date().toISOString(),
+              });
+            }
           }
         }
       } catch (err) {
@@ -105,7 +117,7 @@ function ClaimCard() {
     };
 
     fetchDeal();
-  }, [creatorName, dealId, addActivity]);
+  }, [creatorName, dealId, addActivity, sharerName]);
 
   console.log("[ClaimCard] final dealData =>", dealData);
   console.log("[ClaimCard] final creatorUser =>", creatorUser);
@@ -139,7 +151,7 @@ function ClaimCard() {
 
     // Here we assume we can reference dealData.id
     addActivity({
-      userId: "new-visitor-id-or-similar", // or the ID from supabase if you do an upsert
+      userId: "new-visitor-id-or-similar", // or the ID from Supabase if you do an upsert
       name: userData.name,
       profileImage: userData.profilePhoto,
       action: "claimed a gift card",
@@ -152,7 +164,7 @@ function ClaimCard() {
     setShowProfileSheet(true);
   };
 
-  // Build the final cardData for display
+  // Build final card data for display
   const cardDataForDisplay = {
     value: dealData.deal_value || "",
     title: dealData.title || "",

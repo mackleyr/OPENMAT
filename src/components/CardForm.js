@@ -1,26 +1,26 @@
-import React, { useState } from 'react';
-import Card from './Card';
-import Text from '../config/Text';
-import Button from './Button';
-import { useCard } from '../contexts/CardContext';
-import { createDeal, updateDeal } from '../services/dealsService';
-import { upsertUser } from '../services/usersService';
-import { useActivity } from '../contexts/ActivityContext'; // ADDED
+import React, { useState } from "react";
+import Card from "./Card";
+import Text from "../config/Text";
+import Button from "./Button";
+import { useCard } from "../contexts/CardContext";
+import { createDeal, updateDeal } from "../services/dealsService";
+import { upsertUser } from "../services/usersService";
+import { useActivity } from "../contexts/ActivityContext"; // <-- for logging
 
 function CardForm({ onClose, onSave, initialData = {} }) {
   const { cardData, setCardData } = useCard();
-  const { addActivity } = useActivity(); // ADDED
+  const { addActivity } = useActivity(); // <-- addActivity from ActivityContext
 
   // Local form state for real-time preview
   const [formState, setFormState] = useState({
     id: initialData.id ?? null,
     expiresHours: initialData.expiresHours ?? null,
-    dealValue: initialData.dealValue ?? '',
-    dealTitle: initialData.dealTitle ?? '',
-    dealDescription: initialData.dealDescription ?? '',
+    dealValue: initialData.dealValue ?? "",
+    dealTitle: initialData.dealTitle ?? "",
+    dealDescription: initialData.dealDescription ?? "",
     dealImage: initialData.dealImage ?? null,
-    name: cardData?.name || '',
-    profilePhoto: cardData?.profilePhoto || '',
+    name: cardData?.name || "",
+    profilePhoto: cardData?.profilePhoto || "",
   });
 
   // Handlers
@@ -44,8 +44,10 @@ function CardForm({ onClose, onSave, initialData = {} }) {
   };
 
   const handleDone = async () => {
-    console.log('[CardForm]: handleDone() called with formState:', formState);
+    console.log("[CardForm]: handleDone() called with formState:", formState);
+
     try {
+      // Calculate expires_at
       let expires_at = null;
       if (formState.expiresHours) {
         const now = new Date();
@@ -58,22 +60,18 @@ function CardForm({ onClose, onSave, initialData = {} }) {
       const userName = cardData?.name;
       const profilePhoto = cardData?.profilePhoto;
 
-      if (!phone || !userName) {
-        console.warn('[CardForm] No phone or userName in cardData. Possibly user skipped Onboarding?');
-      }
-
-      console.log('[CardForm] => Upserting user with phone:', phone, 'name:', userName);
+      console.log("[CardForm] => Upserting user with phone:", phone, "name:", userName);
       const user = await upsertUser({
         phone_number: phone,
         name: userName,
         profile_image_url: profilePhoto,
       });
-      console.log('[CardForm] => upserted user =>', user);
+      console.log("[CardForm] => upserted user =>", user);
 
-      //  Create or update
       let dealResult;
       if (formState.id) {
-        console.log('[CardForm]: Updating existing deal with ID:', formState.id);
+        // UPDATE existing deal
+        console.log("[CardForm]: Updating existing deal with ID:", formState.id);
         dealResult = await updateDeal({
           dealId: formState.id,
           title: formState.dealTitle,
@@ -82,8 +80,19 @@ function CardForm({ onClose, onSave, initialData = {} }) {
           creatorName: formState.name,
           deal_value: formState.dealValue,
         });
+
+        // Log "updated" activity
+        addActivity({
+          userId: user.id,
+          name: user.name,
+          profileImage: user.profile_image_url,
+          action: `updated "${formState.dealTitle}"`,
+          dealId: dealResult.id,
+          timestamp: new Date().toISOString(),
+        });
       } else {
-        console.log('[CardForm]: Creating new deal (no existing ID).');
+        // CREATE new deal
+        console.log("[CardForm]: Creating new deal (no existing ID).");
         dealResult = await createDeal({
           creator_id: user.id,
           title: formState.dealTitle,
@@ -93,7 +102,7 @@ function CardForm({ onClose, onSave, initialData = {} }) {
           deal_value: formState.dealValue,
         });
 
-        // ADDED: Log "created" activity
+        // Log "created" activity
         addActivity({
           userId: user.id,
           name: user.name,
@@ -104,7 +113,7 @@ function CardForm({ onClose, onSave, initialData = {} }) {
         });
       }
 
-      console.log('[CardForm]: Supabase returned dealResult:', dealResult);
+      console.log("[CardForm]: Supabase returned dealResult:", dealResult);
 
       // Update global cardData
       setCardData((prev) => ({
@@ -121,11 +130,11 @@ function CardForm({ onClose, onSave, initialData = {} }) {
         id: dealResult.id,
       });
 
-      console.log('[CardForm]: Deal creation/update succeeded. Calling onClose...');
+      console.log("[CardForm]: Deal creation/update succeeded. Calling onClose...");
       onClose?.();
     } catch (err) {
-      console.error('[CardForm]: Error completing deal creation/update:', err);
-      // optional: show a UI message
+      console.error("[CardForm]: Error completing deal creation/update:", err);
+      // optionally show a UI error message here
     }
   };
 
@@ -142,18 +151,20 @@ function CardForm({ onClose, onSave, initialData = {} }) {
     <div
       className="relative w-full h-full flex flex-col items-center"
       style={{
-        backgroundColor: 'transparent',
-        boxSizing: 'border-box',
-        padding: '5%',
-        overflow: 'visible',
+        backgroundColor: "transparent",
+        boxSizing: "border-box",
+        padding: "5%",
+        overflow: "visible",
       }}
     >
       <div className="flex flex-col w-full flex-grow items-start">
+        {/* Card Preview */}
         <Card isInForm={true} cardData={previewCardData} />
 
+        {/* Form Fields */}
         <div
           className="flex flex-col bg-white rounded-lg overflow-hidden px-[5%] box-border w-full max-w-lg mt-4"
-          style={{ height: 'auto' }}
+          style={{ height: "auto" }}
         >
           <div className="flex justify-between items-center mb-4 border-b border-gray-300 pb-4">
             <Text type="large" role="primary" className="text-left">
@@ -197,15 +208,16 @@ function CardForm({ onClose, onSave, initialData = {} }) {
         </div>
       </div>
 
+      {/* Bottom Button */}
       <div className="w-full max-w-md mt-auto">
         <Button
           onClick={handleDone}
           type="secondary"
           className="w-full rounded-full font-semibold transition-all duration-150"
           style={{
-            padding: 'clamp(1.25rem, 2.5%, 3rem)',
-            fontSize: 'clamp(1.25rem, 2vw, 3rem)',
-            textAlign: 'center',
+            padding: "clamp(1.25rem, 2.5%, 3rem)",
+            fontSize: "clamp(1.25rem, 2vw, 3rem)",
+            textAlign: "center",
           }}
         >
           Complete
