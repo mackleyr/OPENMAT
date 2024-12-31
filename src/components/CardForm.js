@@ -5,11 +5,11 @@ import Button from "./Button";
 import { useCard } from "../contexts/CardContext";
 import { createDeal, updateDeal } from "../services/dealsService";
 import { upsertUser } from "../services/usersService";
-import { useActivity } from "../contexts/ActivityContext"; // <-- for logging
+import { useActivity } from "../contexts/ActivityContext";
 
 function CardForm({ onClose, onSave, initialData = {} }) {
   const { cardData, setCardData } = useCard();
-  const { addActivity } = useActivity(); // <-- addActivity from ActivityContext
+  const { addActivity } = useActivity();
 
   // Local form state for real-time preview
   const [formState, setFormState] = useState({
@@ -134,7 +134,6 @@ function CardForm({ onClose, onSave, initialData = {} }) {
       onClose?.();
     } catch (err) {
       console.error("[CardForm]: Error completing deal creation/update:", err);
-      // optionally show a UI error message here
     }
   };
 

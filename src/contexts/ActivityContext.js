@@ -1,4 +1,4 @@
-import React, { createContext, useState, useContext } from 'react';
+import React, { createContext, useState, useContext } from "react";
 
 const ActivityContext = createContext();
 
@@ -6,6 +6,7 @@ export const ActivityProvider = ({ children }) => {
   const [activities, setActivities] = useState([]);
 
   const addActivity = (activity) => {
+    // Prepend new activity
     setActivities((prevActivities) => [activity, ...prevActivities]);
   };
 

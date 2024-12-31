@@ -1,5 +1,3 @@
-// src/pages/ShareCard.jsx
-
 import React, { useState } from "react";
 import { useCard } from "../contexts/CardContext";
 import MainContainer from "../components/MainContainer";
@@ -16,6 +14,9 @@ import "../index.css";
 function ShareCard() {
   const { cardData, setCardData } = useCard();
 
+  // Track which deal is currently in focus
+  const [currentDealId, setCurrentDealId] = useState(null);
+
   // Modal flags
   const [showCardForm, setShowCardForm] = useState(false);
   const [showProfileSheet, setShowProfileSheet] = useState(false);
@@ -24,11 +25,9 @@ function ShareCard() {
 
   // Prefill data for the form
   const [cardFormData, setCardFormData] = useState(null);
-  const [currentDealId, setCurrentDealId] = useState(null);
 
   // Called when user taps “Open” or the plus button
   const handleOpenCardForm = () => {
-    // Pre-fill from context
     setCardFormData({
       id: cardData.id,
       expiresHours: cardData.expires,
@@ -36,13 +35,10 @@ function ShareCard() {
       dealTitle: cardData.title,
       dealDescription: cardData.description || "",
       dealImage: cardData.image,
-      // Also pass name + photo from context
       name: cardData.name,
       profilePhoto: cardData.profilePhoto,
     });
-    setCurrentDealId(cardData?.id || null);
 
-    // Show onboarding first if user not onboarded
     if (!userOnboarded) {
       setShowOnboardingForm(true);
     } else {
@@ -61,7 +57,7 @@ function ShareCard() {
   const handleSaveCard = (formData) => {
     console.log("ShareCard -> handleSaveCard -> final form data:", formData);
 
-    // Merge fields into global cardData, including name/photo
+    // Merge fields into global cardData if desired
     setCardData((prev) => ({
       ...prev,
       id: formData.id,
@@ -70,9 +66,12 @@ function ShareCard() {
       value: formData.dealValue,
       title: formData.dealTitle,
       description: formData.dealDescription,
-      name: formData.name,                 // <--
-      profilePhoto: formData.profilePhoto, // <--
+      name: formData.name,
+      profilePhoto: formData.profilePhoto,
     }));
+
+    // The NEW dealId is in formData.id
+    setCurrentDealId(formData.id);
 
     setShowCardForm(false);
   };
@@ -84,13 +83,13 @@ function ShareCard() {
   return (
     <div className="min-h-screen flex flex-col bg-black relative">
       <MainContainer className="relative flex flex-col justify-between h-full">
-        {/* Main Content */}
         <div className="flex-1 flex flex-col items-center justify-start w-full px-[4%] py-[4%]">
           {/* The “home screen” card reading from context */}
           <Card onOpenCardForm={handleOpenCardForm} />
 
           <div className="w-full max-w-[768px]">
             <Buttons mode="share" />
+            {/* pass currentDealId to ActivityLog */}
             <ActivityLog dealId={currentDealId} onProfileClick={handleProfileClick} />
           </div>
         </div>
