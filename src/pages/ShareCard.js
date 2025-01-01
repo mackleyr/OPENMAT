@@ -11,22 +11,27 @@ import ProfileSheet from "../components/ProfileSheet";
 import OnboardingForm from "../components/OnboardingForm";
 import "../index.css";
 
+// Import supabase and your upsertUser service
+import { supabase } from "../supabaseClient";
+import { upsertUser } from "../services/usersService";
+import { useActivity } from "../contexts/ActivityContext";
+
 function ShareCard() {
   const { cardData, setCardData } = useCard();
+  const { addActivity } = useActivity();
 
-  // Track which deal is currently in focus
   const [currentDealId, setCurrentDealId] = useState(null);
 
-  // Modal flags
+  // Modals
   const [showCardForm, setShowCardForm] = useState(false);
   const [showProfileSheet, setShowProfileSheet] = useState(false);
   const [showOnboardingForm, setShowOnboardingForm] = useState(false);
   const [userOnboarded, setUserOnboarded] = useState(false);
 
-  // Prefill data for the form
+  // For CardForm
   const [cardFormData, setCardFormData] = useState(null);
 
-  // Called when user taps “Open” or the plus button
+  // Called when user taps “+” or “Open”
   const handleOpenCardForm = () => {
     setCardFormData({
       id: cardData.id,
@@ -46,18 +51,15 @@ function ShareCard() {
     }
   };
 
-  // Called if user finishes onboarding
-  const handleOnboardingComplete = (userData) => {
+  // After Onboarding
+  const handleOnboardingComplete = () => {
     setUserOnboarded(true);
     setShowOnboardingForm(false);
     setShowCardForm(true);
   };
 
-  // Called after user taps “Complete” in <CardForm>
+  // After completing CardForm
   const handleSaveCard = (formData) => {
-    console.log("ShareCard -> handleSaveCard -> final form data:", formData);
-
-    // Merge fields into global cardData if desired
     setCardData((prev) => ({
       ...prev,
       id: formData.id,
@@ -69,42 +71,70 @@ function ShareCard() {
       name: formData.name,
       profilePhoto: formData.profilePhoto,
     }));
-
-    // The NEW dealId is in formData.id
     setCurrentDealId(formData.id);
-
     setShowCardForm(false);
   };
 
-  const handleProfileClick = () => {
-    setShowProfileSheet(true);
+  // New function to track “shared deal” in DB
+  const handleShareDeal = async () => {
+    try {
+      // 1) Ensure user has a row in `users`
+      const user = await upsertUser({
+        phone_number: cardData.phone,
+        name: cardData.name,
+        profile_image_url: cardData.profilePhoto,
+      });
+      // 2) Insert a row in `shares` table
+      const { data, error } = await supabase
+        .from("shares")
+        .insert({
+          deal_id: currentDealId,
+          sharer_id: user.id,
+        })
+        .single();
+      if (error) throw error;
+
+      // 3) Also log to local ActivityContext
+      addActivity({
+        userId: user.id,
+        name: user.name,
+        profileImage: user.profile_image_url,
+        action: "shared gift card",
+        dealId: currentDealId,
+        timestamp: new Date().toISOString(),
+      });
+
+      // Optionally: copy link to clipboard or show success
+      console.log("[ShareCard] => Shared deal inserted in DB:", data);
+      alert("Deal shared successfully!");
+    } catch (err) {
+      console.error("[ShareCard] handleShareDeal error =>", err);
+      alert("Error sharing deal.");
+    }
   };
+
+  const handleProfileClick = () => setShowProfileSheet(true);
 
   return (
     <div className="min-h-screen flex flex-col bg-black relative">
       <MainContainer className="relative flex flex-col justify-between h-full">
         <div className="flex-1 flex flex-col items-center justify-start w-full px-[4%] py-[4%]">
-          {/* The “home screen” card reading from context */}
           <Card onOpenCardForm={handleOpenCardForm} />
-
           <div className="w-full max-w-[768px]">
-            <Buttons mode="share" />
-            {/* pass currentDealId to ActivityLog */}
+            {/* Pass handleShareDeal to Buttons */}
+            <Buttons mode="share" onShare={handleShareDeal} />
             <ActivityLog dealId={currentDealId} onProfileClick={handleProfileClick} />
           </div>
         </div>
-
         <Footer />
         <AddButton onOpenCardForm={handleOpenCardForm} />
 
-        {/* Onboarding overlay */}
+        {/* Overlays */}
         {showOnboardingForm && (
           <div className="absolute inset-0 z-50 bg-white">
             <OnboardingForm onComplete={handleOnboardingComplete} />
           </div>
         )}
-
-        {/* Card form overlay */}
         {showCardForm && !showOnboardingForm && (
           <div className="absolute inset-0 z-50 bg-white">
             <CardForm
@@ -114,8 +144,6 @@ function ShareCard() {
             />
           </div>
         )}
-
-        {/* Profile sheet overlay */}
         {showProfileSheet && (
           <div className="absolute inset-0 z-50">
             <ProfileSheet onClose={() => setShowProfileSheet(false)} />

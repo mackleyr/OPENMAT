@@ -7,8 +7,10 @@ import { useCard } from '../contexts/CardContext';
 /**
  * mode='share' => "Copy Link" + "Share"
  * mode='claim' => "Claim" + "Share"
+ *
+ * NEW: onShare => Optional parent function to run DB logic (e.g. upsert 'shares', addActivity, etc.)
  */
-function Buttons({ mode = 'share', onClaim }) {
+function Buttons({ mode = 'share', onClaim, onShare }) {
   const [isCopyClicked, setIsCopyClicked] = useState(false);
   const [isShareClicked, setIsShareClicked] = useState(false);
 
@@ -32,7 +34,7 @@ function Buttons({ mode = 'share', onClaim }) {
         console.error("Failed to copy link:", error);
       }
     } else if (mode === 'claim') {
-      // "Claim" logic 
+      // "Claim" logic
       if (onClaim) {
         onClaim(); // let ClaimCard handle it (show onboarding, etc.)
       } else {
@@ -45,6 +47,16 @@ function Buttons({ mode = 'share', onClaim }) {
 
   // Handle Share Button
   const handleShareClick = async () => {
+    // 1) Call parent's onShare (e.g., to insert into DB + addActivity)
+    if (onShare) {
+      try {
+        await onShare();
+      } catch (err) {
+        console.error("[Buttons] onShare error:", err);
+      }
+    }
+
+    // 2) Then proceed with the Web Share API fallback
     if (!cardData?.share_link) {
       console.log("No share link to share.");
       return;
@@ -78,9 +90,10 @@ function Buttons({ mode = 'share', onClaim }) {
   };
 
   // Decide button labels based on mode
-  const primaryLabel = mode === 'share'
-    ? (isCopyClicked ? 'Copied!' : 'Copy Link')
-    : (isCopyClicked ? 'Claimed!' : 'Claim');
+  const primaryLabel =
+    mode === 'share'
+      ? isCopyClicked ? 'Copied!' : 'Copy Link'
+      : isCopyClicked ? 'Claimed!' : 'Claim';
 
   const secondaryLabel = isShareClicked ? 'Shared!' : 'Share';
 

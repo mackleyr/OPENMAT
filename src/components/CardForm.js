@@ -86,7 +86,7 @@ function CardForm({ onClose, onSave, initialData = {} }) {
           userId: user.id,
           name: user.name,
           profileImage: user.profile_image_url,
-          action: `updated "${formState.dealTitle}"`,
+          action: `updated gift card`,
           dealId: dealResult.id,
           timestamp: new Date().toISOString(),
         });
@@ -107,7 +107,7 @@ function CardForm({ onClose, onSave, initialData = {} }) {
           userId: user.id,
           name: user.name,
           profileImage: user.profile_image_url,
-          action: `created "${formState.dealTitle}"`,
+          action: "created gift card",
           dealId: dealResult.id,
           timestamp: new Date().toISOString(),
         });

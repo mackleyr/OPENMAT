@@ -89,7 +89,7 @@ function ClaimCard() {
             if (sharerName && sharerName.toLowerCase() !== userRow.name.toLowerCase()) {
               // Non-creator share scenario
               addActivity({
-                userId: "non-creator-id", // or you can get from DB if you track Parker
+                userId: "non-creator-id",
                 name: sharerName,
                 profileImage: "",
                 action: "shared deal",
@@ -154,7 +154,7 @@ function ClaimCard() {
       userId: "new-visitor-id-or-similar", // or the ID from Supabase if you do an upsert
       name: userData.name,
       profileImage: userData.profilePhoto,
-      action: "claimed a gift card",
+      action: "claimed gift card",
       dealId: dealData.id,
       timestamp: new Date().toISOString(),
     });
