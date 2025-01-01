@@ -20,26 +20,24 @@ function timeAgo(timestamp) {
 }
 
 function ActivityLog({ onProfileClick, dealId, userId }) {
-  const { getActivitiesByDealId, getActivitiesByUser, activities } = useActivity();
+  const { getActivitiesByDeal, getActivitiesByUser, activities } = useActivity();
   const { cardData } = useCard();
   const [filteredActivities, setFilteredActivities] = useState([]);
 
   useEffect(() => {
     let fetchedActivities = [];
     if (dealId) {
-      fetchedActivities = getActivitiesByDealId(dealId);
+      fetchedActivities = getActivitiesByDeal(dealId);
     } else if (userId) {
       fetchedActivities = getActivitiesByUser(userId);
     }
     setFilteredActivities(fetchedActivities);
-  }, [dealId, userId, activities, getActivitiesByDealId, getActivitiesByUser]);
+  }, [dealId, userId, activities, getActivitiesByDeal, getActivitiesByUser]);
 
   return (
     <div
       className="flex flex-col flex-1 bg-gray-50 rounded-lg overflow-hidden px-[5%] py-[5%] box-border"
-      style={{
-        height: "100%", // Stretch to full available height
-      }}
+      style={{ height: "100%" }}
     >
       {/* Header */}
       <div className="flex justify-between items-center mb-4 border-b border-gray-300 pb-4">
@@ -56,9 +54,10 @@ function ActivityLog({ onProfileClick, dealId, userId }) {
               key={index}
               className="flex items-center py-4 px-5 rounded-lg border border-transparent hover:bg-gray-100 hover:border-gray-300 transition-all duration-150"
             >
+              {/* Use user_profile_url from the DB or default */}
               <Profile
-                src={activity.profileImage || defaultProfile}
-                altText={`${activity.name}'s profile`}
+                src={activity.user_profile_url || defaultProfile}
+                altText={`${activity.user_name}'s profile`}
                 size={50} // Larger profile image
                 onClick={onProfileClick}
               />
@@ -71,11 +70,12 @@ function ActivityLog({ onProfileClick, dealId, userId }) {
                       color: textColors.primary,
                     }}
                   >
-                    {activity.name}
+                    {activity.user_name}
                   </span>{" "}
                   {activity.action}{" "}
                   <span style={{ color: textColors.tertiary }}>
-                    {timeAgo(activity.timestamp)}
+                    {/* We use activity.created_at for timeAgo */}
+                    {timeAgo(activity.created_at)}
                   </span>
                 </Text>
               </div>
