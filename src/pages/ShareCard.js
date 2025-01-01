@@ -17,7 +17,7 @@ import { useActivity } from "../contexts/ActivityContext";
 
 function ShareCard() {
   const { cardData, setCardData } = useCard();
-  const { addActivityToDB } = useActivity(); // <--- from our new context
+  const { addActivity } = useActivity(); // <--- from our new context
   const [currentDealId, setCurrentDealId] = useState(null);
 
   // Modals
@@ -77,7 +77,7 @@ function ShareCard() {
       profile_image_url: cardData.profilePhoto,
     });
 
-    await addActivityToDB({
+    await addActivity({
       userId: user.id,
       userName: user.name,
       userProfile: user.profile_image_url,
@@ -100,7 +100,7 @@ function ShareCard() {
         .insert({ deal_id: currentDealId, sharer_id: user.id });
 
       // Upsert “shared gift card” to the DB
-      await addActivityToDB({
+      await addActivity({
         userId: user.id,
         userName: user.name,
         userProfile: user.profile_image_url,

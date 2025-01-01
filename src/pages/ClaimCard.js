@@ -33,7 +33,7 @@ function ClaimCard() {
   const [currentDealId, setCurrentDealId] = useState(null);
 
   // from global DB-based context
-  const { addActivityToDB } = useActivity();
+  const { addActivity } = useActivity();
 
   useEffect(() => {
     const fetchDeal = async () => {
@@ -74,7 +74,7 @@ function ClaimCard() {
           // Distinguish "creator share" from "non-creator share"
           if (sharerName && sharerName.toLowerCase() !== userRow.name.toLowerCase()) {
             // Non-creator scenario
-            await addActivityToDB({
+            await addActivity({
               userId: "non-creator-id", // or upsert if you pass phone, etc.
               userName: sharerName,
               userProfile: "", // unknown
@@ -83,7 +83,7 @@ function ClaimCard() {
             });
           } else {
             // Creator scenario
-            await addActivityToDB({
+            await addActivity({
               userId: userRow.id,
               userName: userRow.name,
               userProfile: userRow.profile_image_url,
@@ -97,7 +97,7 @@ function ClaimCard() {
     };
 
     fetchDeal();
-  }, [creatorName, dealId, addActivityToDB, sharerName]);
+  }, [creatorName, dealId, addActivity, sharerName]);
 
   const handleClaim = () => {
     if (!userOnboarded) setShowOnboardingForm(true);
@@ -117,7 +117,7 @@ function ClaimCard() {
     });
 
     // 2) Upsert "claimed gift card"
-    await addActivityToDB({
+    await addActivity({
       userId: newUser.id,
       userName: newUser.name,
       userProfile: newUser.profile_image_url,
