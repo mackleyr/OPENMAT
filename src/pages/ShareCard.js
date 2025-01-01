@@ -11,15 +11,13 @@ import ProfileSheet from "../components/ProfileSheet";
 import OnboardingForm from "../components/OnboardingForm";
 import "../index.css";
 
-// Import supabase and your upsertUser service
 import { supabase } from "../supabaseClient";
 import { upsertUser } from "../services/usersService";
 import { useActivity } from "../contexts/ActivityContext";
 
 function ShareCard() {
   const { cardData, setCardData } = useCard();
-  const { addActivity } = useActivity();
-
+  const { addActivityToDB } = useActivity(); // <--- from our new context
   const [currentDealId, setCurrentDealId] = useState(null);
 
   // Modals
@@ -28,10 +26,8 @@ function ShareCard() {
   const [showOnboardingForm, setShowOnboardingForm] = useState(false);
   const [userOnboarded, setUserOnboarded] = useState(false);
 
-  // For CardForm
   const [cardFormData, setCardFormData] = useState(null);
 
-  // Called when user taps “+” or “Open”
   const handleOpenCardForm = () => {
     setCardFormData({
       id: cardData.id,
@@ -51,15 +47,14 @@ function ShareCard() {
     }
   };
 
-  // After Onboarding
   const handleOnboardingComplete = () => {
     setUserOnboarded(true);
     setShowOnboardingForm(false);
     setShowCardForm(true);
   };
 
-  // After completing CardForm
-  const handleSaveCard = (formData) => {
+  const handleSaveCard = async (formData) => {
+    // 1) Merge new deal data
     setCardData((prev) => ({
       ...prev,
       id: formData.id,
@@ -73,39 +68,46 @@ function ShareCard() {
     }));
     setCurrentDealId(formData.id);
     setShowCardForm(false);
+
+    // 2) Upsert “created gift card”
+    // If you do upsertUser here to get userId, do so:
+    const user = await upsertUser({
+      phone_number: cardData.phone,
+      name: cardData.name,
+      profile_image_url: cardData.profilePhoto,
+    });
+
+    await addActivityToDB({
+      userId: user.id,
+      userName: user.name,
+      userProfile: user.profile_image_url,
+      action: "created gift card",
+      dealId: formData.id,
+    });
   };
 
-  // New function to track “shared deal” in DB
   const handleShareDeal = async () => {
     try {
-      // 1) Ensure user has a row in `users`
       const user = await upsertUser({
         phone_number: cardData.phone,
         name: cardData.name,
         profile_image_url: cardData.profilePhoto,
       });
-      // 2) Insert a row in `shares` table
-      const { data, error } = await supabase
-        .from("shares")
-        .insert({
-          deal_id: currentDealId,
-          sharer_id: user.id,
-        })
-        .single();
-      if (error) throw error;
 
-      // 3) Also log to local ActivityContext
-      addActivity({
+      // Insert a row in `shares` if you want referral logic
+      await supabase
+        .from("shares")
+        .insert({ deal_id: currentDealId, sharer_id: user.id });
+
+      // Upsert “shared gift card” to the DB
+      await addActivityToDB({
         userId: user.id,
-        name: user.name,
-        profileImage: user.profile_image_url,
+        userName: user.name,
+        userProfile: user.profile_image_url,
         action: "shared gift card",
         dealId: currentDealId,
-        timestamp: new Date().toISOString(),
       });
 
-      // Optionally: copy link to clipboard or show success
-      console.log("[ShareCard] => Shared deal inserted in DB:", data);
       alert("Deal shared successfully!");
     } catch (err) {
       console.error("[ShareCard] handleShareDeal error =>", err);
@@ -113,23 +115,23 @@ function ShareCard() {
     }
   };
 
-  const handleProfileClick = () => setShowProfileSheet(true);
-
   return (
     <div className="min-h-screen flex flex-col bg-black relative">
       <MainContainer className="relative flex flex-col justify-between h-full">
         <div className="flex-1 flex flex-col items-center justify-start w-full px-[4%] py-[4%]">
           <Card onOpenCardForm={handleOpenCardForm} />
           <div className="w-full max-w-[768px]">
-            {/* Pass handleShareDeal to Buttons */}
             <Buttons mode="share" onShare={handleShareDeal} />
-            <ActivityLog dealId={currentDealId} onProfileClick={handleProfileClick} />
+            {/**
+             * Now <ActivityLog> pulls from the global DB-based context
+             * so it instantly shows "created gift card" or "shared gift card"
+             */}
+            <ActivityLog dealId={currentDealId} />
           </div>
         </div>
         <Footer />
         <AddButton onOpenCardForm={handleOpenCardForm} />
 
-        {/* Overlays */}
         {showOnboardingForm && (
           <div className="absolute inset-0 z-50 bg-white">
             <OnboardingForm onComplete={handleOnboardingComplete} />
