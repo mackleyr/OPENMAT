@@ -13,7 +13,7 @@ export const ActivityProvider = ({ children }) => {
       const { data, error } = await supabase
         .from("activities")
         .select("*")
-        .order("created_at", { ascending: false }); // newest first
+        .order("created_at", { ascending: false });
 
       if (error) {
         console.error("[ActivityContext] => Error fetching initial activities:", error);
@@ -37,30 +37,24 @@ export const ActivityProvider = ({ children }) => {
           table: "activities",
         },
         (payload) => {
-          // 'payload' has { new, old, eventType }
           console.log("[ActivityContext] => Realtime payload:", payload);
 
           if (payload.eventType === "INSERT") {
             const newActivity = payload.new;
             console.log("[ActivityContext] => New activity inserted:", newActivity);
-
-            // Prepend new row
             setActivities((prev) => [newActivity, ...prev]);
           }
-
-          // If you handle UPDATES or DELETES, do so here.
+          // handle UPDATE/DELETE if needed
         }
       )
       .subscribe();
 
-    // Cleanup
     return () => {
       console.log("[ActivityContext] => Removing realtime subscription for 'activities'...");
       supabase.removeChannel(subscription);
     };
   }, []);
 
-  // A helper to upsert a new activity to DB (with 'on_conflict' if you want no duplicates)
   const addActivity = async ({ userId, userName, userProfile, action, dealId }) => {
     console.log("[ActivityContext] => addActivity() called with:", {
       userId,
@@ -82,9 +76,7 @@ export const ActivityProvider = ({ children }) => {
             deal_id: dealId,
           },
         ],
-        {
-          onConflict: "user_id,deal_id,action",
-        }
+        { onConflict: "user_id,deal_id,action" }
       );
 
     if (error) {
@@ -94,7 +86,6 @@ export const ActivityProvider = ({ children }) => {
     }
   };
 
-  // Queries for filtering
   const getActivitiesByDeal = (dealId) => {
     const matching = activities.filter((a) => a.deal_id === dealId);
     console.log("[ActivityContext] => getActivitiesByDeal() =>", { dealId, matching });
