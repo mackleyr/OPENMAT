@@ -46,7 +46,7 @@ export const ActivityProvider = ({ children }) => {
   }, []);
 
   // 3) A helper to upsert a new activity to DB (using 'on_conflict' if you want no duplicates)
-  const addActivityToDB = async ({
+  const addActivity = async ({
     userId,
     userName,
     userProfile,
@@ -85,7 +85,7 @@ export const ActivityProvider = ({ children }) => {
     <ActivityContext.Provider
       value={{
         activities,
-        addActivityToDB,
+        addActivity,
         getActivitiesByDeal,
         getActivitiesByUser,
       }}
