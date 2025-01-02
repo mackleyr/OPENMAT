@@ -10,16 +10,15 @@ import ProfileSheet from "../components/ProfileSheet";
 import OnboardingForm from "../components/OnboardingForm";
 import { supabase } from "../supabaseClient";
 import { upsertUser } from "../services/usersService";
-
-// 1) import our new Buttons
-import Buttons from "../components/Buttons";
-
-// 2) import contexts
 import { useCard } from "../contexts/CardContext";
 import { useActivity } from "../contexts/ActivityContext";
 
+// Buttons now has the same container logic, but the 
+// outer container is here in TherealDeal.jsx
+import Buttons from "../components/Buttons";
+
 function TherealDeal() {
-  // We read optional params for “creatorName” + “dealId”, but we can handle empty or missing.
+  // Same logic: read optional :creatorName and :dealId
   const { creatorName, dealId } = useParams();
   const [searchParams] = useSearchParams();
   const sharerName = searchParams.get("sharer");
@@ -81,7 +80,7 @@ function TherealDeal() {
         if (userRow) {
           setCreatorUser(userRow);
 
-          // If we have a “sharer” name that differs from the creator’s, record a share activity
+          // If we have a “sharer” name that differs from the creator’s, record a share
           if (sharerName && sharerName.toLowerCase() !== userRow.name.toLowerCase()) {
             await addActivity({
               userId: "non-creator-id", // Or upsert if you have phone, etc.
@@ -109,9 +108,8 @@ function TherealDeal() {
     fetchDeal();
   }, [creatorName, dealId, addActivity, sharerName]);
 
-  // Decide if we have an existing deal in “edit mode” or if the user is creating from scratch
+  // Decide if we have an existing deal in “edit mode” or if the user is brand-new
   const handleOpenCardForm = () => {
-    // If we have existing deal data (from supabase), fill the form with that
     const existing = dealData || {};
 
     // Prepare data for <CardForm>
@@ -122,7 +120,7 @@ function TherealDeal() {
       dealTitle: existing.title || "",
       dealDescription: existing.description || "",
       dealImage: existing.background || "",
-      // or fallback to the user’s local “cardData”
+      // fallback to user’s local “cardData”
       name: cardData?.name,
       profilePhoto: cardData?.profilePhoto,
     };
@@ -133,8 +131,11 @@ function TherealDeal() {
     }));
 
     // If user not onboarded, show Onboarding first
-    if (!userOnboarded) setShowOnboardingForm(true);
-    else setShowCardForm(true);
+    if (!userOnboarded) {
+      setShowOnboardingForm(true);
+    } else {
+      setShowCardForm(true);
+    }
   };
 
   const handleOnboardingComplete = () => {
@@ -143,7 +144,7 @@ function TherealDeal() {
     setShowCardForm(true);
   };
 
-  // After we finish the CardForm (the user hits “Complete”)
+  // After we finish the CardForm
   const handleSaveCard = async (formData) => {
     // 1) stash in context
     setCardData((prev) => ({
@@ -177,7 +178,7 @@ function TherealDeal() {
     });
   };
 
-  // handle “Share” — same as before
+  // handle “Share” (if you want a 3rd button eventually)
   const handleShareDeal = async () => {
     try {
       const user = await upsertUser({
@@ -186,13 +187,10 @@ function TherealDeal() {
         profile_image_url: cardData.profilePhoto,
       });
 
-      // Insert a row in `shares` if you want referral logic
-      await supabase.from("shares").insert({
-        deal_id: currentDealId,
-        sharer_id: user.id,
-      });
+      await supabase
+        .from("shares")
+        .insert({ deal_id: currentDealId, sharer_id: user.id });
 
-      // Upsert “shared gift card” to the DB
       await addActivity({
         userId: user.id,
         userName: user.name,
@@ -216,7 +214,7 @@ function TherealDeal() {
       return;
     }
 
-    // otherwise, do something to “claim” in DB
+    // otherwise, claim in DB
     try {
       const user = await upsertUser({
         phone_number: cardData.phone,
@@ -239,10 +237,15 @@ function TherealDeal() {
     }
   };
 
-  if (loading) return <div className="text-center mt-8 text-white">Loading deal...</div>;
+  if (loading) {
+    return (
+      <div className="text-center mt-8 text-white">
+        Loading deal...
+      </div>
+    );
+  }
 
-  // If we loaded a specific deal from DB, use that for display in <Card>
-  // Else if we’re fresh => cardData might contain partial data
+  // For display in <Card>
   const cardDataForDisplay = {
     value: dealData?.deal_value || cardData?.value || "",
     title: dealData?.title || cardData?.title || "",
@@ -254,28 +257,32 @@ function TherealDeal() {
   return (
     <div className="min-h-screen flex flex-col bg-black relative">
       <MainContainer className="relative flex flex-col justify-between h-full">
+        {/* Centered content area */}
         <div className="flex-1 flex flex-col items-center justify-start w-full px-[4%] py-[4%]">
-          {/* 1) The big card display */}
-          <Card cardData={cardDataForDisplay} onOpenCardForm={handleOpenCardForm} />
+          {/* You can pick 768 or 600 for max-width */}
+          <div className="w-full max-w-[600px] mx-auto">
+            {/* 1) The big card display */}
+            <Card
+              cardData={cardDataForDisplay}
+              onOpenCardForm={handleOpenCardForm}
+            />
 
-          {/* 2) Buttons: left => “Copy Link”, right => “Claim” 
-              plus the share logic. 
-          */}
-          <Buttons
-            mode="share"       // we can keep “share” so the left button is “Copy Link”
-            onShare={handleShareDeal}
-            onClaim={handleClaim} // override so the right button is “Claim”
-          />
+            {/* 2) Buttons => left: “Copy Link”, right: “Claim” */}
+            <Buttons 
+              onShare={handleShareDeal}
+              onClaim={handleClaim}
+            />
 
-          {/* 3) ActivityLog for this deal */}
-          <ActivityLog dealId={currentDealId} />
+            {/* 3) ActivityLog for this deal */}
+            <ActivityLog dealId={currentDealId} />
+          </div>
         </div>
 
-        {/* add “Add” button => opens the card form */}
+        {/* Footer + Add button (like old pages) */}
         <Footer />
         <AddButton onOpenCardForm={handleOpenCardForm} />
 
-        {/* Conditionals for modals */}
+        {/* Overlays / Modals */}
         {showProfileSheet && (
           <div className="absolute inset-0 z-50">
             <ProfileSheet onClose={() => setShowProfileSheet(false)} />
@@ -291,7 +298,7 @@ function TherealDeal() {
             <CardForm
               onClose={() => setShowCardForm(false)}
               onSave={handleSaveCard}
-              initialData={cardData} // or build a formData object as above
+              initialData={cardData} 
             />
           </div>
         )}
