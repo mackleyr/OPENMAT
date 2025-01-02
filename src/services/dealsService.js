@@ -1,5 +1,4 @@
 // src/services/dealsService.js
-
 import { supabase } from '../supabaseClient';
 
 // CREATE
@@ -33,20 +32,17 @@ export const createDeal = async ({
       .insert([
         {
           creator_id,
-          title,                 // e.g. "Some title"
-          background,            // base64 image
+          title,
+          background,
           expires_at,
           share_link,
-          deal_value,            // <-- numeric string
+          deal_value,
         }
       ])
       .select('*')
       .single();
 
-    console.log("createDeal(): Supabase returned => data:", deal, "error:", dealError);
     if (dealError) throw dealError;
-
-    console.log("createDeal() success =>", deal);
     return deal;
   } catch (err) {
     console.error("createDeal() unhandled error:", err);
@@ -93,10 +89,7 @@ export const updateDeal = async ({
       .select('*')
       .single();
 
-    console.log("updateDeal(): Supabase returned => data:", updatedDeal, "error:", updateError);
     if (updateError) throw updateError;
-
-    console.log("updateDeal() success =>", updatedDeal);
     return updatedDeal;
   } catch (err) {
     console.error("updateDeal() unhandled error:", err);

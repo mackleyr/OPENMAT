@@ -1,42 +1,42 @@
+// src/components/Buttons.jsx
 import React, { useState } from "react";
 import { useCard } from "../contexts/CardContext";
 import Button from "./Button";
+import { useActivity } from "../contexts/ActivityContext";
 
+/**
+ * We assume:
+ *  - onShare => function that does "copy link" logic
+ *  - onClaim => function that triggers claim logic
+ */
 function Buttons({ onShare, onClaim }) {
-  const [isCopyClicked, setIsCopyClicked] = useState(false);
-  const [isClaimClicked, setIsClaimClicked] = useState(false);
+  const [isLeftClicked, setIsLeftClicked] = useState(false);
+  const [isRightClicked, setIsRightClicked] = useState(false);
 
   const { cardData } = useCard();
+  const { addActivity } = useActivity();
 
-  // Left: “Copy Link”
+  // Left button => "Copy Link"
   const handleCopyClick = async () => {
-    if (!cardData?.share_link) {
-      console.log("No share link to copy.");
-      return;
-    }
+    if (!onShare) return;
     try {
-      await navigator.clipboard.writeText(cardData.share_link);
-      setIsCopyClicked(true);
-      setTimeout(() => setIsCopyClicked(false), 5000);
-      console.log("Link copied:", cardData.share_link);
-    } catch (error) {
-      console.error("Failed to copy link:", error);
-    }
-  };
-
-  // Right: “Claim”
-  const handleClaimClick = async () => {
-    if (onClaim) {
-      await onClaim();
-      setIsClaimClicked(true);
-      setTimeout(() => setIsClaimClicked(false), 5000);
-    }
-  };
-
-  // Optional “Share” handler if you still want a third button
-  const handleShare = async () => {
-    if (onShare) {
       await onShare();
+      setIsLeftClicked(true);
+      setTimeout(() => setIsLeftClicked(false), 3000);
+    } catch (err) {
+      console.error("[Buttons] handleCopyClick =>", err);
+    }
+  };
+
+  // Right button => "Claim"
+  const handleClaimClick = async () => {
+    if (!onClaim) return;
+    try {
+      await onClaim();
+      setIsRightClicked(true);
+      setTimeout(() => setIsRightClicked(false), 3000);
+    } catch (err) {
+      console.error("[Buttons] handleClaimClick =>", err);
     }
   };
 
@@ -45,29 +45,18 @@ function Buttons({ onShare, onClaim }) {
       className="grid grid-cols-2 gap-[5%] px-[5%] py-[5%] w-full"
       style={{ boxSizing: "border-box" }}
     >
-      {/* left => Copy Link */}
+      {/* Left => Copy Link */}
       <Button
-        label={isCopyClicked ? "Copied!" : "Copy Link"}
+        label={isLeftClicked ? "Copied!" : "Copy Link"}
         type="secondary"
         onClick={handleCopyClick}
       />
-      
-      {/* right => Claim */}
+      {/* Right => Claim */}
       <Button
-        label={isClaimClicked ? "Claimed!" : "Claim"}
+        label={isRightClicked ? "Claimed!" : "Claim"}
         type="secondary"
         onClick={handleClaimClick}
       />
-
-      {/*
-       * If you want a third "Share" button, uncomment:
-       *
-       * <Button
-       *   label="Share"
-       *   type="secondary"
-       *   onClick={handleShare}
-       * />
-       */}
     </div>
   );
 }

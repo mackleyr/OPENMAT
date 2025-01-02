@@ -1,16 +1,16 @@
 // src/App.js
 import React from "react";
 import { Routes, Route } from "react-router-dom";
-import TherealDeal from "./pages/TherealDeal";
+import TheRealDeal from "./pages/TheRealDeal";
 
 function App() {
   return (
     <Routes>
       {/* If user goes to / => just show the new single page */}
-      <Route path="/" element={<TherealDeal />} />
+      <Route path="/" element={<TheRealDeal />} />
 
       {/* If user visits /share/:creatorName/:dealId => show the same page */}
-      <Route path="/share/:creatorName/:dealId" element={<TherealDeal />} />
+      <Route path="/share/:creatorName/:dealId" element={<TheRealDeal />} />
     </Routes>
   );
 }

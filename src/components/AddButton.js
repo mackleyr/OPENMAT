@@ -1,15 +1,20 @@
+// src/components/AddButton.jsx
+
 import React, { useState } from 'react';
 import { colorScheme } from '../config/Colors';
 import addIcon from '../assets/add.svg';
 
-function AddButton({ onOpenCouponForm }) {
+function AddButton({ onOpenCardForm }) {
   const [isHovered, setIsHovered] = useState(false);
 
   const handleClick = () => {
-    if (onOpenCouponForm) {
-      onOpenCouponForm(null); // Pass null to create a new coupon
+    // Exactly the same logic as tapping the card.
+    // We simply call onOpenCardForm() with no arguments
+    // to say: “Create a new card or open the existing one.”
+    if (onOpenCardForm) {
+      onOpenCardForm();
     } else {
-      console.error('onOpenCouponForm is not defined');
+      console.error('[AddButton] => onOpenCardForm is not defined');
     }
   };
 
@@ -24,9 +29,9 @@ function AddButton({ onOpenCouponForm }) {
         height: '10%',
         bottom: '6%',
         right: '6%',
-        backgroundColor: isHovered 
-          ? colorScheme.primary.background   // minorColor
-          : colorScheme.primary.background, // mainColor
+        backgroundColor: isHovered
+          ? colorScheme.primary.background
+          : colorScheme.primary.background,
         color: colorScheme.primary.text,
         transition: 'background-color 0.3s ease',
         cursor: 'pointer',
@@ -37,10 +42,7 @@ function AddButton({ onOpenCouponForm }) {
         src={addIcon}
         alt="Add"
         className="h-1/2 w-1/2"
-        style={{
-          // No additional filter needed here
-          transition: 'none',
-        }}
+        style={{ transition: 'none' }}
       />
     </button>
   );

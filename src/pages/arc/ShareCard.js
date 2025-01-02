@@ -1,19 +1,19 @@
 import React, { useState } from "react";
-import { useCard } from "../contexts/CardContext";
-import MainContainer from "../components/MainContainer";
-import Footer from "../components/Footer";
-import Card from "../components/Card";
-import Buttons from "../components/Buttons";
-import ActivityLog from "../components/ActivityLog";
-import AddButton from "../components/AddButton";
-import CardForm from "../components/CardForm";
-import ProfileSheet from "../components/ProfileSheet";
-import OnboardingForm from "../components/OnboardingForm";
-import "../index.css";
+import { useCard } from "../../contexts/CardContext";
+import MainContainer from "../../components/MainContainer";
+import Footer from "../../components/Footer";
+import Card from "../../components/Card";
+import Buttons from "../../components/Buttons";
+import ActivityLog from "../../components/ActivityLog";
+import AddButton from "../../components/AddButton";
+import CardForm from "../../components/CardForm";
+import ProfileSheet from "../../components/ProfileSheet";
+import OnboardingForm from "../../components/OnboardingForm";
+import "../../index.css";
 
-import { supabase } from "../supabaseClient";
-import { upsertUser } from "../services/usersService";
-import { useActivity } from "../contexts/ActivityContext";
+import { supabase } from "../../supabaseClient";
+import { upsertUser } from "../../services/usersService";
+import { useActivity } from "../../contexts/ActivityContext";
 
 function ShareCard() {
   const { cardData, setCardData } = useCard();

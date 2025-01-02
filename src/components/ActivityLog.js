@@ -1,3 +1,5 @@
+// src/components/ActivityLog.jsx
+
 import React, { useEffect, useState } from "react";
 import { useActivity } from "../contexts/ActivityContext";
 import { useCard } from "../contexts/CardContext";
@@ -20,7 +22,7 @@ function timeAgo(timestamp) {
 }
 
 function ActivityLog({ onProfileClick, dealId, userId }) {
-  const { getActivitiesByDeal, getActivitiesByUser, activities } = useActivity();
+  const { getActivitiesByDeal, getActivitiesByUser } = useActivity();
   const { cardData } = useCard();
   const [filteredActivities, setFilteredActivities] = useState([]);
 
@@ -32,7 +34,19 @@ function ActivityLog({ onProfileClick, dealId, userId }) {
       fetchedActivities = getActivitiesByUser(userId);
     }
     setFilteredActivities(fetchedActivities);
-  }, [dealId, userId, activities, getActivitiesByDeal, getActivitiesByUser]);
+  }, [dealId, userId, getActivitiesByDeal, getActivitiesByUser]);
+
+  // Because the global "activities" array might change frequently (real-time),
+  // we can also update whenever "activities" changes in ActivityContext:
+  // In that case, just do:
+  /*
+  useEffect(() => {
+    if (dealId) {
+      setFilteredActivities(getActivitiesByDeal(dealId));
+    }
+  }, [dealId, getActivitiesByDeal, activities]);
+  */
+  // But let's keep your approach if it works.
 
   return (
     <div
@@ -49,41 +63,46 @@ function ActivityLog({ onProfileClick, dealId, userId }) {
       {/* Scrollable Content */}
       <div className="overflow-y-auto flex-1 space-y-3">
         {filteredActivities.length > 0 ? (
-          filteredActivities.map((activity, index) => (
-            <div
-              key={index}
-              className="flex items-center py-4 px-5 rounded-lg border border-transparent hover:bg-gray-100 hover:border-gray-300 transition-all duration-150"
-            >
-              {/* Use user_profile_url from the DB or default */}
-              <Profile
-                src={activity.user_profile_url || defaultProfile}
-                altText={`${activity.user_name}'s profile`}
-                size={50} // Larger profile image
-                onClick={onProfileClick}
-              />
-              <div className="flex-1 ml-4">
-                <Text type="small">
-                  <span
-                    onClick={onProfileClick}
-                    style={{
-                      cursor: "pointer",
-                      color: textColors.primary,
-                    }}
-                  >
-                    {activity.user_name}
-                  </span>{" "}
-                  {activity.action}{" "}
-                  <span style={{ color: textColors.tertiary }}>
-                    {/* We use activity.created_at for timeAgo */}
-                    {timeAgo(activity.created_at)}
-                  </span>
-                </Text>
+          filteredActivities.map((activity, index) => {
+            // "activity.user" is the joined user object
+            const userName = activity.user?.name || "Anonymous";
+            const userPhoto = activity.user?.profile_image_url || defaultProfile;
+
+            return (
+              <div
+                key={activity.id || index}
+                className="flex items-center py-4 px-5 rounded-lg border border-transparent hover:bg-gray-100 hover:border-gray-300 transition-all duration-150"
+              >
+                {/* Use user.profile_image_url or a default */}
+                <Profile
+                  src={userPhoto}
+                  altText={`${userName}'s profile`}
+                  size={50}
+                  onClick={onProfileClick}
+                />
+                <div className="flex-1 ml-4">
+                  <Text type="small">
+                    <span
+                      onClick={onProfileClick}
+                      style={{
+                        cursor: "pointer",
+                        color: textColors.primary,
+                      }}
+                    >
+                      {userName}
+                    </span>{" "}
+                    {activity.action}{" "}
+                    <span style={{ color: textColors.tertiary }}>
+                      {timeAgo(activity.created_at)}
+                    </span>
+                  </Text>
+                </div>
               </div>
-            </div>
-          ))
+            );
+          })
         ) : (
           <Text type="medium" role="tertiary">
-            No action? Share a deal.
+            No action? Share your link.
           </Text>
         )}
       </div>

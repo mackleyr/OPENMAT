@@ -1,3 +1,5 @@
+// src/components/CardForm.jsx
+
 import React, { useState } from "react";
 import Card from "./Card";
 import Text from "../config/Text";
@@ -7,23 +9,23 @@ import { createDeal, updateDeal } from "../services/dealsService";
 import { upsertUser } from "../services/usersService";
 import { useActivity } from "../contexts/ActivityContext";
 
-function CardForm({ onClose, onSave, initialData = {} }) {
+function CardForm({ onClose, onSave, initialData }) {
+  const safeData = initialData ?? {};
+
   const { cardData, setCardData } = useCard();
   const { addActivity } = useActivity();
 
-  // Local form state for real-time preview
   const [formState, setFormState] = useState({
-    id: initialData.id ?? null,
-    expiresHours: initialData.expiresHours ?? null,
-    dealValue: initialData.dealValue ?? "",
-    dealTitle: initialData.dealTitle ?? "",
-    dealDescription: initialData.dealDescription ?? "",
-    dealImage: initialData.dealImage ?? null,
+    id: safeData.id ?? null,
+    expiresHours: safeData.expiresHours ?? null,
+    dealValue: safeData.dealValue ?? "",
+    dealTitle: safeData.dealTitle ?? "",
+    dealDescription: safeData.dealDescription ?? "",
+    dealImage: safeData.dealImage ?? null,
     name: cardData?.name || "",
     profilePhoto: cardData?.profilePhoto || "",
   });
 
-  // Handlers
   const handleValueChange = (e) => {
     setFormState((prev) => ({ ...prev, dealValue: e.target.value }));
   };
@@ -47,7 +49,6 @@ function CardForm({ onClose, onSave, initialData = {} }) {
     console.log("[CardForm]: handleDone() called with formState:", formState);
 
     try {
-      // Calculate expires_at
       let expires_at = null;
       if (formState.expiresHours) {
         const now = new Date();
@@ -55,7 +56,7 @@ function CardForm({ onClose, onSave, initialData = {} }) {
         expires_at = now.toISOString();
       }
 
-      // Upsert the user row
+      // Upsert the user row (if needed)
       const phone = cardData?.phone;
       const userName = cardData?.name;
       const profilePhoto = cardData?.profilePhoto;
@@ -70,7 +71,7 @@ function CardForm({ onClose, onSave, initialData = {} }) {
 
       let dealResult;
       if (formState.id) {
-        // UPDATE existing deal
+        // existing deal => update
         console.log("[CardForm]: Updating existing deal with ID:", formState.id);
         dealResult = await updateDeal({
           dealId: formState.id,
@@ -81,17 +82,14 @@ function CardForm({ onClose, onSave, initialData = {} }) {
           deal_value: formState.dealValue,
         });
 
-        // Log "updated" activity
+        // Insert "updated gift card"
         addActivity({
           userId: user.id,
-          name: user.name,
-          profileImage: user.profile_image_url,
-          action: `updated gift card`,
+          action: "updated gift card",
           dealId: dealResult.id,
-          timestamp: new Date().toISOString(),
         });
       } else {
-        // CREATE new deal
+        // new deal => create
         console.log("[CardForm]: Creating new deal (no existing ID).");
         dealResult = await createDeal({
           creator_id: user.id,
@@ -102,14 +100,11 @@ function CardForm({ onClose, onSave, initialData = {} }) {
           deal_value: formState.dealValue,
         });
 
-        // Log "created" activity
+        // Insert "created gift card"
         addActivity({
           userId: user.id,
-          name: user.name,
-          profileImage: user.profile_image_url,
           action: "created gift card",
           dealId: dealResult.id,
-          timestamp: new Date().toISOString(),
         });
       }
 
@@ -124,7 +119,7 @@ function CardForm({ onClose, onSave, initialData = {} }) {
         value: formState.dealValue,
       }));
 
-      // Notify parent
+      // Let TheRealDeal know we have a new/updated deal
       onSave?.({
         ...formState,
         id: dealResult.id,
@@ -137,7 +132,7 @@ function CardForm({ onClose, onSave, initialData = {} }) {
     }
   };
 
-  // Live preview data
+  // For preview
   const previewCardData = {
     value: formState.dealValue,
     title: formState.dealTitle,
@@ -172,7 +167,6 @@ function CardForm({ onClose, onSave, initialData = {} }) {
           </div>
 
           <div className="grid grid-cols-[auto_1fr] gap-y-4 gap-x-4 text-left">
-            {/* Value */}
             <Text type="medium" role="tertiary">Value</Text>
             <div className="flex items-center">
               <span className="text-black mr-2 font-medium">$</span>
@@ -185,7 +179,6 @@ function CardForm({ onClose, onSave, initialData = {} }) {
               />
             </div>
 
-            {/* Title */}
             <Text type="medium" role="tertiary">Title</Text>
             <input
               type="text"
@@ -195,7 +188,6 @@ function CardForm({ onClose, onSave, initialData = {} }) {
               className="border border-gray-300 rounded-md px-2 py-1 text-black focus:ring-1 focus:ring-[#1A1A1A] focus:outline-none"
             />
 
-            {/* Image */}
             <Text type="medium" role="tertiary">Image</Text>
             <input
               type="file"
@@ -207,7 +199,6 @@ function CardForm({ onClose, onSave, initialData = {} }) {
         </div>
       </div>
 
-      {/* Bottom Button */}
       <div className="w-full max-w-md mt-auto">
         <Button
           onClick={handleDone}

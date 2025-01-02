@@ -1,20 +1,20 @@
 import React, { useEffect, useState } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
-import { supabase } from "../supabaseClient";
-import Card from "../components/Card";
-import Buttons from "../components/Buttons";
-import MainContainer from "../components/MainContainer";
-import Footer from "../components/Footer";
-import ActivityLog from "../components/ActivityLog";
-import AddButton from "../components/AddButton";
-import ProfileSheet from "../components/ProfileSheet";
-import OnboardingForm from "../components/OnboardingForm";
-import SaveCard from "../components/SaveCard";
-import "../index.css";
+import { supabase } from "../../supabaseClient";
+import Card from "../../components/Card";
+import Buttons from "../../components/Buttons";
+import MainContainer from "../../components/MainContainer";
+import Footer from "../../components/Footer";
+import ActivityLog from "../../components/ActivityLog";
+import AddButton from "../../components/AddButton";
+import ProfileSheet from "../../components/ProfileSheet";
+import OnboardingForm from "../../components/OnboardingForm";
+import SaveCard from "../../components/SaveCard";
+import "../../index.css";
 
 // 1) Import the activity context
-import { useActivity } from "../contexts/ActivityContext";
-import { upsertUser } from "../services/usersService";
+import { useActivity } from "../../contexts/ActivityContext";
+import { upsertUser } from "../../services/usersService";
 
 function ClaimCard() {
   const { creatorName, dealId } = useParams();
