@@ -3,12 +3,12 @@
 // (i) Share, (ii) Deals
 
 import React, { useContext } from 'react';
-import { colorScheme, mainColor } from '../config/Colors';
-import Text from '../config/Text';
-import { ReactComponent as Logo2 } from '../assets/logo-2.svg';
-import Profile from './Profile';
-import { AuthContext } from '../contexts/AuthContext';
-import defaultProfile from '../assets/profile.svg';
+import { colorScheme, mainColor } from '../../config/Colors';
+import Text from '../../config/Text';
+import { ReactComponent as Logo2 } from '../../assets/logo-2.svg';
+import Profile from '../Profile';
+import { AuthContext } from '../../contexts/AuthContext';
+import defaultProfile from '../../assets/profile.svg';
 
 function Header({ onProfileClick }) {
   const { profileData } = useContext(AuthContext);

@@ -1,18 +1,16 @@
 // src/App.js
-
 import React from "react";
 import { Routes, Route } from "react-router-dom";
-import ShareCard from "./pages/ShareCard";
-import ClaimCard from "./pages/ClaimCard";
+import TherealDeal from "./pages/TherealDeal";
 
 function App() {
   return (
     <Routes>
-      {/* Home route (main screen) */}
-      <Route path="/" element={<ShareCard />} />
+      {/* If user goes to / => just show the new single page */}
+      <Route path="/" element={<TherealDeal />} />
 
-      {/* Route for anyone visiting the share link */}
-      <Route path="/share/:creatorName/:dealId" element={<ClaimCard />} />
+      {/* If user visits /share/:creatorName/:dealId => show the same page */}
+      <Route path="/share/:creatorName/:dealId" element={<TherealDeal />} />
     </Routes>
   );
 }
