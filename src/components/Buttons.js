@@ -1,3 +1,7 @@
+import React, { useState } from "react";
+import { useCard } from "../contexts/CardContext";
+import Button from "./Button";
+
 function Buttons({ onShare, onClaim }) {
   const [isCopyClicked, setIsCopyClicked] = useState(false);
   const [isClaimClicked, setIsClaimClicked] = useState(false);
@@ -29,31 +33,40 @@ function Buttons({ onShare, onClaim }) {
     }
   };
 
-  // If you still want a “Share” button, just wrap it in handleShare
+  // Optional “Share” handler if you still want a third button
   const handleShare = async () => {
-    if (onShare) await onShare();
+    if (onShare) {
+      await onShare();
+    }
   };
 
   return (
     <div
       className="grid grid-cols-2 gap-[5%] px-[5%] py-[5%] w-full"
-      style={{ boxSizing: 'border-box' }}
+      style={{ boxSizing: "border-box" }}
     >
       {/* left => Copy Link */}
       <Button
-        label={isCopyClicked ? 'Copied!' : 'Copy Link'}
+        label={isCopyClicked ? "Copied!" : "Copy Link"}
         type="secondary"
         onClick={handleCopyClick}
       />
+      
       {/* right => Claim */}
       <Button
-        label={isClaimClicked ? 'Claimed!' : 'Claim'}
+        label={isClaimClicked ? "Claimed!" : "Claim"}
         type="secondary"
         onClick={handleClaimClick}
       />
-      {/**
-       * Or you can have a 3rd button somewhere if you want “Share” 
-       * <Button label="Share" onClick={handleShare} />
+
+      {/*
+       * If you want a third "Share" button, uncomment:
+       *
+       * <Button
+       *   label="Share"
+       *   type="secondary"
+       *   onClick={handleShare}
+       * />
        */}
     </div>
   );
