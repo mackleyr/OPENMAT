@@ -1,3 +1,5 @@
+// src/components/OnboardingForm.jsx
+
 import React, { useState } from "react";
 import Progress from "./Progress";
 import Text from "../config/Text";
@@ -107,7 +109,6 @@ function OnboardingForm({ onComplete }) {
         phone: cleanPhone,
         profilePhoto,
       }));
-      // Minor Tweak: explicitly pass userData to onComplete
       onComplete?.(userData);
     }
   };

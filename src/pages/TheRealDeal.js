@@ -20,12 +20,12 @@ import { useActivity } from "../contexts/ActivityContext";
 
 function TheRealDeal() {
   const { cardData, setCardData } = useCard();
-  const { addActivity } = useActivity();
+  const { addActivity, fetchDealActivities } = useActivity();
 
   // URL parameters: /share/:creatorName/:dealId
   const { creatorName, dealId } = useParams();
   const [searchParams] = useSearchParams();
-  const sharerName = searchParams.get("sharer");
+  const sharerName = searchParams.get("sharer"); // e.g. ?sharer=Mackey
 
   // Local onboarding state
   const [localUserId, setLocalUserId] = useState(null);
@@ -46,7 +46,7 @@ function TheRealDeal() {
   const [creatorUser, setCreatorUser] = useState(null);
   const [currentDealId, setCurrentDealId] = useState(null);
 
-  // Prevent multiple "shared gift card" logs in the same session
+  // Prevent multiple "shared gift card" logs in same session
   const [alreadyShared, setAlreadyShared] = useState(false);
 
   // ──────────────────────────────────────────────────────────
@@ -96,19 +96,26 @@ function TheRealDeal() {
         if (userRow) {
           setCreatorUser(userRow);
 
-          // Only log "shared gift card" once per session
-          if (!alreadyShared) {
-            if (sharerName && sharerName.toLowerCase() !== userRow.name.toLowerCase()) {
-              // Non-creator scenario => log share
+          /**
+           * Only log "shared gift card" once per session, AND only if there's a ?sharer param.
+           * - If sharerName === userRow.name => "Mackey shared gift card"
+           * - Else => "Someone shared gift card"
+           * We do NOT log "shared gift card" just because the user pressed "copy link."
+           */
+          if (!alreadyShared && sharerName) {
+            if (
+              sharerName.toLowerCase() === userRow.name.toLowerCase()
+            ) {
+              // Creator scenario => log "Creator shared gift card"
               await addActivity({
-                userId: "anon-sharer",
+                userId: userRow.id,
                 action: "shared gift card",
                 dealId: dealRow.id,
               });
             } else {
-              // Creator scenario => also log share
+              // Non-creator => log "Someone shared gift card"
               await addActivity({
-                userId: userRow.id,
+                userId: "someone",
                 action: "shared gift card",
                 dealId: dealRow.id,
               });
@@ -120,6 +127,7 @@ function TheRealDeal() {
     };
 
     fetchDeal();
+    // eslint-disable-next-line
   }, [creatorName, dealId, sharerName, addActivity, alreadyShared]);
 
   // ──────────────────────────────────────────────────────────
@@ -128,7 +136,6 @@ function TheRealDeal() {
   useEffect(() => {
     if (fetchedDeal) {
       console.log("[TheRealDeal] => Setting cardData from fetchedDeal =>", fetchedDeal);
-
       setCardData((prev) => ({
         ...prev,
         id: fetchedDeal.id,
@@ -143,8 +150,32 @@ function TheRealDeal() {
     }
   }, [fetchedDeal, setCardData]);
 
+  /**
+   * 2b) Once we have the creatorUser, use their name & photo on the card.
+   * This ensures that no matter who visits (Parker, Bryan, etc.), the card
+   * continues to show Mackey’s info if he is the creator.
+   */
+  useEffect(() => {
+    if (creatorUser) {
+      setCardData((prev) => ({
+        ...prev,
+        name: creatorUser.name,
+        profilePhoto: creatorUser.profile_image_url,
+      }));
+    }
+  }, [creatorUser, setCardData]);
+
   // ──────────────────────────────────────────────────────────
-  // 3) handleCopyLink => share logic
+  // 2c) Once we know dealId => fetch the activity logs from DB
+  // ──────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (currentDealId) {
+      fetchDealActivities(currentDealId);
+    }
+  }, [currentDealId, fetchDealActivities]);
+
+  // ──────────────────────────────────────────────────────────
+  // 3) handleCopyLink => share logic (BUT we do NOT log "shared" here!)
   // ──────────────────────────────────────────────────────────
   const handleCopyLink = async () => {
     if (!cardData?.share_link) {
@@ -153,17 +184,17 @@ function TheRealDeal() {
     }
     try {
       const userName = cardData.name || "anon";
-      const linkWithSharer = `${cardData.share_link}?sharer=${encodeURIComponent(userName)}`;
+      const linkWithSharer = `${cardData.share_link}?sharer=${encodeURIComponent(
+        userName
+      )}`;
 
       await navigator.clipboard.writeText(linkWithSharer);
       alert("Link copied: " + linkWithSharer);
 
-      // "shared gift card"
-      await addActivity({
-        userId: localUserId || "anon",
-        action: "shared gift card",
-        dealId: cardData.id || currentDealId,
-      });
+      /**
+       * We NO LONGER log "shared gift card" here. We only do that
+       * upon someone opening the link with ?sharer=...
+       */
     } catch (err) {
       console.error("[TheRealDeal] handleCopyLink =>", err);
     }
@@ -211,6 +242,7 @@ function TheRealDeal() {
       setShowOnboardingForm(true);
       return;
     }
+    // If there's an existing deal that we didn't create, lock it
     if (cardData.id && cardData.creatorId && cardData.creatorId !== localUserId) {
       alert("You cannot edit a deal you didn't create.");
       return;
@@ -241,6 +273,7 @@ function TheRealDeal() {
     setLocalUserId(user.id);
     setShowOnboardingForm(false);
 
+    // After onboarding, open the form so user can create or edit a deal
     setShowCardForm(true);
   };
 
@@ -270,18 +303,14 @@ function TheRealDeal() {
   if (loading) {
     return (
       <div className="min-h-screen flex flex-col bg-black">
-        <div className="text-center mt-8 text-white">
-          Loading deal...
-        </div>
+        <div className="text-center mt-8 text-white">Loading deal...</div>
       </div>
     );
   }
   if (creatorName && dealId && !dealFound) {
     return (
       <div className="min-h-screen flex flex-col bg-black">
-        <div className="text-center mt-8 text-white">
-          Deal not found.
-        </div>
+        <div className="text-center mt-8 text-white">Deal not found.</div>
       </div>
     );
   }
@@ -296,13 +325,11 @@ function TheRealDeal() {
         <div className="flex-1 flex flex-col items-center justify-start w-full px-[4%] py-[4%]">
           <Card onOpenCardForm={handleOpenCardForm} />
           <div className="w-full max-w-[768px]">
-            <Buttons
-              onShare={handleCopyLink}
-              onClaim={handleClaim}
-            />
+            <Buttons onShare={handleCopyLink} onClaim={handleClaim} />
             <ActivityLog dealId={cardData.id || currentDealId} />
           </div>
         </div>
+
         <Footer />
 
         <AddButton onOpenCardForm={handleOpenCardForm} />

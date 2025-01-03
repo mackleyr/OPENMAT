@@ -1,4 +1,4 @@
-// CardContext.jsx
+// src/contexts/CardContext.jsx
 import React, { createContext, useState, useContext } from 'react';
 
 const CardContext = createContext();
@@ -12,6 +12,9 @@ export const CardProvider = ({ children }) => {
     profilePhoto: '',
     image: null,
     value: '',
+    phone: '',
+    description: '',
+    share_link: '',
   };
 
   const [cardData, setCardData] = useState(initialCardData);

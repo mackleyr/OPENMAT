@@ -36,18 +36,6 @@ function ActivityLog({ onProfileClick, dealId, userId }) {
     setFilteredActivities(fetchedActivities);
   }, [dealId, userId, getActivitiesByDeal, getActivitiesByUser]);
 
-  // Because the global "activities" array might change frequently (real-time),
-  // we can also update whenever "activities" changes in ActivityContext:
-  // In that case, just do:
-  /*
-  useEffect(() => {
-    if (dealId) {
-      setFilteredActivities(getActivitiesByDeal(dealId));
-    }
-  }, [dealId, getActivitiesByDeal, activities]);
-  */
-  // But let's keep your approach if it works.
-
   return (
     <div
       className="flex flex-col flex-1 bg-gray-50 rounded-lg overflow-hidden px-[5%] py-[5%] box-border"
@@ -65,15 +53,20 @@ function ActivityLog({ onProfileClick, dealId, userId }) {
         {filteredActivities.length > 0 ? (
           filteredActivities.map((activity, index) => {
             // "activity.user" is the joined user object
-            const userName = activity.user?.name || "Anonymous";
-            const userPhoto = activity.user?.profile_image_url || defaultProfile;
+            // Decide how to display the name. If user_id === "someone", we override with "Someone".
+            let userName = activity.user?.name || "Anonymous";
+            if (activity.user_id === "someone") {
+              userName = "Someone";
+            }
+
+            const userPhoto =
+              activity.user?.profile_image_url || defaultProfile;
 
             return (
               <div
                 key={activity.id || index}
                 className="flex items-center py-4 px-5 rounded-lg border border-transparent hover:bg-gray-100 hover:border-gray-300 transition-all duration-150"
               >
-                {/* Use user.profile_image_url or a default */}
                 <Profile
                   src={userPhoto}
                   altText={`${userName}'s profile`}
