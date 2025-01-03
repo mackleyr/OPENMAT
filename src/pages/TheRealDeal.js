@@ -50,6 +50,13 @@ function TheRealDeal() {
   const [currentDealId, setCurrentDealId] = useState(null);
 
   // ──────────────────────────────────────────────────────────
+  //  REPEAT-SHARE PREVENTION FLAG
+  // ──────────────────────────────────────────────────────────
+  // This prevents multiple "shared gift card" logs for the same user 
+  // in the same session if the effect re-runs.
+  const [alreadyShared, setAlreadyShared] = useState(false);
+
+  // ──────────────────────────────────────────────────────────
   // 1) If we have /:creatorName/:dealId => fetch the existing deal by share_link
   // ──────────────────────────────────────────────────────────
   useEffect(() => {
@@ -97,27 +104,31 @@ function TheRealDeal() {
           setCreatorUser(userRow);
 
           // Distinguish "creator share" from "non-creator share"
-          if (sharerName && sharerName.toLowerCase() !== userRow.name.toLowerCase()) {
-            // Another user is sharing it
-            await addActivity({
-              userId: "anon-sharer",
-              action: "shared gift card",
-              dealId: dealRow.id,
-            });
-          } else {
-            // The creator is presumably sharing
-            await addActivity({
-              userId: userRow.id,
-              action: "shared gift card",
-              dealId: dealRow.id,
-            });
+          // Only log "shared gift card" once per session if we haven't done so yet
+          if (!alreadyShared) {
+            if (sharerName && sharerName.toLowerCase() !== userRow.name.toLowerCase()) {
+              // Another user is sharing it
+              await addActivity({
+                userId: "anon-sharer",
+                action: "shared gift card",
+                dealId: dealRow.id,
+              });
+            } else {
+              // The creator is presumably sharing
+              await addActivity({
+                userId: userRow.id,
+                action: "shared gift card",
+                dealId: dealRow.id,
+              });
+            }
+            setAlreadyShared(true); // Mark it logged
           }
         }
       }
     };
 
     fetchDeal();
-  }, [creatorName, dealId, sharerName, addActivity]);
+  }, [creatorName, dealId, sharerName, addActivity, alreadyShared]);
 
   // ──────────────────────────────────────────────────────────
   // 2) Once we fetch the existing deal, sync it into cardData
@@ -139,10 +150,6 @@ function TheRealDeal() {
       setCurrentDealId(fetchedDeal.id);
     }
   }, [fetchedDeal, setCardData]);
-
-  // ──────────────────────────────────────────────────────────
-  // "share" param => We used that in the fetchDeal logic above
-  // ──────────────────────────────────────────────────────────
 
   // ──────────────────────────────────────────────────────────
   // 3) handleCopyLink => same as before
@@ -249,7 +256,6 @@ function TheRealDeal() {
   // 7) handleSaveCard => called by CardForm once the deal is created or updated
   // ──────────────────────────────────────────────────────────
   const handleSaveCard = async (formData) => {
-    // Merge new deal data into cardData
     setCardData((prev) => ({
       ...prev,
       id: formData.id,
