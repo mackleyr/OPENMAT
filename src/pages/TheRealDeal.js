@@ -27,42 +27,35 @@ function TheRealDeal() {
   const [searchParams] = useSearchParams();
   const sharerName = searchParams.get("sharer");
 
-  // local user onboarding / ID
+  // Local onboarding state
   const [localUserId, setLocalUserId] = useState(null);
   const userOnboarded = !!localUserId;
 
-  // Modals & forms
+  // Modals/forms
   const [showCardForm, setShowCardForm] = useState(false);
   const [showProfileSheet, setShowProfileSheet] = useState(false);
   const [showOnboardingForm, setShowOnboardingForm] = useState(false);
-
   const [cardFormData, setCardFormData] = useState(null);
 
-  // For loading & "deal not found" states
+  // Loading and "deal not found" states
   const [loading, setLoading] = useState(true);
   const [dealFound, setDealFound] = useState(false);
 
-  // The fetched deal from Supabase, if we have /:creatorName/:dealId
+  // Fetched deal, if any
   const [fetchedDeal, setFetchedDeal] = useState(null);
   const [creatorUser, setCreatorUser] = useState(null);
-
-  // Local store of the current deal ID
   const [currentDealId, setCurrentDealId] = useState(null);
 
-  // ──────────────────────────────────────────────────────────
-  //  REPEAT-SHARE PREVENTION FLAG
-  // ──────────────────────────────────────────────────────────
-  // This prevents multiple "shared gift card" logs for the same user 
-  // in the same session if the effect re-runs.
+  // Prevent multiple "shared gift card" logs in the same session
   const [alreadyShared, setAlreadyShared] = useState(false);
 
   // ──────────────────────────────────────────────────────────
-  // 1) If we have /:creatorName/:dealId => fetch the existing deal by share_link
+  // 1) If we have /:creatorName/:dealId => fetch an existing deal by share_link
   // ──────────────────────────────────────────────────────────
   useEffect(() => {
     const fetchDeal = async () => {
       if (!creatorName || !dealId) {
-        // No URL params => user might be creating a brand-new deal
+        // No URL params => user creating brand-new deal
         setLoading(false);
         setDealFound(false);
         return;
@@ -92,7 +85,7 @@ function TheRealDeal() {
       setLoading(false);
       setCurrentDealId(dealRow.id);
 
-      // If there's a creator, fetch them
+      // Possibly fetch the creator to see if "sharer" differs
       if (dealRow.creator_id) {
         const { data: userRow } = await supabase
           .from("users")
@@ -103,25 +96,24 @@ function TheRealDeal() {
         if (userRow) {
           setCreatorUser(userRow);
 
-          // Distinguish "creator share" from "non-creator share"
-          // Only log "shared gift card" once per session if we haven't done so yet
+          // Only log "shared gift card" once per session
           if (!alreadyShared) {
             if (sharerName && sharerName.toLowerCase() !== userRow.name.toLowerCase()) {
-              // Another user is sharing it
+              // Non-creator scenario => log share
               await addActivity({
                 userId: "anon-sharer",
                 action: "shared gift card",
                 dealId: dealRow.id,
               });
             } else {
-              // The creator is presumably sharing
+              // Creator scenario => also log share
               await addActivity({
                 userId: userRow.id,
                 action: "shared gift card",
                 dealId: dealRow.id,
               });
             }
-            setAlreadyShared(true); // Mark it logged
+            setAlreadyShared(true);
           }
         }
       }
@@ -131,7 +123,7 @@ function TheRealDeal() {
   }, [creatorName, dealId, sharerName, addActivity, alreadyShared]);
 
   // ──────────────────────────────────────────────────────────
-  // 2) Once we fetch the existing deal, sync it into cardData
+  // 2) Once we fetch the existing deal, sync it to cardData
   // ──────────────────────────────────────────────────────────
   useEffect(() => {
     if (fetchedDeal) {
@@ -152,7 +144,7 @@ function TheRealDeal() {
   }, [fetchedDeal, setCardData]);
 
   // ──────────────────────────────────────────────────────────
-  // 3) handleCopyLink => same as before
+  // 3) handleCopyLink => share logic
   // ──────────────────────────────────────────────────────────
   const handleCopyLink = async () => {
     if (!cardData?.share_link) {
@@ -166,7 +158,7 @@ function TheRealDeal() {
       await navigator.clipboard.writeText(linkWithSharer);
       alert("Link copied: " + linkWithSharer);
 
-      // log "shared gift card"
+      // "shared gift card"
       await addActivity({
         userId: localUserId || "anon",
         action: "shared gift card",
@@ -178,7 +170,7 @@ function TheRealDeal() {
   };
 
   // ──────────────────────────────────────────────────────────
-  // 4) handleClaim => same as old
+  // 4) Claim => user must be onboarded
   // ──────────────────────────────────────────────────────────
   const handleClaim = async () => {
     if (!userOnboarded) {
@@ -212,7 +204,7 @@ function TheRealDeal() {
   };
 
   // ──────────────────────────────────────────────────────────
-  // 5) handleOpenCardForm => creating or editing a deal
+  // 5) openCardForm => for new or existing deal
   // ──────────────────────────────────────────────────────────
   const handleOpenCardForm = () => {
     if (!userOnboarded) {
@@ -238,7 +230,7 @@ function TheRealDeal() {
   };
 
   // ──────────────────────────────────────────────────────────
-  // 6) Onboarding => same as old
+  // 6) Onboarding => user info
   // ──────────────────────────────────────────────────────────
   const handleOnboardingComplete = async (userData) => {
     const user = await upsertUser({
@@ -253,7 +245,7 @@ function TheRealDeal() {
   };
 
   // ──────────────────────────────────────────────────────────
-  // 7) handleSaveCard => called by CardForm once the deal is created or updated
+  // 7) handleSaveCard => from CardForm => merges new deal data
   // ──────────────────────────────────────────────────────────
   const handleSaveCard = async (formData) => {
     setCardData((prev) => ({
@@ -273,7 +265,7 @@ function TheRealDeal() {
   };
 
   // ──────────────────────────────────────────────────────────
-  // 8) Render logic => "loading" or "deal not found"
+  // 8) Render logic => loading or deal not found
   // ──────────────────────────────────────────────────────────
   if (loading) {
     return (
@@ -284,7 +276,6 @@ function TheRealDeal() {
       </div>
     );
   }
-  // If we have /share/:creatorName/:dealId but no deal found => show "Deal not found"
   if (creatorName && dealId && !dealFound) {
     return (
       <div className="min-h-screen flex flex-col bg-black">
@@ -296,7 +287,7 @@ function TheRealDeal() {
   }
 
   // ──────────────────────────────────────────────────────────
-  // 9) Normal UI => either a fresh new deal or an existing fetched deal
+  // 9) Normal UI => fresh or existing deal
   // ──────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen flex flex-col bg-black relative">
@@ -314,9 +305,9 @@ function TheRealDeal() {
         </div>
         <Footer />
 
-        {/* Floating + Modals */}
         <AddButton onOpenCardForm={handleOpenCardForm} />
 
+        {/* Overlays */}
         {showProfileSheet && (
           <div className="absolute inset-0 z-50">
             <ProfileSheet onClose={() => setShowProfileSheet(false)} />
