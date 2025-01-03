@@ -1,12 +1,13 @@
 // src/contexts/ActivityContext.js
 
-import React, { createContext, useContext, useState } from "react";
+import React, { createContext, useContext, useState, useRef } from "react";
 import { supabase } from "../supabaseClient";
 
 const ActivityContext = createContext();
 
 export const ActivityProvider = ({ children }) => {
   const [activities, setActivities] = useState([]);
+  const channelRef = useRef(null); // to store the realtime channel if you want to unsubscribe later
 
   /**
    * Called by TheRealDeal (or any screen) once we know dealId.
@@ -16,21 +17,19 @@ export const ActivityProvider = ({ children }) => {
   const fetchDealActivities = async (dealId) => {
     console.log(`[ActivityContext] => fetchDealActivities(${dealId})...`);
 
-    // 1) Clear out old activities or append? Typically, you'd reset:
+    // 1) Clear out old activities whenever we load a new deal
     setActivities([]);
 
     // 2) Fetch just that deal’s rows
     const { data, error } = await supabase
       .from("activities")
-      .select(
-        `
-          *,
-          user:users (
-            name,
-            profile_image_url
-          )
-        `
-      )
+      .select(`
+        *,
+        user:users (
+          name,
+          profile_image_url
+        )
+      `)
       .eq("deal_id", dealId)
       .order("created_at", { ascending: false });
 
@@ -43,9 +42,13 @@ export const ActivityProvider = ({ children }) => {
 
     // 3) Set up a channel listening only for new inserts in "activities"
     // We'll do simple client-side filtering for the matching deal_id.
-    console.log(
-      `[ActivityContext] => Setting up realtime subscription for deal_id=${dealId}...`
-    );
+    console.log(`[ActivityContext] => Setting up realtime subscription for deal_id=${dealId}...`);
+
+    // If we had a previous channel stored, we could remove it here:
+    if (channelRef.current) {
+      supabase.removeChannel(channelRef.current);
+      channelRef.current = null;
+    }
 
     const channel = supabase.channel(`activities-deal-${dealId}`);
 
@@ -86,6 +89,7 @@ export const ActivityProvider = ({ children }) => {
     );
 
     channel.subscribe();
+    channelRef.current = channel;
   };
 
   /**
@@ -100,12 +104,14 @@ export const ActivityProvider = ({ children }) => {
 
     const { data, error } = await supabase
       .from("activities")
-      .insert([{ user_id: userId, deal_id: dealId, action }]);
+      .insert([{ user_id: userId, deal_id: dealId, action }])
+      .select("*"); // so we can see the inserted row in data
 
     if (error) {
       console.error("[ActivityContext] => Error inserting activity to DB:", error);
     } else {
       console.log("[ActivityContext] => Inserted activity =>", data);
+      // We rely on realtime to add it to our local array, so no immediate setActivities() needed
     }
   };
 

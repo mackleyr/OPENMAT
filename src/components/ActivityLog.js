@@ -53,14 +53,13 @@ function ActivityLog({ onProfileClick, dealId, userId }) {
         {filteredActivities.length > 0 ? (
           filteredActivities.map((activity, index) => {
             // "activity.user" is the joined user object
-            // Decide how to display the name. If user_id === "someone", we override with "Someone".
+            // If user_id === "someone", rename them to "Someone"
             let userName = activity.user?.name || "Anonymous";
             if (activity.user_id === "someone") {
               userName = "Someone";
             }
 
-            const userPhoto =
-              activity.user?.profile_image_url || defaultProfile;
+            const userPhoto = activity.user?.profile_image_url || defaultProfile;
 
             return (
               <div

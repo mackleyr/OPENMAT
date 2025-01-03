@@ -46,7 +46,7 @@ function TheRealDeal() {
   const [creatorUser, setCreatorUser] = useState(null);
   const [currentDealId, setCurrentDealId] = useState(null);
 
-  // Prevent multiple "shared gift card" logs in same session
+  // Prevent multiple "shared gift card" logs in the same session
   const [alreadyShared, setAlreadyShared] = useState(false);
 
   // ──────────────────────────────────────────────────────────
@@ -55,7 +55,7 @@ function TheRealDeal() {
   useEffect(() => {
     const fetchDeal = async () => {
       if (!creatorName || !dealId) {
-        // No URL params => user creating brand-new deal
+        // No URL params => user is creating a brand-new deal
         setLoading(false);
         setDealFound(false);
         return;
@@ -103,9 +103,7 @@ function TheRealDeal() {
            * We do NOT log "shared gift card" just because the user pressed "copy link."
            */
           if (!alreadyShared && sharerName) {
-            if (
-              sharerName.toLowerCase() === userRow.name.toLowerCase()
-            ) {
+            if (sharerName.toLowerCase() === userRow.name.toLowerCase()) {
               // Creator scenario => log "Creator shared gift card"
               await addActivity({
                 userId: userRow.id,
@@ -153,7 +151,7 @@ function TheRealDeal() {
   /**
    * 2b) Once we have the creatorUser, use their name & photo on the card.
    * This ensures that no matter who visits (Parker, Bryan, etc.), the card
-   * continues to show Mackey’s info if he is the creator.
+   * continues to show the creator’s info if he is the creator.
    */
   useEffect(() => {
     if (creatorUser) {
@@ -166,7 +164,7 @@ function TheRealDeal() {
   }, [creatorUser, setCardData]);
 
   // ──────────────────────────────────────────────────────────
-  // 2c) Once we know dealId => fetch the activity logs from DB
+  // 2c) Once we know dealId => fetch the activity logs from DB (only once)
   // ──────────────────────────────────────────────────────────
   useEffect(() => {
     if (currentDealId) {
@@ -191,10 +189,7 @@ function TheRealDeal() {
       await navigator.clipboard.writeText(linkWithSharer);
       alert("Link copied: " + linkWithSharer);
 
-      /**
-       * We NO LONGER log "shared gift card" here. We only do that
-       * upon someone opening the link with ?sharer=...
-       */
+      // We do NOT log "shared" here
     } catch (err) {
       console.error("[TheRealDeal] handleCopyLink =>", err);
     }
