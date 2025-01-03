@@ -1,7 +1,7 @@
 // src/App.js
 import React from "react";
 import { Routes, Route } from "react-router-dom";
-import TheRealDeal from "./pages/TherealDeal";
+import TheRealDeal from "./pages/TheRealDeal";
 
 function App() {
   return (
