@@ -7,20 +7,12 @@ const ActivityContext = createContext();
 
 export const ActivityProvider = ({ children }) => {
   const [activities, setActivities] = useState([]);
-  const channelRef = useRef(null); // to store the realtime channel if you want to unsubscribe later
+  const channelRef = useRef(null);
 
-  /**
-   * Called by TheRealDeal (or any screen) once we know dealId.
-   * We fetch all existing rows for that deal, then set up a realtime channel
-   * specifically for that deal’s inserts.
-   */
   const fetchDealActivities = async (dealId) => {
     console.log(`[ActivityContext] => fetchDealActivities(${dealId})...`);
+    setActivities([]); // clear out old
 
-    // 1) Clear out old activities whenever we load a new deal
-    setActivities([]);
-
-    // 2) Fetch just that deal’s rows
     const { data, error } = await supabase
       .from("activities")
       .select(`
@@ -40,82 +32,53 @@ export const ActivityProvider = ({ children }) => {
       setActivities(data || []);
     }
 
-    // 3) Set up a channel listening only for new inserts in "activities"
-    // We'll do simple client-side filtering for the matching deal_id.
     console.log(`[ActivityContext] => Setting up realtime subscription for deal_id=${dealId}...`);
-
-    // If we had a previous channel stored, we could remove it here:
     if (channelRef.current) {
       supabase.removeChannel(channelRef.current);
       channelRef.current = null;
     }
 
     const channel = supabase.channel(`activities-deal-${dealId}`);
-
-    channel.on(
-      "postgres_changes",
-      {
-        event: "*",
-        schema: "public",
-        table: "activities",
-      },
-      async (payload) => {
-        if (payload.eventType === "INSERT") {
-          // Check if the inserted row belongs to *this* deal
-          if (payload.new.deal_id === dealId) {
-            console.log("[ActivityContext] => Realtime (INSERT) for this deal:", payload.new);
-            // fetch the single row with user join
-            const newId = payload.new.id;
-            const { data: joinedRow, error: joinError } = await supabase
-              .from("activities")
-              .select(
-                `
-                  *,
-                  user:users (
-                    name,
-                    profile_image_url
-                  )
-                `
-              )
-              .eq("id", newId)
-              .single();
-            if (!joinError && joinedRow) {
-              console.log("[ActivityContext] => Joined new activity =>", joinedRow);
-              setActivities((prev) => [joinedRow, ...prev]);
-            }
-          }
+    channel.on("postgres_changes", { event: "*", schema: "public", table: "activities" }, async (payload) => {
+      if (payload.eventType === "INSERT" && payload.new.deal_id === dealId) {
+        console.log("[ActivityContext] => Realtime (INSERT) for this deal:", payload.new);
+        const newId = payload.new.id;
+        const { data: joinedRow, error: joinError } = await supabase
+          .from("activities")
+          .select(`
+            *,
+            user:users (
+              name,
+              profile_image_url
+            )
+          `)
+          .eq("id", newId)
+          .single();
+        if (!joinError && joinedRow) {
+          console.log("[ActivityContext] => Joined new activity =>", joinedRow);
+          setActivities((prev) => [joinedRow, ...prev]);
         }
       }
-    );
-
+    });
     channel.subscribe();
     channelRef.current = channel;
   };
 
-  /**
-   * Insert a new row => rely on Realtime to update the UI
-   */
   const addActivity = async ({ userId, dealId, action }) => {
-    console.log("[ActivityContext] => addActivity() called with:", {
-      userId,
-      dealId,
-      action,
-    });
-
+    console.log("[ActivityContext] => addActivity() called with:", { userId, dealId, action });
     const { data, error } = await supabase
       .from("activities")
       .insert([{ user_id: userId, deal_id: dealId, action }])
-      .select("*"); // so we can see the inserted row in data
+      .select("*");
 
     if (error) {
       console.error("[ActivityContext] => Error inserting activity to DB:", error);
     } else {
       console.log("[ActivityContext] => Inserted activity =>", data);
-      // We rely on realtime to add it to our local array, so no immediate setActivities() needed
+      // Realtime picks it up
     }
   };
 
-  // For convenience, local filtering
   const getActivitiesByDeal = (dealId) => {
     return activities.filter((a) => a.deal_id === dealId);
   };
