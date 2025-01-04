@@ -1,4 +1,5 @@
 // src/pages/TheRealDeal.js
+
 import React, { useState, useEffect } from "react";
 import { useSearchParams, useParams } from "react-router-dom";
 import { useCard } from "../contexts/CardContext";
@@ -24,7 +25,7 @@ function TheRealDeal() {
   // URL parameters: /share/:creatorName/:dealId
   const { creatorName, dealId } = useParams();
   const [searchParams] = useSearchParams();
-  const sharerName = searchParams.get("sharer"); // e.g. ?sharer=Mackey (not used to log anymore)
+  const sharerName = searchParams.get("sharer"); // not used for auto-logging
 
   // Local onboarding state
   const [localUserId, setLocalUserId] = useState(null);
@@ -57,11 +58,13 @@ function TheRealDeal() {
         return;
       }
 
+      // We decode the param so "josh%20may" -> "josh may"
+      const decodedName = decodeURIComponent(creatorName).toLowerCase().trim();
+
       // Build share link from environment domain or fallback
       const baseUrl =
         process.env.REACT_APP_DOMAIN || window.location.origin;
-      const lowerName = creatorName.toLowerCase().trim();
-      const shareURL = `${baseUrl}/share/${lowerName}/${dealId}`;
+      const shareURL = `${baseUrl}/share/${decodedName}/${dealId}`;
 
       console.log("[TheRealDeal] => Attempting to fetch existing deal via =>", shareURL);
 
@@ -99,7 +102,6 @@ function TheRealDeal() {
     };
 
     fetchDeal();
-    // eslint-disable-next-line
   }, [creatorName, dealId]);
 
   // ──────────────────────────────────────────────────────────
@@ -145,10 +147,6 @@ function TheRealDeal() {
       fetchDealActivities(currentDealId);
     }
   }, [currentDealId, fetchDealActivities]);
-
-  // ──────────────────────────────────────────────────────────
-  // 3) handleCopyLink => now handled in Buttons (to unify share logic)
-  // ──────────────────────────────────────────────────────────
 
   // ──────────────────────────────────────────────────────────
   // 4) Claim => user must be onboarded
@@ -228,7 +226,7 @@ function TheRealDeal() {
   };
 
   // ──────────────────────────────────────────────────────────
-  // 7) handleSaveCard => from CardForm => merges new deal data
+  // 7) handleSaveCard => merges new deal data
   // ──────────────────────────────────────────────────────────
   const handleSaveCard = async (formData) => {
     setCardData((prev) => ({
@@ -269,10 +267,10 @@ function TheRealDeal() {
   // 9) Normal UI => fresh or existing deal
   // ──────────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen flex flex-col bg-black relative">
-      <MainContainer className="relative flex flex-col justify-between h-full">
+    <div className="min-h-screen flex flex-col bg-black relative z-0">
+      <MainContainer className="relative flex flex-col justify-between h-full z-0">
         {/* Main content */}
-        <div className="flex-1 flex flex-col items-center justify-start w-full px-[4%] py-[4%]">
+        <div className="flex-1 flex flex-col items-center justify-start w-full px-[4%] py-[4%] relative z-0">
           <Card onOpenCardForm={handleOpenCardForm} />
           <div className="w-full max-w-[768px] flex flex-col h-full">
             <Buttons onClaim={handleClaim} />
@@ -280,8 +278,8 @@ function TheRealDeal() {
           </div>
         </div>
 
-        {/* Pinned Footer */}
-        <Footer />
+        {/* Raise Footer above the log (z-10) */}
+        <Footer className="z-10" />
 
         {/* Add button for new or existing deal */}
         <AddButton onOpenCardForm={handleOpenCardForm} />

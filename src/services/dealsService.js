@@ -1,7 +1,6 @@
 // src/services/dealsService.js
-import { supabase } from '../supabaseClient';
+import { supabase } from "../supabaseClient";
 
-// CREATE
 export const createDeal = async ({
   creator_id,
   title,
@@ -10,27 +9,20 @@ export const createDeal = async ({
   creatorName,
   deal_value,
 }) => {
-  console.log("createDeal(): Attempting to create deal:", {
-    creator_id,
-    title,
-    background,
-    expires_at,
-    creatorName,
-    deal_value
-  });
-
   try {
     const baseUrl =
-      process.env.REACT_APP_DOMAIN || 'https://and.deals'; 
-    const nameLower = (creatorName || '').toLowerCase().trim();
-    const uniqueUrl = crypto.randomUUID();
+      process.env.REACT_APP_DOMAIN || "https://and.deals";
+    // Replace whitespace with %20 by using encodeURIComponent.
+    const nameLower = (creatorName || "").toLowerCase().trim();
     const encodedName = encodeURIComponent(nameLower);
+
+    const uniqueUrl = crypto.randomUUID();
     const share_link = `${baseUrl}/share/${encodedName}/${uniqueUrl}`;
 
     console.log("createDeal(): final share_link =>", share_link);
 
-    const { data: deal, error: dealError } = await supabase
-      .from('deals')
+    const { data: deal, error } = await supabase
+      .from("deals")
       .insert([
         {
           creator_id,
@@ -39,12 +31,12 @@ export const createDeal = async ({
           expires_at,
           share_link,
           deal_value,
-        }
+        },
       ])
-      .select('*')
+      .select("*")
       .single();
 
-    if (dealError) throw dealError;
+    if (error) throw error;
     return deal;
   } catch (err) {
     console.error("createDeal() unhandled error:", err);
@@ -52,7 +44,6 @@ export const createDeal = async ({
   }
 };
 
-// UPDATE
 export const updateDeal = async ({
   dealId,
   title,
@@ -61,27 +52,19 @@ export const updateDeal = async ({
   creatorName,
   deal_value,
 }) => {
-  console.log("updateDeal(): Attempting to update deal:", {
-    dealId,
-    title,
-    background,
-    expires_at,
-    creatorName,
-    deal_value
-  });
-
   try {
     const baseUrl =
-      process.env.REACT_APP_DOMAIN || 'https://and.deals';
-    const nameLower = (creatorName || '').toLowerCase().trim();
-    const uniqueUrl = crypto.randomUUID();
+      process.env.REACT_APP_DOMAIN || "https://and.deals";
+    const nameLower = (creatorName || "").toLowerCase().trim();
     const encodedName = encodeURIComponent(nameLower);
+
+    const uniqueUrl = crypto.randomUUID();
     const share_link = `${baseUrl}/share/${encodedName}/${uniqueUrl}`;
 
     console.log("updateDeal(): final share_link =>", share_link);
 
-    const { data: updatedDeal, error: updateError } = await supabase
-      .from('deals')
+    const { data: updatedDeal, error } = await supabase
+      .from("deals")
       .update({
         title,
         background,
@@ -89,11 +72,11 @@ export const updateDeal = async ({
         share_link,
         deal_value,
       })
-      .eq('id', dealId)
-      .select('*')
+      .eq("id", dealId)
+      .select("*")
       .single();
 
-    if (updateError) throw updateError;
+    if (error) throw error;
     return updatedDeal;
   } catch (err) {
     console.error("updateDeal() unhandled error:", err);
