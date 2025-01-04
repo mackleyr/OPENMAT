@@ -1,4 +1,5 @@
 // src/components/ActivityLog.jsx
+
 import React, { useEffect, useState } from "react";
 import { useActivity } from "../contexts/ActivityContext";
 import { useCard } from "../contexts/CardContext";
@@ -37,11 +38,10 @@ function ActivityLog({ onProfileClick, dealId, userId }) {
 
   return (
     <div
-      // Full container with a column layout
       className="flex flex-col rounded-lg overflow-hidden box-border bg-gray-50"
       style={{
-        // let parent define the height
-        // we just fill it and let .overflow-y-auto handle scrolling
+        /* This container takes up the remaining space in TheRealDeal, 
+           so it can scroll inside. */
         flex: 1,
         padding: "1rem",
       }}
@@ -56,7 +56,12 @@ function ActivityLog({ onProfileClick, dealId, userId }) {
       {/* Scrollable Content */}
       <div
         className="flex-1 overflow-y-auto space-y-3 pt-4"
-        style={{ marginRight: "-0.25rem", paddingRight: "0.25rem" }}
+        style={{
+          marginRight: "-0.25rem",
+          paddingRight: "0.25rem",
+          WebkitOverflowScrolling: "touch", // iOS momentum scrolling
+          touchAction: "pan-y", // ensure vertical scroll on iOS
+        }}
       >
         {filteredActivities.length > 0 ? (
           filteredActivities.map((activity, index) => {
@@ -96,7 +101,7 @@ function ActivityLog({ onProfileClick, dealId, userId }) {
           })
         ) : (
           <Text type="medium" role="tertiary">
-            No activity yet. Share your link or claim.
+            No activity yet. Share your link.
           </Text>
         )}
       </div>
