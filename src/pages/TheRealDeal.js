@@ -1,5 +1,3 @@
-// src/pages/TheRealDeal.js
-
 import React, { useState, useEffect } from "react";
 import { useSearchParams, useParams } from "react-router-dom";
 import { useCard } from "../contexts/CardContext";
@@ -61,7 +59,7 @@ function TheRealDeal() {
         return;
       }
 
-      // Use REACT_APP_DOMAIN if set; otherwise fall back to window.location.origin
+      // Use REACT_APP_DOMAIN if set; otherwise fallback to window.location.origin
       const baseUrl =
         process.env.REACT_APP_DOMAIN || window.location.origin;
       const lowerName = creatorName.toLowerCase().trim();
@@ -100,23 +98,29 @@ function TheRealDeal() {
           setCreatorUser(userRow);
 
           /**
-           * Only log "shared gift card" once per session, AND only if there's a ?sharer param.
+           * Only log "shared gift card" once per session, AND only if there's a ?sharer param
+           * and we can confirm the sharer is the same as the creator. 
+           * If we can't confirm, skip logging instead of "someone".
            */
           if (!alreadyShared && sharerName) {
-            if (sharerName.toLowerCase() === userRow.name.toLowerCase()) {
-              // Creator scenario => "Creator shared gift card"
+            const userRowName = userRow.name?.toLowerCase().trim() || "";
+            const incomingSharer = sharerName.toLowerCase().trim();
+
+            if (incomingSharer === userRowName) {
+              // Creator scenario => log "Creator shared gift card"
+              console.log(
+                "[TheRealDeal] => Logging 'shared gift card' for the known creator"
+              );
               await addActivity({
                 userId: userRow.id,
                 action: "shared gift card",
                 dealId: dealRow.id,
               });
             } else {
-              // Non-creator => "Someone shared gift card"
-              await addActivity({
-                userId: "someone",
-                action: "shared gift card",
-                dealId: dealRow.id,
-              });
+              // If there's no known user, skip logging for now
+              console.log(
+                "[TheRealDeal] => Sharer doesn't match the known creator. SKIP logging."
+              );
             }
             setAlreadyShared(true);
           }
@@ -166,6 +170,10 @@ function TheRealDeal() {
   // ──────────────────────────────────────────────────────────
   useEffect(() => {
     if (currentDealId) {
+      console.log(
+        "[TheRealDeal] => useEffect triggered. Calling fetchDealActivities for dealId:",
+        currentDealId
+      );
       fetchDealActivities(currentDealId);
     }
   }, [currentDealId, fetchDealActivities]);
@@ -175,7 +183,7 @@ function TheRealDeal() {
   // ──────────────────────────────────────────────────────────
   const handleCopyLink = async () => {
     if (!cardData?.share_link) {
-      console.log("No share link to copy.");
+      console.log("[TheRealDeal] => No share link to copy.");
       return;
     }
     try {
