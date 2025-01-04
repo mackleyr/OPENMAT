@@ -61,8 +61,11 @@ function TheRealDeal() {
         return;
       }
 
+      // Use REACT_APP_DOMAIN if set; otherwise fall back to window.location.origin
+      const baseUrl =
+        process.env.REACT_APP_DOMAIN || window.location.origin;
       const lowerName = creatorName.toLowerCase().trim();
-      const shareURL = `https://and.deals/share/${lowerName}/${dealId}`;
+      const shareURL = `${baseUrl}/share/${lowerName}/${dealId}`;
 
       console.log("[TheRealDeal] => Attempting to fetch existing deal via =>", shareURL);
 
@@ -85,7 +88,7 @@ function TheRealDeal() {
       setLoading(false);
       setCurrentDealId(dealRow.id);
 
-      // Possibly fetch the creator to see if "sharer" differs
+      // Possibly fetch the creator
       if (dealRow.creator_id) {
         const { data: userRow } = await supabase
           .from("users")
@@ -98,20 +101,17 @@ function TheRealDeal() {
 
           /**
            * Only log "shared gift card" once per session, AND only if there's a ?sharer param.
-           * - If sharerName === userRow.name => "Mackey shared gift card"
-           * - Else => "Someone shared gift card"
-           * We do NOT log "shared gift card" just because the user pressed "copy link."
            */
           if (!alreadyShared && sharerName) {
             if (sharerName.toLowerCase() === userRow.name.toLowerCase()) {
-              // Creator scenario => log "Creator shared gift card"
+              // Creator scenario => "Creator shared gift card"
               await addActivity({
                 userId: userRow.id,
                 action: "shared gift card",
                 dealId: dealRow.id,
               });
             } else {
-              // Non-creator => log "Someone shared gift card"
+              // Non-creator => "Someone shared gift card"
               await addActivity({
                 userId: "someone",
                 action: "shared gift card",
@@ -150,8 +150,6 @@ function TheRealDeal() {
 
   /**
    * 2b) Once we have the creatorUser, use their name & photo on the card.
-   * This ensures that no matter who visits (Parker, Bryan, etc.), the card
-   * continues to show the creator’s info if he is the creator.
    */
   useEffect(() => {
     if (creatorUser) {
@@ -164,7 +162,7 @@ function TheRealDeal() {
   }, [creatorUser, setCardData]);
 
   // ──────────────────────────────────────────────────────────
-  // 2c) Once we know dealId => fetch the activity logs from DB (only once)
+  // 2c) Once we know dealId => fetch the activity logs
   // ──────────────────────────────────────────────────────────
   useEffect(() => {
     if (currentDealId) {
@@ -188,8 +186,6 @@ function TheRealDeal() {
 
       await navigator.clipboard.writeText(linkWithSharer);
       alert("Link copied: " + linkWithSharer);
-
-      // We do NOT log "shared" here
     } catch (err) {
       console.error("[TheRealDeal] handleCopyLink =>", err);
     }
@@ -215,7 +211,6 @@ function TheRealDeal() {
       });
       setLocalUserId(user.id);
 
-      // "claimed gift card"
       await addActivity({
         userId: user.id,
         action: "claimed gift card",

@@ -20,10 +20,12 @@ export const createDeal = async ({
   });
 
   try {
+    const baseUrl =
+      process.env.REACT_APP_DOMAIN || 'https://and.deals'; 
     const nameLower = (creatorName || '').toLowerCase().trim();
     const uniqueUrl = crypto.randomUUID();
     const encodedName = encodeURIComponent(nameLower);
-    const share_link = `https://and.deals/share/${encodedName}/${uniqueUrl}`;
+    const share_link = `${baseUrl}/share/${encodedName}/${uniqueUrl}`;
 
     console.log("createDeal(): final share_link =>", share_link);
 
@@ -69,10 +71,12 @@ export const updateDeal = async ({
   });
 
   try {
+    const baseUrl =
+      process.env.REACT_APP_DOMAIN || 'https://and.deals';
     const nameLower = (creatorName || '').toLowerCase().trim();
     const uniqueUrl = crypto.randomUUID();
     const encodedName = encodeURIComponent(nameLower);
-    const share_link = `https://and.deals/share/${encodedName}/${uniqueUrl}`;
+    const share_link = `${baseUrl}/share/${encodedName}/${uniqueUrl}`;
 
     console.log("updateDeal(): final share_link =>", share_link);
 
