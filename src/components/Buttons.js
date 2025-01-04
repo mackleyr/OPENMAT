@@ -5,11 +5,10 @@ import Button from "./Button";
 import { useActivity } from "../contexts/ActivityContext";
 
 /**
- * We assume:
- *  - onShare => function that does "copy link" logic
- *  - onClaim => function that triggers claim logic
+ * We unify the "shared gift card" logging inside handleCopyClick,
+ * so that if the user actually copies the link, we log it once.
  */
-function Buttons({ onShare, onClaim }) {
+function Buttons({ onClaim }) {
   const [isLeftClicked, setIsLeftClicked] = useState(false);
   const [isRightClicked, setIsRightClicked] = useState(false);
 
@@ -18,9 +17,28 @@ function Buttons({ onShare, onClaim }) {
 
   // Left button => "Copy Link"
   const handleCopyClick = async () => {
-    if (!onShare) return;
+    // Only log if we have a real user and deal
+    if (!cardData.id || !cardData.creatorId) {
+      alert("No valid deal or user to share.");
+      return;
+    }
     try {
-      await onShare();
+      // Build link with sharer param
+      const userName = cardData.name || "anon";
+      const linkWithSharer = `${cardData.share_link}?sharer=${encodeURIComponent(
+        userName
+      )}`;
+
+      await navigator.clipboard.writeText(linkWithSharer);
+      alert("Link copied: " + linkWithSharer);
+
+      // Now log "shared gift card" once
+      await addActivity({
+        userId: cardData.creatorId, // The user who created it
+        action: "shared gift card",
+        dealId: cardData.id,
+      });
+
       setIsLeftClicked(true);
       setTimeout(() => setIsLeftClicked(false), 3000);
     } catch (err) {
@@ -29,6 +47,7 @@ function Buttons({ onShare, onClaim }) {
   };
 
   // Right button => "Claim"
+  // This calls the parent's onClaim
   const handleClaimClick = async () => {
     if (!onClaim) return;
     try {

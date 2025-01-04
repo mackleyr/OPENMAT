@@ -1,5 +1,4 @@
 // src/components/ActivityLog.jsx
-
 import React, { useEffect, useState } from "react";
 import { useActivity } from "../contexts/ActivityContext";
 import { useCard } from "../contexts/CardContext";
@@ -38,41 +37,44 @@ function ActivityLog({ onProfileClick, dealId, userId }) {
 
   return (
     <div
-      className="flex flex-col flex-1 bg-gray-50 rounded-lg overflow-hidden px-[5%] py-[5%] box-border"
-      style={{ height: "100%" }}
+      // Full container with a column layout
+      className="flex flex-col rounded-lg overflow-hidden box-border bg-gray-50"
+      style={{
+        // let parent define the height
+        // we just fill it and let .overflow-y-auto handle scrolling
+        flex: 1,
+        padding: "1rem",
+      }}
     >
       {/* Header */}
-      <div className="flex justify-between items-center mb-4 border-b border-gray-300 pb-4">
+      <div className="flex-shrink-0 flex justify-between items-center border-b border-gray-300 pb-4">
         <Text type="large" role="primary">
           Activity
         </Text>
       </div>
 
       {/* Scrollable Content */}
-      <div className="overflow-y-auto flex-1 space-y-3">
+      <div
+        className="flex-1 overflow-y-auto space-y-3 pt-4"
+        style={{ marginRight: "-0.25rem", paddingRight: "0.25rem" }}
+      >
         {filteredActivities.length > 0 ? (
           filteredActivities.map((activity, index) => {
-            // "activity.user" is the joined user object
-            // If user_id === "someone", rename them to "Someone"
-            let userName = activity.user?.name || "Anonymous";
-            if (activity.user_id === "someone") {
-              userName = "Someone";
-            }
-
+            const userName = activity.user?.name || "Anonymous";
             const userPhoto = activity.user?.profile_image_url || defaultProfile;
 
             return (
               <div
                 key={activity.id || index}
-                className="flex items-center py-4 px-5 rounded-lg border border-transparent hover:bg-gray-100 hover:border-gray-300 transition-all duration-150"
+                className="flex items-center py-2 px-3 rounded-lg border border-transparent hover:bg-gray-100 hover:border-gray-300 transition-all duration-150"
               >
                 <Profile
                   src={userPhoto}
                   altText={`${userName}'s profile`}
-                  size={50}
+                  size={40}
                   onClick={onProfileClick}
                 />
-                <div className="flex-1 ml-4">
+                <div className="flex-1 ml-3">
                   <Text type="small">
                     <span
                       onClick={onProfileClick}
@@ -94,7 +96,7 @@ function ActivityLog({ onProfileClick, dealId, userId }) {
           })
         ) : (
           <Text type="medium" role="tertiary">
-            No action? Share your link.
+            No activity yet. Share your link or claim.
           </Text>
         )}
       </div>

@@ -1,3 +1,4 @@
+// src/pages/TheRealDeal.js
 import React, { useState, useEffect } from "react";
 import { useSearchParams, useParams } from "react-router-dom";
 import { useCard } from "../contexts/CardContext";
@@ -23,7 +24,7 @@ function TheRealDeal() {
   // URL parameters: /share/:creatorName/:dealId
   const { creatorName, dealId } = useParams();
   const [searchParams] = useSearchParams();
-  const sharerName = searchParams.get("sharer"); // e.g. ?sharer=Mackey
+  const sharerName = searchParams.get("sharer"); // e.g. ?sharer=Mackey (not used to log anymore)
 
   // Local onboarding state
   const [localUserId, setLocalUserId] = useState(null);
@@ -44,9 +45,6 @@ function TheRealDeal() {
   const [creatorUser, setCreatorUser] = useState(null);
   const [currentDealId, setCurrentDealId] = useState(null);
 
-  // Prevent multiple "shared gift card" logs in the same session
-  const [alreadyShared, setAlreadyShared] = useState(false);
-
   // ──────────────────────────────────────────────────────────
   // 1) If we have /:creatorName/:dealId => fetch an existing deal by share_link
   // ──────────────────────────────────────────────────────────
@@ -59,7 +57,7 @@ function TheRealDeal() {
         return;
       }
 
-      // Use REACT_APP_DOMAIN if set; otherwise fallback to window.location.origin
+      // Build share link from environment domain or fallback
       const baseUrl =
         process.env.REACT_APP_DOMAIN || window.location.origin;
       const lowerName = creatorName.toLowerCase().trim();
@@ -96,41 +94,13 @@ function TheRealDeal() {
 
         if (userRow) {
           setCreatorUser(userRow);
-
-          /**
-           * Only log "shared gift card" once per session, AND only if there's a ?sharer param
-           * and we can confirm the sharer is the same as the creator. 
-           * If we can't confirm, skip logging instead of "someone".
-           */
-          if (!alreadyShared && sharerName) {
-            const userRowName = userRow.name?.toLowerCase().trim() || "";
-            const incomingSharer = sharerName.toLowerCase().trim();
-
-            if (incomingSharer === userRowName) {
-              // Creator scenario => log "Creator shared gift card"
-              console.log(
-                "[TheRealDeal] => Logging 'shared gift card' for the known creator"
-              );
-              await addActivity({
-                userId: userRow.id,
-                action: "shared gift card",
-                dealId: dealRow.id,
-              });
-            } else {
-              // If there's no known user, skip logging for now
-              console.log(
-                "[TheRealDeal] => Sharer doesn't match the known creator. SKIP logging."
-              );
-            }
-            setAlreadyShared(true);
-          }
         }
       }
     };
 
     fetchDeal();
     // eslint-disable-next-line
-  }, [creatorName, dealId, sharerName, addActivity, alreadyShared]);
+  }, [creatorName, dealId]);
 
   // ──────────────────────────────────────────────────────────
   // 2) Once we fetch the existing deal, sync it to cardData
@@ -152,9 +122,7 @@ function TheRealDeal() {
     }
   }, [fetchedDeal, setCardData]);
 
-  /**
-   * 2b) Once we have the creatorUser, use their name & photo on the card.
-   */
+  // 2b) Once we have the creatorUser, use their name & photo on the card
   useEffect(() => {
     if (creatorUser) {
       setCardData((prev) => ({
@@ -179,25 +147,8 @@ function TheRealDeal() {
   }, [currentDealId, fetchDealActivities]);
 
   // ──────────────────────────────────────────────────────────
-  // 3) handleCopyLink => share logic (BUT we do NOT log "shared" here!)
+  // 3) handleCopyLink => now handled in Buttons (to unify share logic)
   // ──────────────────────────────────────────────────────────
-  const handleCopyLink = async () => {
-    if (!cardData?.share_link) {
-      console.log("[TheRealDeal] => No share link to copy.");
-      return;
-    }
-    try {
-      const userName = cardData.name || "anon";
-      const linkWithSharer = `${cardData.share_link}?sharer=${encodeURIComponent(
-        userName
-      )}`;
-
-      await navigator.clipboard.writeText(linkWithSharer);
-      alert("Link copied: " + linkWithSharer);
-    } catch (err) {
-      console.error("[TheRealDeal] handleCopyLink =>", err);
-    }
-  };
 
   // ──────────────────────────────────────────────────────────
   // 4) Claim => user must be onboarded
@@ -219,6 +170,7 @@ function TheRealDeal() {
       });
       setLocalUserId(user.id);
 
+      // Log "claimed gift card"
       await addActivity({
         userId: user.id,
         action: "claimed gift card",
@@ -322,14 +274,16 @@ function TheRealDeal() {
         {/* Main content */}
         <div className="flex-1 flex flex-col items-center justify-start w-full px-[4%] py-[4%]">
           <Card onOpenCardForm={handleOpenCardForm} />
-          <div className="w-full max-w-[768px]">
-            <Buttons onShare={handleCopyLink} onClaim={handleClaim} />
+          <div className="w-full max-w-[768px] flex flex-col h-full">
+            <Buttons onClaim={handleClaim} />
             <ActivityLog dealId={cardData.id || currentDealId} />
           </div>
         </div>
 
+        {/* Pinned Footer */}
         <Footer />
 
+        {/* Add button for new or existing deal */}
         <AddButton onOpenCardForm={handleOpenCardForm} />
 
         {/* Overlays */}

@@ -1,3 +1,4 @@
+// src/contexts/ActivityContext.js
 import React, { createContext, useContext, useState, useRef, useCallback } from "react";
 import { supabase } from "../supabaseClient";
 
@@ -7,15 +8,10 @@ export const ActivityProvider = ({ children }) => {
   const [activities, setActivities] = useState([]);
   const channelRef = useRef(null);
 
-  /**
-   * 1) fetchDealActivities – calls Supabase to get all activity logs for a given dealId.
-   *    We also set up a realtime subscription once per dealId.
-   */
+  // fetchDealActivities
   const fetchDealActivities = useCallback(async (dealId) => {
     console.log("[ActivityContext] => fetchDealActivities(", dealId, ")...");
-
     try {
-      // Clear out old activities
       setActivities([]);
 
       const { data, error } = await supabase
@@ -42,7 +38,6 @@ export const ActivityProvider = ({ children }) => {
       // Realtime subscription
       console.log("[ActivityContext] => Setting up realtime subscription for deal_id=", dealId, "...");
       if (channelRef.current) {
-        // remove previous subscription if it exists
         supabase.removeChannel(channelRef.current);
         channelRef.current = null;
       }
@@ -54,10 +49,7 @@ export const ActivityProvider = ({ children }) => {
         async (payload) => {
           console.log("[ActivityContext] => Realtime event:", payload.eventType, payload.new);
           if (payload.eventType === "INSERT" && payload.new.deal_id === dealId) {
-            console.log(
-              "[ActivityContext] => Realtime (INSERT) for this deal:",
-              payload.new
-            );
+            console.log("[ActivityContext] => Realtime (INSERT) for this deal:", payload.new);
             const newId = payload.new.id;
             // fetch the joined row
             const { data: joinedRow, error: joinError } = await supabase
@@ -88,16 +80,13 @@ export const ActivityProvider = ({ children }) => {
     }
   }, []);
 
-  /**
-   * 2) addActivity – Insert a row in the "activities" table
-   *    We assume userId is a valid UUID if user is known. If unknown, skip or handle differently.
-   */
+  // addActivity
   const addActivity = async ({ userId, dealId, action }) => {
     console.log("[ActivityContext] => addActivity() called with:", { userId, dealId, action });
 
-    // If there's no userId, we skip. (We removed "someone" logic.)
-    if (!userId || userId === "someone") {
-      console.log("[ActivityContext] => No valid userId provided. Skipping insert.");
+    // If there's no valid userId or dealId, skip
+    if (!userId || !dealId) {
+      console.log("[ActivityContext] => Missing userId or dealId. Skipping insert.");
       return;
     }
 
@@ -110,20 +99,14 @@ export const ActivityProvider = ({ children }) => {
       console.error("[ActivityContext] => Error inserting activity to DB:", error);
     } else {
       console.log("[ActivityContext] => Inserted activity =>", data);
-      // The real-time subscription will pick it up as well.
+      // Realtime subscription will pick it up
     }
   };
 
-  /**
-   * 3) getActivitiesByDeal
-   */
   const getActivitiesByDeal = (dealId) => {
     return activities.filter((a) => a.deal_id === dealId);
   };
 
-  /**
-   * 4) getActivitiesByUser
-   */
   const getActivitiesByUser = (userId) => {
     return activities.filter((a) => a.user_id === userId);
   };
