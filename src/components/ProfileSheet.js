@@ -1,7 +1,9 @@
-import React, { useEffect, useState } from 'react';
-import Profile from './Profile';
-import Text from '../config/Text';
-import { colorScheme } from '../config/Colors';
+// src/components/ProfileSheet.jsx
+
+import React, { useEffect, useState } from "react";
+import Profile from "./Profile";
+import Text from "../config/Text";
+import { colorScheme } from "../config/Colors";
 
 function ProfileSheet({ onClose }) {
   const [isVisible, setIsVisible] = useState(false);
@@ -9,8 +11,8 @@ function ProfileSheet({ onClose }) {
   const [isShareClicked, setIsShareClicked] = useState(false);
 
   // Just local states for name and image
-  const [name, setName] = useState('Anonymous');
-  const [profileImage, setProfileImage] = useState('');
+  const [name, setName] = useState("Anonymous");
+  const [profileImage, setProfileImage] = useState("");
 
   useEffect(() => {
     setIsVisible(true);
@@ -24,21 +26,20 @@ function ProfileSheet({ onClose }) {
   };
 
   const handleEditToggle = () => {
-    // Normally, you'd update user profile here, but we've removed all user logic.
     setIsEditing(!isEditing);
+    // you'd also update the user profile in real logic
   };
 
   const handleShareProfile = () => {
     if (!isEditing) {
-      // Simulate share logic or remove if unnecessary.
       setIsShareClicked(true);
-      setTimeout(() => setIsShareClicked(false), 5000);
-      alert('Profile shared (simulated).');
+      setTimeout(() => setIsShareClicked(false), 3000);
+      alert("Profile shared (simulated).");
     }
   };
 
   const handleImageUpload = (e) => {
-    const file = e.target.files[0];
+    const file = e.target.files?.[0];
     if (file) {
       const reader = new FileReader();
       reader.onload = () => {
@@ -50,23 +51,23 @@ function ProfileSheet({ onClose }) {
 
   return (
     <>
-      {/* Blurred Background */}
+      {/* Background overlay */}
       <div
         className={`fixed inset-0 z-40 transition-opacity duration-300 ${
-          isVisible ? 'opacity-100' : 'opacity-0'
+          isVisible ? "opacity-100" : "opacity-0"
         }`}
         style={{
-          backgroundColor: 'rgba(0, 0, 0, 0.8)',
-          backdropFilter: isVisible ? colorScheme.glass.blur : 'none',
-          WebkitBackdropFilter: isVisible ? colorScheme.glass.blur : 'none',
+          backgroundColor: "rgba(0, 0, 0, 0.8)",
+          backdropFilter: colorScheme.glass.blur,
+          WebkitBackdropFilter: colorScheme.glass.blur,
         }}
         onClick={handleClose}
       ></div>
 
-      {/* ProfileSheet */}
+      {/* Sliding sheet */}
       <div
-        className={`absolute inset-x-0 bottom-0 rounded-t-lg p-4 md:p-6 z-50 overflow-y-auto transform transition-transform duration-300 ${
-          isVisible ? 'translate-y-0' : 'translate-y-full'
+        className={`fixed bottom-0 inset-x-0 z-50 rounded-t-lg p-4 md:p-6 overflow-y-auto transform transition-transform duration-300 ${
+          isVisible ? "translate-y-0" : "translate-y-full"
         }`}
         style={{
           backgroundColor: colorScheme.glass.background,
@@ -81,31 +82,26 @@ function ProfileSheet({ onClose }) {
         </button>
 
         <div className="flex flex-col items-center space-y-6 md:space-y-8 py-4">
-          <div className="relative">
-            {/* Profile Image */}
-            <label className="cursor-pointer">
-              <Profile
-                size={window.innerWidth > 768 ? 140 : 120}
-                src={profileImage}
+          {/* Profile image + optional editing */}
+          <label className="relative cursor-pointer">
+            <Profile size={120} src={profileImage} />
+            {isEditing && (
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleImageUpload}
               />
-              {isEditing && (
-                <input
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={handleImageUpload}
-                />
-              )}
-            </label>
-          </div>
+            )}
+          </label>
 
-          {/* Name Input */}
+          {/* Name Input / Display */}
           {isEditing ? (
             <input
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="text-xl md:text-2xl font-semibold text-center bg-gray-100 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-mainColor"
+              className="text-xl md:text-2xl font-semibold text-center bg-gray-100 rounded-lg px-4 py-2 focus:outline-none"
             />
           ) : (
             <Text type="large" role="white" className="text-center">
@@ -119,18 +115,16 @@ function ProfileSheet({ onClose }) {
               onClick={handleShareProfile}
               className="py-2 px-4 rounded-lg bg-gray-600 text-white text-lg md:text-xl w-full"
             >
-              {isShareClicked ? 'Shared!' : 'Share Profile'}
+              {isShareClicked ? "Shared!" : "Share Profile"}
             </button>
 
             <button
               onClick={handleEditToggle}
               className="py-2 px-4 rounded-lg bg-gray-600 text-white text-lg md:text-xl w-full"
             >
-              {isEditing ? 'Save' : 'Edit Profile'}
+              {isEditing ? "Save" : "Edit Profile"}
             </button>
           </div>
-          
-          {/* Remove Delete Account logic since no auth is present */}
         </div>
       </div>
     </>

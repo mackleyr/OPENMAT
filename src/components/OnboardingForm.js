@@ -1,5 +1,3 @@
-// src/components/OnboardingForm.jsx
-
 import React, { useState } from "react";
 import Progress from "./Progress";
 import Text from "../config/Text";
@@ -10,17 +8,18 @@ import { useCard } from "../contexts/CardContext";
 function OnboardingForm({ onComplete }) {
   const { setCardData } = useCard();
   const [currentStep, setCurrentStep] = useState(1);
-  const [name, setName] = useState("");
+
+  // For phone, name, and photo
   const [phone, setPhone] = useState("");
+  const [name, setName] = useState("");
   const [profilePhoto, setProfilePhoto] = useState("");
   const [isUploading, setIsUploading] = useState(false);
 
-  // Simple validations
-  const nameValidation = (value) => /^[A-Za-z ]{2,}$/.test(value.trim());
   const phoneValidation = (value) => {
     const digits = value.replace(/\D/g, "");
     return digits.length === 10;
   };
+  const nameValidation = (value) => /^[A-Za-z ]{2,}$/.test(value.trim());
 
   const formatPhone = (value) => {
     const digits = value.replace(/\D/g, "");
@@ -30,20 +29,21 @@ function OnboardingForm({ onComplete }) {
     return `(${clipped.slice(0, 3)}) ${clipped.slice(3, 6)}-${clipped.slice(6)}`;
   };
 
+  // Step array => [ Phone => Name => Photo ]
   const steps = [
-    {
-      title: "What's your Name?",
-      subtext: "Your name appears on deals.",
-      placeholder: "Name",
-      inputType: "text",
-      validation: nameValidation,
-    },
     {
       title: "What's your Phone Number?",
       subtext: "Your number unlocks deals.",
       placeholder: "(123) 456-7890",
       inputType: "phone",
       validation: phoneValidation,
+    },
+    {
+      title: "What's your Name?",
+      subtext: "Your name appears on deals.",
+      placeholder: "Name",
+      inputType: "text",
+      validation: nameValidation,
     },
     {
       title: "Add your Profile Photo",
@@ -54,17 +54,15 @@ function OnboardingForm({ onComplete }) {
 
   const currentStepData = steps[currentStep - 1];
 
-  // Input change handling
   const handleInputChange = (e) => {
     const value = e.target.value;
-    if (currentStepData.inputType === "text") {
-      setName(value);
-    } else if (currentStepData.inputType === "phone") {
+    if (currentStepData.inputType === "phone") {
       setPhone(formatPhone(value));
+    } else if (currentStepData.inputType === "text") {
+      setName(value);
     }
   };
 
-  // Photo upload
   const handlePhotoUpload = (e) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -79,34 +77,34 @@ function OnboardingForm({ onComplete }) {
   };
 
   const isValid = () => {
+    if (currentStepData.inputType === "phone") {
+      return phoneValidation(phone);
+    }
     if (currentStepData.inputType === "text") {
       return nameValidation(name);
-    } else if (currentStepData.inputType === "phone") {
-      return phoneValidation(phone);
-    } else if (currentStepData.inputType === "photo") {
+    }
+    if (currentStepData.inputType === "photo") {
       return !!profilePhoto;
     }
     return false;
   };
 
-  // Go to next step or complete
   const handleNext = () => {
     if (currentStep < steps.length) {
       setCurrentStep(currentStep + 1);
     } else {
-      // Completed all steps: build userData
-      const cleanName = name.trim();
+      // Completed all steps
       const cleanPhone = phone.replace(/\D/g, "");
+      const cleanName = name.trim();
       const userData = {
-        name: cleanName,
         phone: cleanPhone,
+        name: cleanName,
         profilePhoto,
       };
-      // Merge into global cardData
       setCardData((prev) => ({
         ...prev,
-        name: cleanName,
         phone: cleanPhone,
+        name: cleanName,
         profilePhoto,
       }));
       onComplete?.(userData);

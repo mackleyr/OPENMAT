@@ -2,7 +2,7 @@
 
 // Define the main color for the app
 export const mainColor = '#1A1A1A'; // black
-export const minorColor = '#EBEBEB'; // White
+export const minorColor = '#EBEBEB'; // white (light grayish)
 
 // Define the color scheme for different button and component states
 export const colorScheme = {
@@ -38,14 +38,16 @@ export const colorScheme = {
 // Define text colors for different roles
 export const textColors = {
   mainColor,         // e.g. '#1A1A1A'
-  primary: '#000000', 
-  secondary: '#6B7280', 
-  tertiary: '#D1D5DB', 
-  white: '#FFFFFF',   // <-- Critical key
+  primary: '#000000',
+  secondary: '#6B7280',
+  tertiary: '#D1D5DB',
+  white: '#FFFFFF',  // <-- used in OnboardingForm button text
 };
 
+// Default export compiles everything for convenience
 export default {
   mainColor,
+  minorColor,
   colorScheme,
   textColors,
 };
