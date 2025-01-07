@@ -1,3 +1,5 @@
+// src/components/Buttons.jsx
+
 import React, { useState } from "react";
 import { useCard } from "../contexts/CardContext";
 import Button from "./Button";
@@ -17,13 +19,9 @@ function Buttons({ onSave }) {
       return;
     }
     try {
-      // Build link with sharer param
-      const userName = cardData.name || "anon";
-      const linkWithSharer = `${cardData.share_link}?sharer=${encodeURIComponent(
-        userName
-      )}`;
-      await navigator.clipboard.writeText(linkWithSharer);
-      alert("Link copied: " + linkWithSharer);
+      // We simply copy the share_link from the canonical cardData
+      await navigator.clipboard.writeText(cardData.share_link);
+      alert("Link copied: " + cardData.share_link);
 
       // Log "shared gift card"
       await addActivity({
@@ -39,7 +37,7 @@ function Buttons({ onSave }) {
     }
   };
 
-  // Right button => "Save"
+  // Right button => "Claim"
   const handleSaveClick = async () => {
     if (!onSave) return;
     try {
@@ -63,7 +61,7 @@ function Buttons({ onSave }) {
         onClick={handleCopyClick}
       />
 
-      {/* Right => Save */}
+      {/* Right => Claim */}
       <Button
         label={isRightClicked ? "Claimed!" : "Claim"}
         type="secondary"

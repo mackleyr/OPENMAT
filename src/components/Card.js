@@ -1,29 +1,33 @@
-// src/components/Card.jsx
+import React from "react";
+import CardSide from "./CardSide";
+import { useCard } from "../contexts/CardContext";
 
-import React from 'react';
-import CardSide from './CardSide';
-import { useCard } from '../contexts/CardContext';
-
-function Card({ onOpenCardForm, isInForm = false, cardData: overrideData }) {
-  // If overrideData is provided, use it; else use globalCardData
+function Card({
+  onCardTap,
+  onOpenCardForm,
+  onProfileClick,
+  isInForm = false,
+  cardData: overrideData,
+}) {
   const { cardData: globalCardData } = useCard();
   const displayedData = overrideData || globalCardData;
 
-  const handleClick = () => {
-    if (!isInForm && onOpenCardForm) {
+  const handleCardContainerClick = () => {
+    if (isInForm) return;
+
+    if (onCardTap) {
+      onCardTap();
+    } else if (onOpenCardForm) {
       onOpenCardForm(globalCardData);
     }
   };
 
   return (
     <div
-      onClick={handleClick}
+      onClick={handleCardContainerClick}
       className="relative flex flex-col justify-between items-center w-full h-auto bg-white cursor-pointer rounded-lg"
-      style={{
-        boxSizing: 'border-box',
-      }}
     >
-      <CardSide cardData={displayedData} />
+      <CardSide cardData={displayedData} onProfileClick={onProfileClick} />
     </div>
   );
 }

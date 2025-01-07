@@ -33,10 +33,10 @@ function CardSide({ cardData }) {
     value,
     title,
     image,
-    name,           // for ShareCard
-    profilePhoto,   // for ShareCard
-    creatorName,    // for ClaimCard
-    creatorPhoto,   // for ClaimCard
+    name,           
+    profilePhoto,   
+    creatorName,    
+    creatorPhoto,   
   } = cardData || {};
 
   // If we have "creatorName", use that first; else use "name"

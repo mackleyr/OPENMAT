@@ -41,7 +41,7 @@ function Footer() {
       />
 
       <div className="flex space-x-4">
-        <a href="https://wa.me/your-whatsapp-number" target="_blank" rel="noopener noreferrer">
+        <a href="https://chat.whatsapp.com/D4cbTC5qnU1GNcS5XDA88h" target="_blank" rel="noopener noreferrer">
           <Text type="small" role="tertiary" isClickable className="hover:underline hover:font-semibold">
             Message
           </Text>

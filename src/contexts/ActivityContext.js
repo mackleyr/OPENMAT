@@ -1,4 +1,5 @@
 // src/contexts/ActivityContext.js
+
 import React, { createContext, useContext, useState, useRef, useCallback } from "react";
 import { supabase } from "../supabaseClient";
 
@@ -8,7 +9,6 @@ export const ActivityProvider = ({ children }) => {
   const [activities, setActivities] = useState([]);
   const channelRef = useRef(null);
 
-  // fetchDealActivities
   const fetchDealActivities = useCallback(async (dealId) => {
     console.log("[ActivityContext] => fetchDealActivities(", dealId, ")...");
     try {
@@ -36,7 +36,7 @@ export const ActivityProvider = ({ children }) => {
       }
 
       // Realtime subscription
-      console.log("[ActivityContext] => Setting up realtime subscription for deal_id=", dealId, "...");
+      console.log("[ActivityContext] => Setting up realtime subscription for deal_id=", dealId);
       if (channelRef.current) {
         supabase.removeChannel(channelRef.current);
         channelRef.current = null;
@@ -80,11 +80,9 @@ export const ActivityProvider = ({ children }) => {
     }
   }, []);
 
-  // addActivity
   const addActivity = async ({ userId, dealId, action }) => {
     console.log("[ActivityContext] => addActivity() called with:", { userId, dealId, action });
 
-    // If there's no valid userId or dealId, skip
     if (!userId || !dealId) {
       console.log("[ActivityContext] => Missing userId or dealId. Skipping insert.");
       return;
@@ -99,7 +97,7 @@ export const ActivityProvider = ({ children }) => {
       console.error("[ActivityContext] => Error inserting activity to DB:", error);
     } else {
       console.log("[ActivityContext] => Inserted activity =>", data);
-      // Realtime subscription will pick it up
+      // Realtime will pick it up
     }
   };
 

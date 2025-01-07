@@ -1,4 +1,3 @@
-// src/components/ActivityLog.jsx
 import React, { useEffect, useState } from "react";
 import { useActivity } from "../contexts/ActivityContext";
 import Profile from "./Profile";
@@ -34,18 +33,15 @@ function ActivityLog({ onProfileClick, dealId, userId }) {
 
   return (
     <div className="flex flex-col rounded-lg bg-gray-50 w-full h-full overflow-hidden">
-      {/* Header */}
       <div className="flex-shrink-0 flex items-center justify-between border-b border-gray-300 px-4 py-3">
         <Text type="large" role="primary">
           Activity
         </Text>
       </div>
-
-      {/* Scrollable list */}
       <div
         className="flex-1 overflow-y-auto px-4 pt-3 pb-2 space-y-3"
         style={{
-          WebkitOverflowScrolling: "touch", // iOS momentum
+          WebkitOverflowScrolling: "touch",
           touchAction: "pan-y",
         }}
       >

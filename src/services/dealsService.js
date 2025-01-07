@@ -1,4 +1,5 @@
 // src/services/dealsService.js
+
 import { supabase } from "../supabaseClient";
 
 export const createDeal = async ({
@@ -10,9 +11,7 @@ export const createDeal = async ({
   deal_value,
 }) => {
   try {
-    const baseUrl =
-      process.env.REACT_APP_DOMAIN || "https://and.deals";
-    // Replace whitespace with %20 by using encodeURIComponent.
+    const baseUrl = process.env.REACT_APP_DOMAIN || "https://and.deals";
     const nameLower = (creatorName || "").toLowerCase().trim();
     const encodedName = encodeURIComponent(nameLower);
 
@@ -53,8 +52,7 @@ export const updateDeal = async ({
   deal_value,
 }) => {
   try {
-    const baseUrl =
-      process.env.REACT_APP_DOMAIN || "https://and.deals";
+    const baseUrl = process.env.REACT_APP_DOMAIN || "https://and.deals";
     const nameLower = (creatorName || "").toLowerCase().trim();
     const encodedName = encodeURIComponent(nameLower);
 

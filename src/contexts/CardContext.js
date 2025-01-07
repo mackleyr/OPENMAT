@@ -1,33 +1,62 @@
 // src/contexts/CardContext.jsx
-import React, { createContext, useState, useContext } from 'react';
+
+import React, { createContext, useState, useContext } from "react";
 
 const CardContext = createContext();
 
 export const CardProvider = ({ children }) => {
   const initialCardData = {
     id: null,
-    title: '',
+    creatorId: null,   // The original creator's user ID
+    title: "",
+    value: "",
+    image: null,       // background image
+    share_link: "",
+    description: "",
     expires: null,
-    name: '',
-    profilePhoto: '',
-    image: null,
-    value: '',
-    phone: '',
-    description: '',
-    share_link: '',
+
+    // The original creator’s name + photo
+    // (We do NOT store phone here anymore)
+    name: "",
+    profilePhoto: "",
   };
 
-  const [cardData, setCardData] = useState(initialCardData);
+  const [cardData, rawSetCardData] = useState(initialCardData);
+
+  /**
+   * debugSetCardData => logs the old/new data so we know who is calling it
+   */
+  const debugSetCardData = (updater, debugLabel = "UNLABELED_CALL") => {
+    rawSetCardData((prev) => {
+      const newValue =
+        typeof updater === "function" ? updater(prev) : { ...prev, ...updater };
+
+      console.log(
+        `[CardContext.debugSetCardData] => ${debugLabel}:\n`,
+        "Previous =>",
+        prev,
+        "\nNew =>",
+        newValue
+      );
+      return newValue;
+    });
+  };
 
   const resetCardData = () => {
-    console.log("CardContext.resetCardData(): Resetting card data to initial.");
-    setCardData(initialCardData);
+    console.log("CardContext.resetCardData(): resetting to initial deal data.");
+    debugSetCardData(initialCardData, "resetCardData");
   };
 
   console.log("CardContext: Current cardData:", cardData);
 
   return (
-    <CardContext.Provider value={{ cardData, setCardData, resetCardData }}>
+    <CardContext.Provider
+      value={{
+        cardData,
+        setCardData: debugSetCardData, // we use the debug version
+        resetCardData,
+      }}
+    >
       {children}
     </CardContext.Provider>
   );
