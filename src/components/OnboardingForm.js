@@ -24,8 +24,8 @@ function OnboardingForm({ onComplete }) {
     {
       title: isVerified ? "Phone Verified!" : "What's your Phone Number?",
       subtext: isVerified
-        ? "Verified. You can proceed."
-        : "We only accept 10 digits for US phone. We'll prepend +1 automatically. Format: (###) ###-####",
+        ? "Tap next."
+        : "Your number unlocks deals.",
       inputType: "phone",
     },
     {

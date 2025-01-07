@@ -1,3 +1,5 @@
+// src/components/CardForm.jsx
+
 import React, { useState } from "react";
 import Card from "./Card";
 import Text from "../config/Text";
@@ -5,29 +7,35 @@ import Button from "./Button";
 import { createDeal, updateDeal } from "../services/dealsService";
 import { useActivity } from "../contexts/ActivityContext";
 
+/**
+ * Props:
+ *  - onClose: function() to close the overlay
+ *  - onSave: function(formData) => called after successful create/update
+ *  - initialData: { id, dealValue, dealTitle, dealImage, name, profilePhoto, localUserId }
+ */
 function CardForm({ onClose, onSave, initialData }) {
   const safeData = initialData ?? {};
 
+  // State reflecting the form fields
   const [formState, setFormState] = useState({
-    id: safeData.id ?? null,
+    id: safeData.id ?? null,                   // deal ID if existing
     dealValue: safeData.dealValue ?? "",
     dealTitle: safeData.dealTitle ?? "",
     dealImage: safeData.dealImage ?? null,
-    name: safeData.name ?? "",
-    profilePhoto: safeData.profilePhoto ?? "",
-    localUserId: safeData.localUserId ?? null,
+    name: safeData.name ?? "",                // creator’s display name
+    profilePhoto: safeData.profilePhoto ?? "",// creator’s photo
+    localUserId: safeData.localUserId ?? null // the actual user’s ID
   });
 
   const { addActivity } = useActivity();
 
+  // Handlers for each form field
   const handleValueChange = (e) => {
     setFormState((prev) => ({ ...prev, dealValue: e.target.value }));
   };
   const handleTitleChange = (e) => {
     setFormState((prev) => ({ ...prev, dealTitle: e.target.value }));
   };
-  // If you want a description field, re-add it. If not, remove references.
-
   const handleImageUpload = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -38,6 +46,7 @@ function CardForm({ onClose, onSave, initialData }) {
     reader.readAsDataURL(file);
   };
 
+  // Called when user hits "Complete" in the form
   const handleDone = async () => {
     console.log("[CardForm] => handleDone with formState:", formState);
 
@@ -48,29 +57,50 @@ function CardForm({ onClose, onSave, initialData }) {
         return;
       }
 
+      // Prepare payload for create/update
       const dealPayload = {
         creator_id: userId,
         title: formState.dealTitle,
         background: formState.dealImage,
         deal_value: formState.dealValue,
-        creatorName: formState.name, // store name in DB
+        creatorName: formState.name, // store the creator’s name in the DB row if you want
       };
 
       let dealResult;
       if (formState.id) {
-        console.log("[CardForm] => updating existing deal:", formState.id);
+        // We have an existing deal => update
+        console.log("[CardForm] => updating existing deal with ID:", formState.id);
         dealResult = await updateDeal({
           dealId: formState.id,
-          ...dealPayload,
+          ...dealPayload
         });
-        addActivity({ userId, dealId: dealResult.id, action: "updated gift card" });
+        console.log("[CardForm] => updateDeal => returned =>", dealResult);
+
+        // log "updated gift card"
+        addActivity({
+          userId,
+          dealId: dealResult.id,
+          action: "updated gift card"
+        });
       } else {
-        console.log("[CardForm] => creating new deal =>", dealPayload);
+        // brand-new deal => create
+        console.log("[CardForm] => creating a new deal =>", dealPayload);
         dealResult = await createDeal(dealPayload);
-        addActivity({ userId, dealId: dealResult.id, action: "created gift card" });
+        console.log("[CardForm] => createDeal => returned =>", dealResult);
+
+        // log "created gift card"
+        addActivity({
+          userId,
+          dealId: dealResult.id,
+          action: "created gift card"
+        });
       }
 
-      onSave?.({ ...formState, id: dealResult.id });
+      // Pass the new/updated deal ID & data back
+      onSave?.({
+        ...formState,
+        id: dealResult.id
+      });
       onClose?.();
     } catch (err) {
       console.error("[CardForm]: Error =>", err);
@@ -78,20 +108,26 @@ function CardForm({ onClose, onSave, initialData }) {
     }
   };
 
+  // For a visual preview in the form
   const previewCardData = {
     value: formState.dealValue,
     title: formState.dealTitle,
     image: formState.dealImage,
     name: formState.name,
-    profilePhoto: formState.profilePhoto,
+    profilePhoto: formState.profilePhoto
   };
 
   return (
     <div
       className="relative w-full h-full flex flex-col items-center p-[5%]"
-      style={{ backgroundColor: "transparent", boxSizing: "border-box" }}
+      style={{
+        backgroundColor: "transparent",
+        boxSizing: "border-box",
+        overflow: "visible"
+      }}
     >
       <div className="flex flex-col w-full flex-grow items-start">
+        {/* Card preview */}
         <Card isInForm={true} cardData={previewCardData} />
 
         <div
@@ -99,7 +135,7 @@ function CardForm({ onClose, onSave, initialData }) {
           style={{ height: "auto" }}
         >
           <div className="flex justify-between items-center mb-4 border-b border-gray-300 pb-4">
-            <Text type="large" role="primary">
+            <Text type="large" role="primary" className="text-left">
               Create or Update
             </Text>
           </div>
@@ -151,7 +187,7 @@ function CardForm({ onClose, onSave, initialData }) {
           style={{
             padding: "1rem",
             fontSize: "1.25rem",
-            textAlign: "center",
+            textAlign: "center"
           }}
         >
           Complete
