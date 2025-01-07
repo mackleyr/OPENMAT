@@ -2,29 +2,30 @@ import React, { useState } from "react";
 import Text from "../config/Text";
 import Profile from "./Profile";
 import { mainColor, textColors } from "../config/Colors";
+// We'll assume these exist in your code
 import { sendVerificationCode, checkVerificationCode } from "../services/twilioClient";
 
 function OnboardingForm({ onComplete }) {
   const [currentStep, setCurrentStep] = useState(1);
 
-  // phone & code
+  // phone with parentheses => e.g. "(123) 456-7890"
   const [phone, setPhone] = useState("");
   const [showCodeField, setShowCodeField] = useState(false);
   const [verificationCode, setVerificationCode] = useState("");
   const [isVerified, setIsVerified] = useState(false);
 
-  // name, photo
+  // name + photo
   const [name, setName] = useState("");
   const [profilePhoto, setProfilePhoto] = useState("");
   const [isUploading, setIsUploading] = useState(false);
 
-  // Steps: 1 => phone verify, 2 => name, 3 => photo
+  // steps
   const steps = [
     {
       title: isVerified ? "Phone Verified!" : "What's your Phone Number?",
       subtext: isVerified
-        ? "Great! Verified."
-        : "We only accept 10 digits for US phone. We'll prepend +1 automatically.",
+        ? "Verified. You can proceed."
+        : "We only accept 10 digits for US phone. We'll prepend +1 automatically. Format: (###) ###-####",
       inputType: "phone",
     },
     {
@@ -41,11 +42,46 @@ function OnboardingForm({ onComplete }) {
   const currentStepData = steps[currentStep - 1];
 
   /**
-   * isValid() => checks if the user’s input is valid for the current step
+   * formatPhone():
+   * 1) Strip out all non-digits
+   * 2) Limit to 10 digits
+   * 3) Insert parentheses and dash => (###) ###-####
+   */
+  function formatPhone(value) {
+    let digits = value.replace(/\D/g, "");
+    // limit to 10 digits
+    if (digits.length > 10) {
+      digits = digits.substring(0, 10);
+    }
+
+    // Based on length, build up the format
+    if (digits.length <= 3) {
+      // up to 3 => "(123"
+      return `(${digits}`;
+    } else if (digits.length <= 6) {
+      // up to 6 => "(123) 456"
+      return `(${digits.substring(0, 3)}) ${digits.substring(3)}`;
+    } else {
+      // up to 10 => "(123) 456-7890"
+      return `(${digits.substring(0, 3)}) ${digits.substring(3, 6)}-${digits.substring(6)}`;
+    }
+  }
+
+  /**
+   * handlePhoneChange => Called when user types in the phone field.
+   * We run formatPhone() => store the result in state.
+   */
+  const handlePhoneChange = (rawValue) => {
+    const formatted = formatPhone(rawValue);
+    setPhone(formatted);
+  };
+
+  /**
+   * isValid() => decides if the user can press "Next" or "Send Code" or "Verify"
    */
   const isValid = () => {
     if (currentStepData.inputType === "phone") {
-      // We want exactly 10 digits
+      // We must have exactly 10 digits to be valid
       const digits = phone.replace(/\D/g, "");
       return digits.length === 10;
     }
@@ -53,36 +89,36 @@ function OnboardingForm({ onComplete }) {
       return name.trim().length >= 2;
     }
     if (currentStepData.inputType === "photo") {
-      return !!profilePhoto; // must have a photo
+      return !!profilePhoto;
     }
     return false;
   };
 
   /**
-   * handleSendOrCheckCode => called if user not verified yet (in step=1)
-   * 1) If we haven't sent code => send it
-   * 2) Else => check code
+   * handleSendOrCheckCode => for step 1, if not verified:
+   * 1) If we haven't shown the code field => we "send" the code
+   * 2) If we have => we "check" the code
    */
   const handleSendOrCheckCode = async () => {
     if (!showCodeField) {
-      // 1) user just typed phone => send code
+      // user typed phone => let's convert to +1XXXXXXXXXX
+      const digits = phone.replace(/\D/g, ""); // e.g. "1234567890"
+      if (digits.length !== 10) {
+        alert("Please enter exactly 10 digits for a US phone.");
+        return;
+      }
+      const e164 = `+1${digits}`; // => "+11234567890"
       try {
-        const digits = phone.replace(/\D/g, ""); // strip everything but digits
-        if (digits.length !== 10) {
-          alert("Please enter exactly 10 digits (US phone).");
-          return;
-        }
-        const e164 = `+1${digits}`; // e.g. '+11234567890'
-        await sendVerificationCode(e164);
+        await sendVerificationCode(e164); // your serverless call
         setShowCodeField(true);
       } catch (err) {
-        alert("Error sending verification code: " + err.message);
+        alert(`Error sending verification code: ${err.message}`);
       }
     } else {
-      // 2) user typed code => check
+      // user typed code => let's check
+      const digits = phone.replace(/\D/g, "");
+      const e164 = `+1${digits}`;
       try {
-        const digits = phone.replace(/\D/g, "");
-        const e164 = `+1${digits}`;
         const success = await checkVerificationCode(e164, verificationCode);
         if (success) {
           setIsVerified(true);
@@ -92,30 +128,29 @@ function OnboardingForm({ onComplete }) {
           alert("Code incorrect or expired");
         }
       } catch (err) {
-        alert("Error verifying code: " + err.message);
+        alert(`Error verifying code: ${err.message}`);
       }
     }
   };
 
   /**
-   * handleNext => the big button logic
+   * handleNext => big button logic
    */
   const handleNext = async () => {
     // If step=1 & not verified => do Twilio logic
     if (currentStep === 1 && !isVerified) {
       await handleSendOrCheckCode();
-      return; // don't proceed
+      return; // do not proceed
     }
 
-    // Otherwise, proceed to next step or complete
     if (currentStep < steps.length) {
       setCurrentStep(currentStep + 1);
       return;
     }
 
-    // Completed => call onComplete
+    // Completed => pass data
     onComplete?.({
-      phone: phone.replace(/\D/g, ""), // store digits only or the final e164
+      phone: phone.replace(/\D/g, ""), // store digits or e164
       name: name.trim(),
       profilePhoto,
     });
@@ -141,15 +176,15 @@ function OnboardingForm({ onComplete }) {
           <input
             type="tel"
             value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            placeholder="Enter 10 digits, e.g. 1234567890"
+            onChange={(e) => handlePhoneChange(e.target.value)}
+            placeholder="(123) 456-7890"
             className="bg-transparent border-none outline-none w-full text-center text-white mt-4 text-2xl"
           />
         )}
         {currentStepData.inputType === "phone" && showCodeField && !isVerified && (
           <div className="flex flex-col mt-4 items-center">
             <Text type="small" role="white">
-              Enter the 6-digit code we sent:
+              Enter the 6-digit code:
             </Text>
             <input
               type="text"
