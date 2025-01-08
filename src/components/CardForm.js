@@ -7,26 +7,17 @@ import Button from "./Button";
 import { createDeal, updateDeal } from "../services/dealsService";
 import { useActivity } from "../contexts/ActivityContext";
 
-function CardForm({ onClose, onSave, initialData }) {
-  // Safely parse the initial data we get from TheRealDeal.jsx
-  const safeData = initialData ?? {};
-  console.log("[CardForm] safeData:", safeData);
-
-  const [formState, setFormState] = useState({
-    id: safeData.id ?? null,
-    dealValue: safeData.dealValue ?? "",
-    dealTitle: safeData.dealTitle ?? "",
-    dealDescription: safeData.dealDescription ?? "",
-    dealImage: safeData.dealImage ?? null,
-
-    // The creator’s name + photo. If TheRealDeal passes them in `initialData`,
-    // we fill them here. That way the <Card> preview sees the up-to-date info.
-    name: safeData.name ?? "",
-    profilePhoto: safeData.profilePhoto ?? "",
-
-    // Local user ID (crucial for create/update)
-    localUserId: safeData.localUserId ?? null,
-  });
+function CardForm({ onClose, onSave, cardData }) {
+    const [formState, setFormState] = useState({
+      id: cardData.id ?? null,
+      dealValue: cardData.value ?? "",
+      dealTitle: cardData.title ?? "",
+      dealDescription: cardData.description ?? "",
+      dealImage: cardData.image ?? null,
+      name: cardData.name ?? "",
+      profilePhoto: cardData.profilePhoto ?? "",
+      localUserId: cardData.creatorId ?? null,
+    });
 
   const { addActivity } = useActivity();
 

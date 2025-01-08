@@ -211,20 +211,8 @@ function TheRealDeal() {
       alert("You cannot edit a deal you didn't create.");
       return;
     }
-
-    const initData = {
-      id: cardData.id,
-      dealValue: cardData.value,
-      dealTitle: cardData.title,
-      dealDescription: cardData.description || "",
-      dealImage: cardData.image,
-      name: localUser.name || "",
-      profilePhoto: localUser.profilePhoto || "",
-      localUserId: localUser.id,
-    };
-
-    setCardFormData(initData);
-    setShowCardForm(true);
+  
+    setShowCardForm(true); // Open the form
   };
 
   const handleOnboardingComplete = async (userData) => {
@@ -371,7 +359,7 @@ function TheRealDeal() {
           <CardForm
             onClose={() => setShowCardForm(false)}
             onSave={handleSaveCard}
-            initialData={cardFormData}
+            cardData={cardData}
           />
         </div>
       )}
