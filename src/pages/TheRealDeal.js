@@ -57,20 +57,23 @@ function TheRealDeal() {
       .eq("share_link", shareLink)
       .single();
 
-    if (error || !dealRow) {
-      console.error("[fetchDeal] Error fetching deal:", error);
-      setDealFound(false);
+      if (error || !dealRow) {
+        console.error("[fetchDeal] Error fetching deal:", error);
+        setDealFound(false);
+        setLoading(false);
+        return;
+      }
+      
+      // Success path:
+      const { name, profile_image_url: profilePhoto } = dealRow.users || {};
+      setFetchedDeal({
+        ...dealRow,
+        creatorName: name,
+        creatorPhoto: profilePhoto,
+      });
+      setDealFound(true);
+      
       setLoading(false);
-      return;
-    }
-
-    const { name, profile_image_url: profilePhoto } = dealRow.users || {};
-    setFetchedDeal({
-      ...dealRow,
-      creatorName: name,
-      creatorPhoto: profilePhoto,
-    });
-    setDealFound(true);
   };
 
   const refetchDealById = async (dealId) => {

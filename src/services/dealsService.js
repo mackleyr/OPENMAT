@@ -10,78 +10,48 @@ export const createDeal = async ({
   deal_value,
 }) => {
   try {
-    // We only create a share_link here (the first time).
-    const baseUrl = process.env.REACT_APP_DOMAIN || "https://and.deals";
-    const nameLower = (creatorName || "").toLowerCase().trim();
-    const encodedName = encodeURIComponent(nameLower);
-
-    // The "uniqueUrl" is the random slug we append.
-    const uniqueUrl = crypto.randomUUID();
-    const share_link = `${baseUrl}/share/${encodedName}/${uniqueUrl}`;
-
-    console.log("createDeal(): final share_link =>", share_link);
-
-    const { data: deal, error } = await supabase
+    // 1) Insert the row WITHOUT share_link
+    const { data: insertedDeal, error: insertError } = await supabase
       .from("deals")
       .insert([
         {
           creator_id,
           title,
           background,
-          share_link,
           deal_value,
+          // no share_link yet
         },
       ])
       .select("*")
       .single();
 
-    if (error) throw error;
-    return deal;
-  } catch (err) {
-    console.error("createDeal() unhandled error:", err);
-    throw err;
-  }
-};
-
-export const updateDeal = async ({
-  dealId,
-  title,
-  background,
-  creatorName,
-  deal_value,
-  regenLink = false,
-}) => {
-  try {
-    let updates = {
-      title,
-      background,
-      deal_value,
-    };
-
-    if (regenLink) {
-      // regenerate the link if needed
-      const baseUrl = process.env.REACT_APP_DOMAIN || "https://and.deals";
-      const nameLower = (creatorName || "").toLowerCase().trim();
-      const encodedName = encodeURIComponent(nameLower);
-
-      const uniqueUrl = crypto.randomUUID();
-      const newShareLink = `${baseUrl}/share/${encodedName}/${uniqueUrl}`;
-
-      console.log("updateDeal(): re-generated share_link =>", newShareLink);
-      updates.share_link = newShareLink;
+    if (insertError) throw insertError;
+    if (!insertedDeal || !insertedDeal.id) {
+      throw new Error("Unable to create deal or missing deal.id");
     }
 
-    const { data: updatedDeal, error } = await supabase
+    // 2) Build the share_link using insertedDeal.id
+    const baseUrl = process.env.REACT_APP_DOMAIN || "https://and.deals";
+    const nameLower = (creatorName || "").toLowerCase().trim();
+    const encodedName = encodeURIComponent(nameLower);
+
+    // Use the row's UUID as slug
+    const share_link = `${baseUrl}/share/${encodedName}/${insertedDeal.id}`;
+
+    // 3) Update that same row with share_link
+    const { data: updatedDeal, error: updateError } = await supabase
       .from("deals")
-      .update(updates)
-      .eq("id", dealId)
+      .update({ share_link })
+      .eq("id", insertedDeal.id)
       .select("*")
       .single();
 
-    if (error) throw error;
+    if (updateError) throw updateError;
+
+    // Return the final record (with share_link)
     return updatedDeal;
   } catch (err) {
-    console.error("updateDeal() unhandled error:", err);
+    console.error("createDeal() unhandled error:", err);
     throw err;
   }
 };
