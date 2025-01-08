@@ -121,6 +121,8 @@ function CardForm({ onClose, onSave, initialData }) {
     name: formState.name,
     profilePhoto: formState.profilePhoto,
   };
+  
+  console.log("[CardForm] previewCardData:", previewCardData);
 
   return (
     <div

@@ -155,16 +155,15 @@ function TheRealDeal() {
       dealTitle: cardData.title,
       dealDescription: cardData.description || "",
       dealImage: cardData.image,
-      name: localUser.name || "",
-      profilePhoto: localUser.profilePhoto || "",
+      name: cardData.name || localUser.name || "",
+      profilePhoto: cardData.profilePhoto || localUser.profilePhoto || "",
       localUserId: localUser.id,
     };
   
     console.log("[openCardForm] initData:", initData);
     setCardFormData(initData);
     setShowCardForm(true);
-  };
-  
+  };  
 
   const handleOnboardingComplete = async (userData) => {
     // Upsert the user in the database
