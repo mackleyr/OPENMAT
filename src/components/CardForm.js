@@ -10,6 +10,7 @@ import { useActivity } from "../contexts/ActivityContext";
 function CardForm({ onClose, onSave, initialData }) {
   // Safely parse the initial data we get from TheRealDeal.jsx
   const safeData = initialData ?? {};
+  console.log("[CardForm] safeData:", safeData);
 
   const [formState, setFormState] = useState({
     id: safeData.id ?? null,

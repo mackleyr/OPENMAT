@@ -1,11 +1,9 @@
-// src/components/CardSide.jsx
-
-import React, { useEffect, useRef, useState } from 'react';
-import Profile from './Profile'; // or your path
-import Text from '../config/Text'; // if you use a shared Text component
-import defaultProfile from '../assets/profile.svg';
-import defaultBackground from '../assets/background.svg';
-import logo from '../assets/logo.svg'; // your logo path
+import React, { useEffect, useRef, useState } from "react";
+import Profile from "./Profile"; // Ensure the path is correct
+import Text from "../config/Text"; // Ensure the path is correct
+import defaultProfile from "../assets/profile.svg"; // Ensure these assets exist
+import defaultBackground from "../assets/background.svg"; // Ensure these assets exist
+import logo from "../assets/logo.svg"; // Ensure this asset exists
 
 function CardSide({ cardData }) {
   const containerRef = useRef(null);
@@ -27,21 +25,17 @@ function CardSide({ cardData }) {
   const baseWidth = 400;
   const scale = dimensions.width ? dimensions.width / baseWidth : 1;
 
-  // Here we expect either "name" + "profilePhoto" from ShareCard 
-  const {
-    value,
-    title,
-    image,
-    name,           
-    profilePhoto,
-  } = cardData || {};
+  // Destructure cardData with debugging
+  const { value, title, image, name, profilePhoto } = cardData || {};
+  console.log("[CardSide] cardData received:", cardData);
 
-  // If we have "creatorName", use that first; else use "name"
+  // Compute display values with debugging
   const displayName = name || "";
-  // Likewise for photos
-  const displayPhoto = profilePhoto || "";
+  const displayPhoto = profilePhoto || defaultProfile;
+  console.log("[CardSide] displayName:", displayName);
+  console.log("[CardSide] displayPhoto:", displayPhoto);
 
-  // For the background fallback
+  // Fallback for background
   const backgroundSrc = image || defaultBackground;
 
   return (
@@ -49,9 +43,9 @@ function CardSide({ cardData }) {
       ref={containerRef}
       className="relative w-full aspect-[5/3] overflow-hidden"
       style={{
-        borderRadius: '12px',
-        padding: '5%',
-        boxShadow: '0px 6px 10px rgba(0, 0, 0, 0.4)',
+        borderRadius: "12px",
+        padding: "5%",
+        boxShadow: "0px 6px 10px rgba(0, 0, 0, 0.4)",
         background: `url(${backgroundSrc}) center/cover no-repeat`,
       }}
     >
@@ -59,9 +53,9 @@ function CardSide({ cardData }) {
       <div
         className="absolute top-0 left-0 w-full"
         style={{
-          height: '25%',
-          background: 'linear-gradient(to bottom, rgba(0,0,0,0.5), transparent)',
-          pointerEvents: 'none',
+          height: "25%",
+          background: "linear-gradient(to bottom, rgba(0,0,0,0.5), transparent)",
+          pointerEvents: "none",
           zIndex: 1,
         }}
       />
@@ -70,9 +64,9 @@ function CardSide({ cardData }) {
       <div
         className="absolute bottom-0 left-0 w-full"
         style={{
-          height: '25%',
-          background: 'linear-gradient(to top, rgba(0,0,0,0.5), transparent)',
-          pointerEvents: 'none',
+          height: "25%",
+          background: "linear-gradient(to top, rgba(0,0,0,0.5), transparent)",
+          pointerEvents: "none",
           zIndex: 1,
         }}
       />
@@ -81,16 +75,13 @@ function CardSide({ cardData }) {
       <div
         className="absolute flex items-center"
         style={{
-          top: '5%',
-          left: '5%',
+          top: "5%",
+          left: "5%",
           fontSize: `${1.3 * scale}rem`,
           zIndex: 2,
         }}
       >
-        <Profile
-          size={50 * scale}
-          src={displayPhoto || defaultProfile}
-        />
+        <Profile size={50 * scale} src={displayPhoto} />
         {displayName && (
           <div className="ml-2">
             <Text
@@ -109,12 +100,12 @@ function CardSide({ cardData }) {
         <div
           className="absolute flex flex-col items-center"
           style={{
-            top: '5%',
-            right: '5%',
-            backgroundColor: 'rgba(0, 0, 0, 0.5)',
-            padding: '4px 8px',
-            borderRadius: '8px',
-            textAlign: 'center',
+            top: "5%",
+            right: "5%",
+            backgroundColor: "rgba(0, 0, 0, 0.5)",
+            padding: "4px 8px",
+            borderRadius: "8px",
+            textAlign: "center",
             fontSize: `${1.3 * scale}rem`,
             zIndex: 2,
           }}
@@ -142,14 +133,14 @@ function CardSide({ cardData }) {
         <div
           className="absolute flex flex-col items-center text-center"
           style={{
-            top: '50%',
-            left: '50%',
-            transform: 'translate(-50%, -50%)',
-            backgroundColor: 'rgba(0, 0, 0, 0.5)',
-            padding: '8px 12px',
-            borderRadius: '12px',
-            maxWidth: '75%',
-            wordWrap: 'break-word',
+            top: "50%",
+            left: "50%",
+            transform: "translate(-50%, -50%)",
+            backgroundColor: "rgba(0, 0, 0, 0.5)",
+            padding: "8px 12px",
+            borderRadius: "12px",
+            maxWidth: "75%",
+            wordWrap: "break-word",
             fontSize: `${scale}rem`,
             zIndex: 2,
           }}
@@ -157,7 +148,7 @@ function CardSide({ cardData }) {
           <Text
             type="large"
             role="white"
-            style={{ fontSize: `${1.4 * scale}rem`, fontWeight: 'bold' }}
+            style={{ fontSize: `${1.4 * scale}rem`, fontWeight: "bold" }}
           >
             {title}
           </Text>
@@ -170,11 +161,11 @@ function CardSide({ cardData }) {
         alt="Logo"
         className="absolute"
         style={{
-          bottom: '5%',
-          right: '5%',
+          bottom: "5%",
+          right: "5%",
           width: `${36 * scale}px`,
-          height: 'auto',
-          objectFit: 'contain',
+          height: "auto",
+          objectFit: "contain",
           zIndex: 2,
         }}
       />

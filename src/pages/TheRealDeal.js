@@ -148,7 +148,7 @@ function TheRealDeal() {
       alert("You cannot edit a deal you didn't create.");
       return;
     }
-
+  
     const initData = {
       id: cardData.id,
       dealValue: cardData.value,
@@ -159,10 +159,12 @@ function TheRealDeal() {
       profilePhoto: localUser.profilePhoto || "",
       localUserId: localUser.id,
     };
-
+  
+    console.log("[openCardForm] initData:", initData);
     setCardFormData(initData);
     setShowCardForm(true);
   };
+  
 
   const handleOnboardingComplete = async (userData) => {
     // Upsert the user in the database
@@ -179,6 +181,10 @@ function TheRealDeal() {
       name: user.name,
       profilePhoto: user.profile_image_url,
     });
+
+    console.log("[handleOnboardingComplete] localUser:", localUser);
+    console.log("[handleOnboardingComplete] cardData:", cardData);
+
   
     // Close the onboarding form
     setShowOnboardingForm(false);
@@ -197,6 +203,9 @@ function TheRealDeal() {
       openCardForm();
       return;
     }
+
+    console.log("[handleOnboardingComplete] localUser:", localUser);
+    console.log("[handleOnboardingComplete] cardData:", cardData);
   
     // Shared Mode logic
     if (cardData.creatorId === user.id) {
