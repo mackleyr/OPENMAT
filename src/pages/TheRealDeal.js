@@ -308,6 +308,7 @@ function TheRealDeal() {
       description: formData.dealDescription,
       name: formData.name,
       profilePhoto: formData.profilePhoto,
+      share_link: formData.share_link || prev.share_link,
     }));
     setCurrentDealId(formData.id);
     setShowCardForm(false);

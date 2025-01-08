@@ -96,6 +96,7 @@ function CardForm({ onClose, onSave, cardData }) {
       onSave?.({
         ...formState,
         id: dealResult.id,
+        share_link: dealResult.share_link,
       });
       onClose?.();
     } catch (err) {
