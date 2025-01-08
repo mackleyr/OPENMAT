@@ -148,65 +148,59 @@ function TheRealDeal() {
       alert("You cannot edit a deal you didn't create.");
       return;
     }
-  
+
     const initData = {
       id: cardData.id,
       dealValue: cardData.value,
       dealTitle: cardData.title,
       dealDescription: cardData.description || "",
       dealImage: cardData.image,
-      name: cardData.name || localUser.name || "",
-      profilePhoto: cardData.profilePhoto || localUser.profilePhoto || "",
+      name: localUser.name || "",
+      profilePhoto: localUser.profilePhoto || "",
       localUserId: localUser.id,
     };
-  
-    console.log("[openCardForm] initData:", initData);
+
     setCardFormData(initData);
     setShowCardForm(true);
-  };  
+  };
 
   const handleOnboardingComplete = async (userData) => {
-    // Upsert the user in the database
     const user = await upsertUser({
       phone_number: userData.phone,
       name: userData.name,
       profile_image_url: userData.profilePhoto,
     });
-  
-    // Update localUser state
-    setLocalUser({
-      id: user.id,
-      phone: user.phone_number,
-      name: user.name,
-      profilePhoto: user.profile_image_url,
+
+    setLocalUser((prevState) => {
+      const updatedUser = {
+        ...prevState,
+        id: user.id,
+        phone: user.phone_number,
+        name: user.name,
+        profilePhoto: user.profile_image_url,
+      };
+      console.log("[handleOnboardingComplete] Updated localUser:", updatedUser);
+      return updatedUser;
     });
 
-    console.log("[handleOnboardingComplete] localUser:", localUser);
-    console.log("[handleOnboardingComplete] cardData:", cardData);
-
-  
-    // Close the onboarding form
-    setShowOnboardingForm(false);
-  
-    // If we are in Base Mode (dealFound = false)
-    if (!dealFound) {
-      // Update cardData explicitly with the newly onboarded localUser data
-      setCardData((prev) => ({
-        ...prev,
+    setCardData((prevCardData) => {
+      const updatedCardData = {
+        ...prevCardData,
         creatorId: user.id,
         name: user.name,
         profilePhoto: user.profile_image_url,
-      }));
-  
-      // Open the CardForm for the user to create a new card
+      };
+      console.log("[handleOnboardingComplete] Updated cardData:", updatedCardData);
+      return updatedCardData;
+    });
+
+    setShowOnboardingForm(false);
+
+    if (!dealFound) {
       openCardForm();
       return;
     }
 
-    console.log("[handleOnboardingComplete] localUser:", localUser);
-    console.log("[handleOnboardingComplete] cardData:", cardData);
-  
-    // Shared Mode logic
     if (cardData.creatorId === user.id) {
       if (postOnboardingAction === "CARD_FORM" || postOnboardingAction === "COUPON_TAP") {
         openCardForm();
@@ -216,7 +210,7 @@ function TheRealDeal() {
         setShowSaveSheet(true);
       }
     }
-  };  
+  };
 
   const handleSave = () => {
     if (!localUser.id) {
@@ -265,6 +259,7 @@ function TheRealDeal() {
     }));
     setCurrentDealId(formData.id);
     setShowCardForm(false);
+    await refetchDealById(formData.id);
   };
 
   const handleProfileClick = () => {
