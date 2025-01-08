@@ -8,6 +8,7 @@ import { createDeal, updateDeal } from "../services/dealsService";
 import { useActivity } from "../contexts/ActivityContext";
 
 function CardForm({ onClose, onSave, initialData }) {
+  // Safely parse the initial data we get from TheRealDeal.jsx
   const safeData = initialData ?? {};
 
   const [formState, setFormState] = useState({
@@ -16,14 +17,19 @@ function CardForm({ onClose, onSave, initialData }) {
     dealTitle: safeData.dealTitle ?? "",
     dealDescription: safeData.dealDescription ?? "",
     dealImage: safeData.dealImage ?? null,
-    // The creator’s name + photo
+
+    // The creator’s name + photo. If TheRealDeal passes them in `initialData`,
+    // we fill them here. That way the <Card> preview sees the up-to-date info.
     name: safeData.name ?? "",
     profilePhoto: safeData.profilePhoto ?? "",
+
+    // Local user ID (crucial for create/update)
     localUserId: safeData.localUserId ?? null,
   });
 
   const { addActivity } = useActivity();
 
+  // Handlers for each input
   const handleValueChange = (e) => {
     setFormState((prev) => ({ ...prev, dealValue: e.target.value }));
   };
@@ -33,6 +39,8 @@ function CardForm({ onClose, onSave, initialData }) {
   const handleDescriptionChange = (e) => {
     setFormState((prev) => ({ ...prev, dealDescription: e.target.value }));
   };
+
+  // Handle file upload => convert to Data URL => store in dealImage
   const handleImageUpload = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -43,8 +51,10 @@ function CardForm({ onClose, onSave, initialData }) {
     reader.readAsDataURL(file);
   };
 
+  // Called when user hits "Complete"
   const handleDone = async () => {
     console.log("[CardForm] => handleDone with formState:", formState);
+
     try {
       const userId = formState.localUserId;
       if (!userId) {
@@ -52,6 +62,7 @@ function CardForm({ onClose, onSave, initialData }) {
         return;
       }
 
+      // Prepare the payload for createDeal / updateDeal
       const dealPayload = {
         creator_id: userId,
         title: formState.dealTitle,
@@ -63,19 +74,25 @@ function CardForm({ onClose, onSave, initialData }) {
 
       let dealResult;
       if (formState.id) {
-        // update existing
+        // We have an existing deal => update it
+        console.log("[CardForm] => updating existing deal with ID:", formState.id);
         dealResult = await updateDeal({
           dealId: formState.id,
           ...dealPayload,
         });
+        console.log("[CardForm] => updateDeal => returned =>", dealResult);
+
         addActivity({
           userId,
           dealId: dealResult.id,
           action: "updated gift card",
         });
       } else {
-        // create new
+        // brand-new deal => create
+        console.log("[CardForm] => creating a new deal =>", dealPayload);
         dealResult = await createDeal(dealPayload);
+        console.log("[CardForm] => createDeal => returned =>", dealResult);
+
         addActivity({
           userId,
           dealId: dealResult.id,
@@ -83,7 +100,7 @@ function CardForm({ onClose, onSave, initialData }) {
         });
       }
 
-      // Pass updated data back to TheRealDeal => handleSaveCard
+      // Pass the updated data back to TheRealDeal => handleSaveCard
       onSave?.({
         ...formState,
         id: dealResult.id,
@@ -95,7 +112,7 @@ function CardForm({ onClose, onSave, initialData }) {
     }
   };
 
-  // For the live card preview
+  // For the live preview in the form
   const previewCardData = {
     value: formState.dealValue,
     title: formState.dealTitle,
@@ -113,6 +130,7 @@ function CardForm({ onClose, onSave, initialData }) {
         overflow: "visible",
       }}
     >
+      {/* This top section is the "card preview" */}
       <div className="flex flex-col w-full flex-grow items-start">
         <Card isInForm={true} cardData={previewCardData} />
 
@@ -127,6 +145,7 @@ function CardForm({ onClose, onSave, initialData }) {
           </div>
 
           <div className="grid grid-cols-[auto_1fr] gap-y-4 gap-x-4 text-left">
+            {/* Deal Value */}
             <Text type="medium" role="tertiary">
               Value
             </Text>
@@ -137,10 +156,11 @@ function CardForm({ onClose, onSave, initialData }) {
                 placeholder="Dollars"
                 value={formState.dealValue}
                 onChange={handleValueChange}
-                className="border border-gray-300 rounded-md px-2 py-1 text-black focus:ring-1 focus:ring-[#1A1A1A] focus:outline-none flex-1"
+                className="border border-gray-300 rounded-md px-2 py-1 text-black focus:ring-1 focus:outline-none flex-1"
               />
             </div>
 
+            {/* Deal Title */}
             <Text type="medium" role="tertiary">
               Title
             </Text>
@@ -149,9 +169,10 @@ function CardForm({ onClose, onSave, initialData }) {
               placeholder="Add a title"
               value={formState.dealTitle}
               onChange={handleTitleChange}
-              className="border border-gray-300 rounded-md px-2 py-1 text-black focus:ring-1 focus:ring-[#1A1A1A] focus:outline-none"
+              className="border border-gray-300 rounded-md px-2 py-1 text-black focus:ring-1 focus:outline-none"
             />
 
+            {/* Deal Description */}
             <Text type="medium" role="tertiary">
               Description
             </Text>
@@ -160,9 +181,10 @@ function CardForm({ onClose, onSave, initialData }) {
               placeholder="Optional description"
               value={formState.dealDescription}
               onChange={handleDescriptionChange}
-              className="border border-gray-300 rounded-md px-2 py-1 text-black focus:ring-1 focus:ring-[#1A1A1A] focus:outline-none"
+              className="border border-gray-300 rounded-md px-2 py-1 text-black focus:ring-1 focus:outline-none"
             />
 
+            {/* Deal Image */}
             <Text type="medium" role="tertiary">
               Image
             </Text>
@@ -170,12 +192,13 @@ function CardForm({ onClose, onSave, initialData }) {
               type="file"
               accept="image/*"
               onChange={handleImageUpload}
-              className="text-black focus:ring-1 focus:ring-[#1A1A1A] focus:outline-none"
+              className="text-black focus:ring-1 focus:outline-none"
             />
           </div>
         </div>
       </div>
 
+      {/* The "Complete" button at the bottom */}
       <div className="w-full max-w-md mt-auto">
         <Button
           onClick={handleDone}
