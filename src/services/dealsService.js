@@ -6,7 +6,6 @@ export const createDeal = async ({
   creator_id,
   title,
   background,
-  expires_at,
   creatorName,
   deal_value,
 }) => {
@@ -27,7 +26,6 @@ export const createDeal = async ({
           creator_id,
           title,
           background,
-          expires_at,
           share_link,
           deal_value,
         },
@@ -47,7 +45,6 @@ export const updateDeal = async ({
   dealId,
   title,
   background,
-  expires_at,
   creatorName,
   deal_value,
 }) => {
@@ -66,7 +63,6 @@ export const updateDeal = async ({
       .update({
         title,
         background,
-        expires_at,
         share_link,
         deal_value,
       })
