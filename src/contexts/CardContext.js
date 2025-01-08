@@ -7,18 +7,15 @@ const CardContext = createContext();
 export const CardProvider = ({ children }) => {
   const initialCardData = {
     id: null,
-    creatorId: null,   // The original creator's user ID
+    creatorId: null,
+    name: "",
+    profilePhoto: "",
     title: "",
     value: "",
-    image: null,       // background image
+    image: null,
     share_link: "",
     description: "",
     expires: null,
-
-    // The original creator’s name + photo
-    // (We do NOT store phone here anymore)
-    name: "",
-    profilePhoto: "",
   };
 
   const [cardData, rawSetCardData] = useState(initialCardData);

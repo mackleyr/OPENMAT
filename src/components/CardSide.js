@@ -28,21 +28,18 @@ function CardSide({ cardData }) {
   const scale = dimensions.width ? dimensions.width / baseWidth : 1;
 
   // Here we expect either "name" + "profilePhoto" from ShareCard 
-  // OR "creatorName" + "creatorPhoto" from ClaimCard
   const {
     value,
     title,
     image,
     name,           
-    profilePhoto,   
-    creatorName,    
-    creatorPhoto,   
+    profilePhoto,
   } = cardData || {};
 
   // If we have "creatorName", use that first; else use "name"
-  const displayName = creatorName || name || "";
+  const displayName = name || "";
   // Likewise for photos
-  const displayPhoto = creatorPhoto || profilePhoto || "";
+  const displayPhoto = profilePhoto || "";
 
   // For the background fallback
   const backgroundSrc = image || defaultBackground;
