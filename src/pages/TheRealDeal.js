@@ -75,6 +75,69 @@ function TheRealDeal() {
     setDealFound(true);
   };
 
+  const refetchDealById = async (dealId) => {
+    if (!dealId) {
+      console.warn("[refetchDealById] No dealId provided");
+      return;
+    }
+
+    console.log("[TheRealDeal] => refetchDealById =>", dealId);
+
+    try {
+      const { data: dealRow, error } = await supabase
+        .from("deals")
+        .select(`
+          id,
+          title,
+          deal_value,
+          description,
+          background,
+          share_link,
+          users!deals_creator_id_fkey (
+            id,
+            name,
+            profile_image_url
+          )
+        `)
+        .eq("id", dealId)
+        .single();
+
+      if (error) {
+        console.error("[refetchDealById] Error fetching deal:", error.message);
+        setDealFound(false);
+        return;
+      }
+
+      if (!dealRow) {
+        console.warn("[refetchDealById] No deal found with ID:", dealId);
+        setDealFound(false);
+        return;
+      }
+
+      // Normalize the data for use in state
+      const normalizedDeal = {
+        id: dealRow.id,
+        title: dealRow.title,
+        value: dealRow.deal_value,
+        description: dealRow.description,
+        image: dealRow.background,
+        share_link: dealRow.share_link,
+        creatorId: dealRow.users?.id || null,
+        creatorName: dealRow.users?.name || "Anonymous",
+        creatorPhoto: dealRow.users?.profile_image_url || null,
+      };
+
+      console.log("[TheRealDeal] => re-fetched deal =>", normalizedDeal);
+
+      // Update state
+      setFetchedDeal(normalizedDeal);
+      setDealFound(true);
+    } catch (err) {
+      console.error("[refetchDealById] Unexpected error:", err);
+      setDealFound(false);
+    }
+  };
+
   useEffect(() => {
     const fetchData = async () => {
       if (!creatorName || !dealId) {
@@ -99,12 +162,12 @@ function TheRealDeal() {
     setCardData((prev) => ({
       ...prev,
       id: fetchedDeal.id,
-      creatorId: fetchedDeal.creator_id,
+      creatorId: fetchedDeal.creatorId,
       name: fetchedDeal.creatorName,
       profilePhoto: fetchedDeal.creatorPhoto,
       title: fetchedDeal.title,
-      value: fetchedDeal.deal_value,
-      image: fetchedDeal.background,
+      value: fetchedDeal.value,
+      image: fetchedDeal.image,
       share_link: fetchedDeal.share_link,
       description: fetchedDeal.description,
     }));
