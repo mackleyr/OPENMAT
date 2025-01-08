@@ -45,9 +45,8 @@ function CardForm({ onClose, onSave, initialData }) {
 
   const handleDone = async () => {
     console.log("[CardForm] => handleDone with formState:", formState);
-
     try {
-      const userId = formState.localUserId; 
+      const userId = formState.localUserId;
       if (!userId) {
         alert("No local user ID found. Cannot create or update deal.");
         return;
@@ -84,7 +83,7 @@ function CardForm({ onClose, onSave, initialData }) {
         });
       }
 
-      // Pass new data to TheRealDeal
+      // Pass updated data back to TheRealDeal => handleSaveCard
       onSave?.({
         ...formState,
         id: dealResult.id,
@@ -96,6 +95,7 @@ function CardForm({ onClose, onSave, initialData }) {
     }
   };
 
+  // For the live card preview
   const previewCardData = {
     value: formState.dealValue,
     title: formState.dealTitle,
@@ -121,7 +121,7 @@ function CardForm({ onClose, onSave, initialData }) {
           style={{ height: "auto" }}
         >
           <div className="flex justify-between items-center mb-4 border-b border-gray-300 pb-4">
-            <Text type="large" role="primary">
+            <Text type="large" role="primary" className="text-left">
               Create or Update
             </Text>
           </div>
