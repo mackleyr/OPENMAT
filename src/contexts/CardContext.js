@@ -27,14 +27,6 @@ export const CardProvider = ({ children }) => {
     rawSetCardData((prev) => {
       const newValue =
         typeof updater === "function" ? updater(prev) : { ...prev, ...updater };
-
-      console.log(
-        `[CardContext.debugSetCardData] => ${debugLabel}:\n`,
-        "Previous =>",
-        prev,
-        "\nNew =>",
-        newValue
-      );
       return newValue;
     });
   };
@@ -43,8 +35,6 @@ export const CardProvider = ({ children }) => {
     console.log("CardContext.resetCardData(): resetting to initial deal data.");
     debugSetCardData(initialCardData, "resetCardData");
   };
-
-  console.log("CardContext: Current cardData:", cardData);
 
   return (
     <CardContext.Provider
