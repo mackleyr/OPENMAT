@@ -10,10 +10,12 @@ export const createDeal = async ({
   deal_value,
 }) => {
   try {
+    // We only create a share_link here (the first time).
     const baseUrl = process.env.REACT_APP_DOMAIN || "https://and.deals";
     const nameLower = (creatorName || "").toLowerCase().trim();
     const encodedName = encodeURIComponent(nameLower);
 
+    // The "uniqueUrl" is the random slug we append.
     const uniqueUrl = crypto.randomUUID();
     const share_link = `${baseUrl}/share/${encodedName}/${uniqueUrl}`;
 
@@ -47,25 +49,31 @@ export const updateDeal = async ({
   background,
   creatorName,
   deal_value,
+  regenLink = false,
 }) => {
   try {
-    const baseUrl = process.env.REACT_APP_DOMAIN || "https://and.deals";
-    const nameLower = (creatorName || "").toLowerCase().trim();
-    const encodedName = encodeURIComponent(nameLower);
+    let updates = {
+      title,
+      background,
+      deal_value,
+    };
 
-    const uniqueUrl = crypto.randomUUID();
-    const share_link = `${baseUrl}/share/${encodedName}/${uniqueUrl}`;
+    if (regenLink) {
+      // regenerate the link if needed
+      const baseUrl = process.env.REACT_APP_DOMAIN || "https://and.deals";
+      const nameLower = (creatorName || "").toLowerCase().trim();
+      const encodedName = encodeURIComponent(nameLower);
 
-    console.log("updateDeal(): final share_link =>", share_link);
+      const uniqueUrl = crypto.randomUUID();
+      const newShareLink = `${baseUrl}/share/${encodedName}/${uniqueUrl}`;
+
+      console.log("updateDeal(): re-generated share_link =>", newShareLink);
+      updates.share_link = newShareLink;
+    }
 
     const { data: updatedDeal, error } = await supabase
       .from("deals")
-      .update({
-        title,
-        background,
-        share_link,
-        deal_value,
-      })
+      .update(updates)
       .eq("id", dealId)
       .select("*")
       .single();

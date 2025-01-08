@@ -60,7 +60,8 @@ function CardForm({ onClose, onSave, cardData }) {
         deal_value: formState.dealValue,
         creatorName: formState.name,
         description: formState.dealDescription,
-        // NOTE: share_link is NOT being set here
+        // Important: do NOT forcibly generate a new link here
+        // regenLink: true, // only if you REALLY want a new link
       };
 
       let dealResult;
