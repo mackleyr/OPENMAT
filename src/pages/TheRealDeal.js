@@ -1,5 +1,3 @@
-// src/pages/TheRealDeal.jsx
-
 import React, { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
 import { useCard } from "../contexts/CardContext";
@@ -27,8 +25,6 @@ function TheRealDeal() {
 
   // If these exist => "shared mode"
   const { creatorName, dealId } = useParams();
-
-  const userOnboarded = !!localUser.id;
 
   // Overlays
   const [showOnboardingForm, setShowOnboardingForm] = useState(false);
@@ -122,16 +118,19 @@ function TheRealDeal() {
   }, [currentDealId, fetchDealActivities]);
 
   /**
-   * Tapping the coupon => must onboard or open next step
+   * Tapping the coupon => either open "creator" flow or "claim" flow
+   * We assume user is onboarded, or we show Onboarding if localUser.id is missing
    */
   const handleCardTap = () => {
-    console.log("[TheRealDeal] => handleCardTap => userOnboarded?", userOnboarded);
-    if (!userOnboarded) {
+    console.log("[TheRealDeal] => handleCardTap => localUser.id?", localUser.id);
+    if (!localUser.id) {
+      // Not onboarded => open onboarding
       setPostOnboardingAction("COUPON_TAP");
       setShowOnboardingForm(true);
-    } else {
-      openCreatorOrSave();
+      return;
     }
+    // else do next
+    openCreatorOrSave();
   };
 
   const openCreatorOrSave = () => {
@@ -139,7 +138,7 @@ function TheRealDeal() {
       // user is the creator => open card form
       openCardForm();
     } else {
-      // visitor => claim
+      // else "claim"
       setShowSaveSheet(true);
     }
   };
@@ -148,8 +147,8 @@ function TheRealDeal() {
    * The (+) => create/edit => must be the creator, or brand-new user in base mode
    */
   const handleOpenCardForm = () => {
-    console.log("[TheRealDeal] => handleOpenCardForm => userOnboarded?", userOnboarded);
-    if (!userOnboarded) {
+    console.log("[TheRealDeal] => handleOpenCardForm => localUser.id?", localUser.id);
+    if (!localUser.id) {
       setPostOnboardingAction("CARD_FORM");
       setShowOnboardingForm(true);
     } else {
@@ -157,29 +156,27 @@ function TheRealDeal() {
     }
   };
 
+  /**
+   * openCardForm => we skip userOnboarded check, assuming they are
+   * but if we do want to guard, we can do it:
+   */
   const openCardForm = () => {
     console.log("[TheRealDeal] => openCardForm => cardData =>", cardData);
 
-    // If shared mode & not the creator => block
+    // If in shared mode & user is not the actual creator => block editing
     if (dealFound && cardData.creatorId !== localUser.id) {
       alert("You cannot edit a deal you didn't create.");
       return;
     }
 
-    if (!userOnboarded) {
-      alert("Please onboard first.");
-      return;
-    }
-
-    // Fill form data
+    // Prepare data for <CardForm>
     const initData = {
-      id: cardData.id,                  // if we have an existing deal
+      id: cardData.id,                  // might be null if new
       dealValue: cardData.value,
       dealTitle: cardData.title,
       dealImage: cardData.image,
-      // The creator’s name + photo => from localUser or cardData
-      name: cardData.name || localUser.name || "",
-      profilePhoto: cardData.profilePhoto || localUser.profilePhoto || "",
+      name: localUser.name || "",        // "the user is the occupant of CardForm"
+      profilePhoto: localUser.profilePhoto || "",
       localUserId: localUser.id
     };
 
@@ -189,6 +186,7 @@ function TheRealDeal() {
 
   /**
    * Onboarding => after complete => store localUser => if base => set as creator
+   * Then open card form
    */
   const handleOnboardingComplete = async (userData) => {
     console.log("[TheRealDeal] => handleOnboardingComplete => userData =>", userData);
@@ -215,16 +213,19 @@ function TheRealDeal() {
       dealFound,
       " => cardData.creatorId:",
       cardData.creatorId,
-      " vs localUser.id:",
+      " vs new user.id:",
       user.id
     );
 
     if (!dealFound) {
+      // base mode => user is new creator
       console.log("[TheRealDeal][handleOnboardingComplete] => base mode => set cardData => new user as creator");
       setCardData((prev) => ({
         ...prev,
         creatorId: user.id
       }));
+
+      // Now we open the card form
       openCardForm();
       return;
     }
@@ -235,7 +236,7 @@ function TheRealDeal() {
         openCardForm();
       }
     } else {
-      // visitor => claim
+      // user is a visitor => claim
       if (postOnboardingAction === "COUPON_TAP" || postOnboardingAction === "SAVE_SHEET") {
         setShowSaveSheet(true);
       }
@@ -243,11 +244,11 @@ function TheRealDeal() {
   };
 
   /**
-   * "Save" => open SaveSheet => if not onboarded => prompt
+   * "Save" => open SaveSheet => if user not onboarded => prompt them
    */
   const handleSave = () => {
-    console.log("[TheRealDeal] => handleSave => userOnboarded?", userOnboarded);
-    if (!userOnboarded) {
+    console.log("[TheRealDeal] => handleSave => localUser.id?", localUser.id);
+    if (!localUser.id) {
       setPostOnboardingAction("SAVE_SHEET");
       setShowOnboardingForm(true);
     } else {
@@ -256,7 +257,7 @@ function TheRealDeal() {
   };
 
   /**
-   * finalizeSave => user claims => logs an activity, no overwrite
+   * finalizeSave => user claims => logs an activity
    */
   const finalizeSave = async () => {
     console.log("[TheRealDeal] => finalizeSave => cardData.id =>", cardData.id);
@@ -310,12 +311,12 @@ function TheRealDeal() {
    * tapping the profile => open ProfileSheet
    */
   const handleProfileClick = () => {
-    if (!userOnboarded) return;
+    if (!localUser.id) return;
     setShowProfileSheet(true);
   };
 
   /**
-   * loading / not found / normal
+   * Render states
    */
   if (loading) {
     console.log("[TheRealDeal] => loading => 'Loading deal...'");
