@@ -113,7 +113,7 @@ function CardForm({ onClose, onSave, cardData }) {
     name: formState.name,
     profilePhoto: formState.profilePhoto,
   };
-  
+
   console.log("[CardForm] previewCardData:", previewCardData);
 
   return (
