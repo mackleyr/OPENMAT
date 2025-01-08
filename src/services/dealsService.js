@@ -35,7 +35,7 @@ export const createDeal = async ({
     const nameLower = (creatorName || "").toLowerCase().trim();
     const encodedName = encodeURIComponent(nameLower);
 
-    // Use the row's UUID as slug
+    // Use the row's UUID (deal.id) in the URL
     const share_link = `${baseUrl}/share/${encodedName}/${insertedDeal.id}`;
 
     // 3) Update that same row with share_link
@@ -52,6 +52,34 @@ export const createDeal = async ({
     return updatedDeal;
   } catch (err) {
     console.error("createDeal() unhandled error:", err);
+    throw err;
+  }
+};
+
+// IMPORTANT: Re-add updateDeal so CardForm doesn't break
+export const updateDeal = async ({
+  dealId,
+  title,
+  background,
+  deal_value,
+  // We do NOT regenerate share_link by default.
+}) => {
+  try {
+    const { data: updatedDeal, error } = await supabase
+      .from("deals")
+      .update({
+        title,
+        background,
+        deal_value,
+      })
+      .eq("id", dealId)
+      .select("*")
+      .single();
+
+    if (error) throw error;
+    return updatedDeal;
+  } catch (err) {
+    console.error("updateDeal() unhandled error:", err);
     throw err;
   }
 };
