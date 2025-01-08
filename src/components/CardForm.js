@@ -1,5 +1,3 @@
-// src/components/CardForm.jsx
-
 import React, { useState } from "react";
 import Card from "./Card";
 import Text from "../config/Text";
@@ -8,16 +6,16 @@ import { createDeal, updateDeal } from "../services/dealsService";
 import { useActivity } from "../contexts/ActivityContext";
 
 function CardForm({ onClose, onSave, cardData }) {
-    const [formState, setFormState] = useState({
-      id: cardData.id ?? null,
-      dealValue: cardData.value ?? "",
-      dealTitle: cardData.title ?? "",
-      dealDescription: cardData.description ?? "",
-      dealImage: cardData.image ?? null,
-      name: cardData.name ?? "",
-      profilePhoto: cardData.profilePhoto ?? "",
-      localUserId: cardData.creatorId ?? null,
-    });
+  const [formState, setFormState] = useState({
+    id: cardData.id ?? null,
+    dealValue: cardData.value ?? "",
+    dealTitle: cardData.title ?? "",
+    dealDescription: cardData.description ?? "",
+    dealImage: cardData.image ?? null,
+    name: cardData.name ?? "",
+    profilePhoto: cardData.profilePhoto ?? "",
+    localUserId: cardData.creatorId ?? null,
+  });
 
   const { addActivity } = useActivity();
 
@@ -62,11 +60,12 @@ function CardForm({ onClose, onSave, cardData }) {
         deal_value: formState.dealValue,
         creatorName: formState.name,
         description: formState.dealDescription,
+        // NOTE: share_link is NOT being set here
       };
 
       let dealResult;
       if (formState.id) {
-        // We have an existing deal => update it
+        // We have an existing deal => update
         console.log("[CardForm] => updating existing deal with ID:", formState.id);
         dealResult = await updateDeal({
           dealId: formState.id,
@@ -80,7 +79,7 @@ function CardForm({ onClose, onSave, cardData }) {
           action: "updated gift card",
         });
       } else {
-        // brand-new deal => create
+        // brand-new => create
         console.log("[CardForm] => creating a new deal =>", dealPayload);
         dealResult = await createDeal(dealPayload);
         console.log("[CardForm] => createDeal => returned =>", dealResult);

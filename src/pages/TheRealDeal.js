@@ -1,5 +1,3 @@
-// src/pages/TheRealDeal.jsx
-
 import React, { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
 import { useCard } from "../contexts/CardContext";
@@ -159,6 +157,9 @@ function TheRealDeal() {
       return;
     }
 
+    // Prevent unnecessary updates
+    if (cardData.id === fetchedDeal.id) return;
+
     setCardData((prev) => ({
       ...prev,
       id: fetchedDeal.id,
@@ -172,7 +173,7 @@ function TheRealDeal() {
       description: fetchedDeal.description,
     }));
     setCurrentDealId(fetchedDeal.id);
-  }, [fetchedDeal, setCardData]);
+  }, [fetchedDeal, setCardData, cardData.id]);
 
   useEffect(() => {
     if (currentDealId) {

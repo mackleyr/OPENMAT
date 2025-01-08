@@ -25,17 +25,14 @@ function CardSide({ cardData }) {
   const baseWidth = 400;
   const scale = dimensions.width ? dimensions.width / baseWidth : 1;
 
-  // Destructure cardData with debugging
   const { value, title, image, name, profilePhoto } = cardData || {};
   console.log("[CardSide] cardData received:", cardData);
 
-  // Compute display values with debugging
   const displayName = name || "";
   const displayPhoto = profilePhoto || defaultProfile;
   console.log("[CardSide] displayName:", displayName);
   console.log("[CardSide] displayPhoto:", displayPhoto);
 
-  // Fallback for background
   const backgroundSrc = image || defaultBackground;
 
   return (

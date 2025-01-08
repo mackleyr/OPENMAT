@@ -23,9 +23,7 @@ function OnboardingForm({ onComplete }) {
   const steps = [
     {
       title: isVerified ? "Phone Verified!" : "What's your Phone Number?",
-      subtext: isVerified
-        ? "Tap next."
-        : "Your number unlocks deals.",
+      subtext: isVerified ? "Tap next." : "Your number unlocks deals.",
       inputType: "phone",
     },
     {
@@ -49,39 +47,25 @@ function OnboardingForm({ onComplete }) {
    */
   function formatPhone(value) {
     let digits = value.replace(/\D/g, "");
-    // limit to 10 digits
     if (digits.length > 10) {
       digits = digits.substring(0, 10);
     }
-
-    // Based on length, build up the format
     if (digits.length <= 3) {
-      // up to 3 => "(123"
       return `(${digits}`;
     } else if (digits.length <= 6) {
-      // up to 6 => "(123) 456"
       return `(${digits.substring(0, 3)}) ${digits.substring(3)}`;
     } else {
-      // up to 10 => "(123) 456-7890"
       return `(${digits.substring(0, 3)}) ${digits.substring(3, 6)}-${digits.substring(6)}`;
     }
   }
 
-  /**
-   * handlePhoneChange => Called when user types in the phone field.
-   * We run formatPhone() => store the result in state.
-   */
   const handlePhoneChange = (rawValue) => {
     const formatted = formatPhone(rawValue);
     setPhone(formatted);
   };
 
-  /**
-   * isValid() => decides if the user can press "Next" or "Send Code" or "Verify"
-   */
   const isValid = () => {
     if (currentStepData.inputType === "phone") {
-      // We must have exactly 10 digits to be valid
       const digits = phone.replace(/\D/g, "");
       return digits.length === 10;
     }
@@ -94,28 +78,21 @@ function OnboardingForm({ onComplete }) {
     return false;
   };
 
-  /**
-   * handleSendOrCheckCode => for step 1, if not verified:
-   * 1) If we haven't shown the code field => we "send" the code
-   * 2) If we have => we "check" the code
-   */
   const handleSendOrCheckCode = async () => {
     if (!showCodeField) {
-      // user typed phone => let's convert to +1XXXXXXXXXX
-      const digits = phone.replace(/\D/g, ""); // e.g. "1234567890"
+      const digits = phone.replace(/\D/g, "");
       if (digits.length !== 10) {
         alert("Please enter exactly 10 digits for a US phone.");
         return;
       }
-      const e164 = `+1${digits}`; // => "+11234567890"
+      const e164 = `+1${digits}`;
       try {
-        await sendVerificationCode(e164); // your serverless call
+        await sendVerificationCode(e164);
         setShowCodeField(true);
       } catch (err) {
         alert(`Error sending verification code: ${err.message}`);
       }
     } else {
-      // user typed code => let's check
       const digits = phone.replace(/\D/g, "");
       const e164 = `+1${digits}`;
       try {
@@ -133,16 +110,14 @@ function OnboardingForm({ onComplete }) {
     }
   };
 
-  /**
-   * handleNext => big button logic
-   */
   const handleNext = async () => {
-    // If step=1 & not verified => do Twilio logic
+    // If step=1 & not verified => Twilio logic
     if (currentStep === 1 && !isVerified) {
       await handleSendOrCheckCode();
-      return; // do not proceed
+      return;
     }
 
+    // Move to next step
     if (currentStep < steps.length) {
       setCurrentStep(currentStep + 1);
       return;
@@ -150,7 +125,7 @@ function OnboardingForm({ onComplete }) {
 
     // Completed => pass data
     onComplete?.({
-      phone: phone.replace(/\D/g, ""), // store digits or e164
+      phone: phone.replace(/\D/g, ""),
       name: name.trim(),
       profilePhoto,
     });
