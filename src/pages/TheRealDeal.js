@@ -19,11 +19,11 @@ import { upsertUser } from "../services/usersService";
 import { useActivity } from "../contexts/ActivityContext";
 
 function TheRealDeal() {
-  const { cardData, setCardData } = useCard();     // The single "active" deal
+  const { cardData, setCardData } = useCard();       // The single "active" deal
   const { localUser, setLocalUser } = useLocalUser(); // The visiting user
   const { addActivity, fetchDealActivities } = useActivity();
 
-  // If these exist => "shared mode"
+  // "shared mode" if these exist:
   const { creatorName, dealId } = useParams();
 
   // Overlays
@@ -35,9 +35,6 @@ function TheRealDeal() {
   // Next step after onboarding
   const [postOnboardingAction, setPostOnboardingAction] = useState(null);
 
-  // For <CardForm>
-  const [cardFormData, setCardFormData] = useState(null);
-
   // Deal fetch states
   const [loading, setLoading] = useState(true);
   const [dealFound, setDealFound] = useState(false);
@@ -47,33 +44,33 @@ function TheRealDeal() {
   const fetchDeal = async (shareLink) => {
     const { data: dealRow, error } = await supabase
       .from("deals")
-      .select(`
-        *,
-        users!deals_creator_id_fkey (
-          name,
-          profile_image_url
-        )
-      `)
+      .select(
+        `
+          *,
+          users!deals_creator_id_fkey (
+            name,
+            profile_image_url
+          )
+        `
+      )
       .eq("share_link", shareLink)
       .single();
 
-      if (error || !dealRow) {
-        console.error("[fetchDeal] Error fetching deal:", error);
-        setDealFound(false);
-        setLoading(false);
-        return;
-      }
-      
-      // Success path:
-      const { name, profile_image_url: profilePhoto } = dealRow.users || {};
-      setFetchedDeal({
-        ...dealRow,
-        creatorName: name,
-        creatorPhoto: profilePhoto,
-      });
-      setDealFound(true);
-      
+    if (error || !dealRow) {
+      console.error("[fetchDeal] Error fetching deal:", error);
+      setDealFound(false);
       setLoading(false);
+      return;
+    }
+
+    const { name, profile_image_url: profilePhoto } = dealRow.users || {};
+    setFetchedDeal({
+      ...dealRow,
+      creatorName: name,
+      creatorPhoto: profilePhoto,
+    });
+    setDealFound(true);
+    setLoading(false);
   };
 
   const refetchDealById = async (dealId) => {
@@ -82,24 +79,24 @@ function TheRealDeal() {
       return;
     }
 
-    console.log("[TheRealDeal] => refetchDealById =>", dealId);
-
     try {
       const { data: dealRow, error } = await supabase
         .from("deals")
-        .select(`
-          id,
-          title,
-          deal_value,
-          description,
-          background,
-          share_link,
-          users!deals_creator_id_fkey (
+        .select(
+          `
             id,
-            name,
-            profile_image_url
-          )
-        `)
+            title,
+            deal_value,
+            description,
+            background,
+            share_link,
+            users!deals_creator_id_fkey (
+              id,
+              name,
+              profile_image_url
+            )
+          `
+        )
         .eq("id", dealId)
         .single();
 
@@ -115,7 +112,6 @@ function TheRealDeal() {
         return;
       }
 
-      // Normalize the data for use in state
       const normalizedDeal = {
         id: dealRow.id,
         title: dealRow.title,
@@ -127,10 +123,8 @@ function TheRealDeal() {
         creatorName: dealRow.users?.name || "Anonymous",
         creatorPhoto: dealRow.users?.profile_image_url || null,
       };
-
       console.log("[TheRealDeal] => re-fetched deal =>", normalizedDeal);
 
-      // Update state
       setFetchedDeal(normalizedDeal);
       setDealFound(true);
     } catch (err) {
@@ -139,6 +133,7 @@ function TheRealDeal() {
     }
   };
 
+  // On mount, if we have creatorName + dealId => shared mode. Attempt to fetch.
   useEffect(() => {
     const fetchData = async () => {
       if (!creatorName || !dealId) {
@@ -154,6 +149,7 @@ function TheRealDeal() {
     fetchData();
   }, [creatorName, dealId]);
 
+  // When we get a fetchedDeal => put it into cardData if not already loaded
   useEffect(() => {
     if (!fetchedDeal) {
       setCurrentDealId(null);
@@ -178,12 +174,14 @@ function TheRealDeal() {
     setCurrentDealId(fetchedDeal.id);
   }, [fetchedDeal, setCardData, cardData.id]);
 
+  // Once we know the current deal's ID => fetch its activities
   useEffect(() => {
     if (currentDealId) {
       fetchDealActivities(currentDealId);
     }
   }, [currentDealId, fetchDealActivities]);
 
+  // If user taps the card, either edit (if owner) or claim (visitor)
   const handleCardTap = () => {
     if (!localUser.id) {
       setPostOnboardingAction("COUPON_TAP");
@@ -215,10 +213,12 @@ function TheRealDeal() {
       alert("You cannot edit a deal you didn't create.");
       return;
     }
-  
-    setShowCardForm(true); // Open the form
+    setShowCardForm(true);
   };
 
+  /**
+   * handleOnboardingComplete => user finished phone verify + name + profile photo
+   */
   const handleOnboardingComplete = async (userData) => {
     const user = await upsertUser({
       phone_number: userData.phone,
@@ -226,6 +226,7 @@ function TheRealDeal() {
       profile_image_url: userData.profilePhoto,
     });
 
+    // Save to localUser
     setLocalUser((prevState) => {
       const updatedUser = {
         ...prevState,
@@ -238,35 +239,36 @@ function TheRealDeal() {
       return updatedUser;
     });
 
-    setCardData((prevCardData) => {
-      const updatedCardData = {
+    setShowOnboardingForm(false);
+
+    // If no deal found => base mode => this new user is the creator
+    if (!dealFound) {
+      setCardData((prevCardData) => ({
         ...prevCardData,
         creatorId: user.id,
         name: user.name,
         profilePhoto: user.profile_image_url,
-      };
-      console.log("[handleOnboardingComplete] Updated cardData:", updatedCardData);
-      return updatedCardData;
-    });
-
-    setShowOnboardingForm(false);
-
-    if (!dealFound) {
+      }));
+      // Open the CardForm to create a new deal
       openCardForm();
       return;
     }
 
+    // If we do have a deal => shared mode
     if (cardData.creatorId === user.id) {
+      // The user actually owns this deal
       if (postOnboardingAction === "CARD_FORM" || postOnboardingAction === "COUPON_TAP") {
         openCardForm();
       }
     } else {
+      // The user is just a visitor
       if (postOnboardingAction === "COUPON_TAP" || postOnboardingAction === "SAVE_SHEET") {
         setShowSaveSheet(true);
       }
     }
   };
 
+  // "Claim" => triggers SaveSheet or asks user to onboard
   const handleSave = () => {
     if (!localUser.id) {
       setPostOnboardingAction("SAVE_SHEET");
@@ -276,6 +278,7 @@ function TheRealDeal() {
     }
   };
 
+  // finalizeSave => logs "claimed" activity
   const finalizeSave = async () => {
     if (!cardData.id) return;
     if (!localUser.id) return;
@@ -300,7 +303,11 @@ function TheRealDeal() {
     }
   };
 
+  /**
+   * handleSaveCard => user created/updated the deal in CardForm
+   */
   const handleSaveCard = async (formData) => {
+    // Overwrite the local card data with new form data
     setCardData((prev) => ({
       ...prev,
       id: formData.id,
@@ -315,14 +322,19 @@ function TheRealDeal() {
     }));
     setCurrentDealId(formData.id);
     setShowCardForm(false);
+
     await refetchDealById(formData.id);
   };
 
+  // if user taps on the profile picture in the Card
   const handleProfileClick = () => {
     if (!localUser.id) return;
     setShowProfileSheet(true);
   };
 
+  // ---------------
+  // Render
+  // ---------------
   if (loading) {
     return (
       <div className="min-h-screen flex flex-col bg-black">
