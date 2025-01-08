@@ -165,31 +165,40 @@ function TheRealDeal() {
   };
 
   const handleOnboardingComplete = async (userData) => {
+    // Upsert the user in the database
     const user = await upsertUser({
       phone_number: userData.phone,
       name: userData.name,
       profile_image_url: userData.profilePhoto,
     });
-
+  
+    // Update localUser state
     setLocalUser({
       id: user.id,
       phone: user.phone_number,
       name: user.name,
       profilePhoto: user.profile_image_url,
     });
+  
+    // Close the onboarding form
     setShowOnboardingForm(false);
-
+  
+    // If we are in Base Mode (dealFound = false)
     if (!dealFound) {
+      // Update cardData explicitly with the newly onboarded localUser data
       setCardData((prev) => ({
         ...prev,
         creatorId: user.id,
         name: user.name,
         profilePhoto: user.profile_image_url,
       }));
+  
+      // Open the CardForm for the user to create a new card
       openCardForm();
       return;
     }
-
+  
+    // Shared Mode logic
     if (cardData.creatorId === user.id) {
       if (postOnboardingAction === "CARD_FORM" || postOnboardingAction === "COUPON_TAP") {
         openCardForm();
@@ -199,7 +208,7 @@ function TheRealDeal() {
         setShowSaveSheet(true);
       }
     }
-  };
+  };  
 
   const handleSave = () => {
     if (!localUser.id) {
