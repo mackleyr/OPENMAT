@@ -1,4 +1,3 @@
-// src/services/dealsService.js
 import { supabase } from "../supabaseClient";
 
 export const createDeal = async ({
@@ -8,6 +7,14 @@ export const createDeal = async ({
   creatorName,
   deal_value,
 }) => {
+  console.log("[createDeal] => incoming payload:", {
+    creator_id,
+    title,
+    background,
+    creatorName,
+    deal_value,
+  });
+
   try {
     // 1) Insert the row WITHOUT share_link
     const { data: insertedDeal, error: insertError } = await supabase
@@ -18,11 +25,12 @@ export const createDeal = async ({
           title,
           background,
           deal_value,
-          // no share_link yet
         },
       ])
       .select("*")
       .single();
+
+    console.log("[createDeal] => insertedDeal:", insertedDeal, "insertError:", insertError);
 
     if (insertError) throw insertError;
     if (!insertedDeal || !insertedDeal.id) {
@@ -33,8 +41,6 @@ export const createDeal = async ({
     const baseUrl = process.env.REACT_APP_DOMAIN || "https://and.deals";
     const nameLower = (creatorName || "").toLowerCase().trim();
     const encodedName = encodeURIComponent(nameLower);
-
-    // Use the row's UUID (deal.id) in the URL
     const share_link = `${baseUrl}/share/${encodedName}/${insertedDeal.id}`;
 
     // 3) Update that same row with share_link
@@ -44,6 +50,8 @@ export const createDeal = async ({
       .eq("id", insertedDeal.id)
       .select("*")
       .single();
+
+    console.log("[createDeal] => updatedDeal with share_link:", updatedDeal, "updateError:", updateError);
 
     if (updateError) throw updateError;
 
@@ -55,7 +63,6 @@ export const createDeal = async ({
   }
 };
 
-// IMPORTANT: Re-add updateDeal so CardForm doesn't break
 export const updateDeal = async ({
   dealId,
   title,
@@ -63,6 +70,12 @@ export const updateDeal = async ({
   deal_value,
   // We do NOT regenerate share_link by default.
 }) => {
+  console.log("[updateDeal] => incoming payload:", {
+    dealId,
+    title,
+    background,
+    deal_value,
+  });
   try {
     const { data: updatedDeal, error } = await supabase
       .from("deals")
@@ -74,6 +87,8 @@ export const updateDeal = async ({
       .eq("id", dealId)
       .select("*")
       .single();
+
+    console.log("[updateDeal] => updatedDeal:", updatedDeal, "error:", error);
 
     if (error) throw error;
     return updatedDeal;

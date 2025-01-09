@@ -24,9 +24,10 @@ function CardSide({ cardData }) {
 
   const baseWidth = 400;
   const scale = dimensions.width ? dimensions.width / baseWidth : 1;
+  console.log("[CardSide] cardData received:", cardData);
 
   const { value, title, image, name, profilePhoto } = cardData || {};
-  console.log("[CardSide] cardData received:", cardData);
+  console.log("[CardSide] => value:", value, "title:", title, "image:", image);
 
   const displayName = name || "";
   const displayPhoto = profilePhoto || defaultProfile;
