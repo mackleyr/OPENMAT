@@ -11,7 +11,6 @@ export const createDeal = async ({
   background,
   creatorName,
   deal_value,
-  description,
 }) => {
   console.log("[createDeal] => incoming payload:", {
     creator_id,
@@ -19,7 +18,6 @@ export const createDeal = async ({
     background,
     creatorName,
     deal_value,
-    description,
   });
 
   try {
@@ -30,9 +28,8 @@ export const createDeal = async ({
         {
           creator_id,
           title,
-          background,       // must match DB column
-          deal_value,       // must match DB column
-          description,      // optional
+          background,       
+          deal_value,       
         },
       ])
       .select("*")
@@ -77,14 +74,12 @@ export const updateDeal = async ({
   title,
   background,
   deal_value,
-  description,
 }) => {
   console.log("[updateDeal] => incoming payload:", {
     dealId,
     title,
     background,
     deal_value,
-    description,
   });
 
   try {
@@ -94,7 +89,6 @@ export const updateDeal = async ({
         title,
         background,    // must match DB column
         deal_value,    // must match DB column
-        description,   // optional
       })
       .eq("id", dealId)
       .select("*")

@@ -11,7 +11,6 @@ function CardForm({ onClose, onSave, cardData }) {
     id: cardData.id ?? null,
     dealValue: cardData.value ?? "",        // numeric stored as string in state
     dealTitle: cardData.title ?? "",
-    dealDescription: cardData.description ?? "",
     dealImage: cardData.image ?? null,      // base64 or URL
     name: cardData.name ?? "",
     profilePhoto: cardData.profilePhoto ?? "",
@@ -28,9 +27,6 @@ function CardForm({ onClose, onSave, cardData }) {
   };
   const handleTitleChange = (e) => {
     setFormState((prev) => ({ ...prev, dealTitle: e.target.value }));
-  };
-  const handleDescriptionChange = (e) => {
-    setFormState((prev) => ({ ...prev, dealDescription: e.target.value }));
   };
   const handleImageUpload = (e) => {
     const file = e.target.files?.[0];
@@ -58,7 +54,6 @@ function CardForm({ onClose, onSave, cardData }) {
         background: formState.dealImage,               // pass base64 or URL
         deal_value: parseFloat(formState.dealValue) || 0,
         creatorName: formState.name,                   // for share link
-        description: formState.dealDescription,
       };
 
       let dealResult;
@@ -70,7 +65,6 @@ function CardForm({ onClose, onSave, cardData }) {
           title: dealPayload.title,
           background: dealPayload.background,
           deal_value: dealPayload.deal_value,
-          description: dealPayload.description,
         });
         console.log("[CardForm] => updateDeal => returned =>", dealResult);
 
@@ -152,16 +146,6 @@ function CardForm({ onClose, onSave, cardData }) {
               placeholder="Add a title"
               value={formState.dealTitle}
               onChange={handleTitleChange}
-              className="border border-gray-300 rounded-md px-2 py-1 text-black focus:ring-1 focus:outline-none"
-            />
-
-            {/* Deal Description */}
-            <Text type="medium" role="tertiary">Description</Text>
-            <textarea
-              rows={2}
-              placeholder="Optional description"
-              value={formState.dealDescription}
-              onChange={handleDescriptionChange}
               className="border border-gray-300 rounded-md px-2 py-1 text-black focus:ring-1 focus:outline-none"
             />
 

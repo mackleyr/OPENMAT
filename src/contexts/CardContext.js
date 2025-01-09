@@ -12,7 +12,6 @@ export const CardProvider = ({ children }) => {
     value: "",
     image: null,
     share_link: "",
-    description: "",
     expires: null,
   };
 
