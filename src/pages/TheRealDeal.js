@@ -12,6 +12,7 @@ import CardForm from "../components/CardForm";
 import OnboardingForm from "../components/OnboardingForm";
 import ProfileSheet from "../components/ProfileSheet";
 import SaveSheet from "../components/SaveSheet";
+import Payment from "../components/Payment"; // <-- NEW
 import "../index.css";
 
 import { supabase } from "../supabaseClient";
@@ -19,8 +20,8 @@ import { upsertUser } from "../services/usersService";
 import { useActivity } from "../contexts/ActivityContext";
 
 function TheRealDeal() {
-  const { cardData, setCardData } = useCard();       // The single "active" deal
-  const { localUser, setLocalUser } = useLocalUser(); // The visiting user
+  const { cardData, setCardData } = useCard();     
+  const { localUser, setLocalUser } = useLocalUser();
   const { addActivity, fetchDealActivities } = useActivity();
 
   // "shared mode" if these exist:
@@ -31,6 +32,7 @@ function TheRealDeal() {
   const [showCardForm, setShowCardForm] = useState(false);
   const [showSaveSheet, setShowSaveSheet] = useState(false);
   const [showProfileSheet, setShowProfileSheet] = useState(false);
+  const [showPayment, setShowPayment] = useState(false); // <-- NEW
 
   // Next step after onboarding
   const [postOnboardingAction, setPostOnboardingAction] = useState(null);
@@ -49,7 +51,8 @@ function TheRealDeal() {
           *,
           users!deals_creator_id_fkey (
             name,
-            profile_image_url
+            profile_image_url,
+            paypal_email
           )
         `
       )
@@ -63,11 +66,12 @@ function TheRealDeal() {
       return;
     }
 
-    const { name, profile_image_url: profilePhoto } = dealRow.users || {};
+    const { name, profile_image_url: profilePhoto, paypal_email } = dealRow.users || {};
     setFetchedDeal({
       ...dealRow,
       creatorName: name,
       creatorPhoto: profilePhoto,
+      creatorPayPalEmail: paypal_email, // store for Payment.js
     });
     setDealFound(true);
     setLoading(false);
@@ -93,7 +97,8 @@ function TheRealDeal() {
             users!deals_creator_id_fkey (
               id,
               name,
-              profile_image_url
+              profile_image_url,
+              paypal_email
             )
           `
         )
@@ -122,6 +127,7 @@ function TheRealDeal() {
         creatorId: dealRow.users?.id || null,
         creatorName: dealRow.users?.name || "Anonymous",
         creatorPhoto: dealRow.users?.profile_image_url || null,
+        creatorPayPalEmail: dealRow.users?.paypal_email || null,
       };
       console.log("[TheRealDeal] => re-fetched deal =>", normalizedDeal);
 
@@ -156,7 +162,6 @@ function TheRealDeal() {
       return;
     }
 
-    // Prevent unnecessary updates
     if (cardData.id === fetchedDeal.id) return;
 
     setCardData((prev) => ({
@@ -181,7 +186,7 @@ function TheRealDeal() {
     }
   }, [currentDealId, fetchDealActivities]);
 
-  // If user taps the card, either edit (if owner) or claim (visitor)
+  // If user taps the card, either edit (if owner) or grab (visitor)
   const handleCardTap = () => {
     if (!localUser.id) {
       setPostOnboardingAction("COUPON_TAP");
@@ -216,9 +221,6 @@ function TheRealDeal() {
     setShowCardForm(true);
   };
 
-  /**
-   * handleOnboardingComplete => user finished phone verify + name + profile photo
-   */
   const handleOnboardingComplete = async (userData) => {
     const user = await upsertUser({
       phone_number: userData.phone,
@@ -226,62 +228,64 @@ function TheRealDeal() {
       profile_image_url: userData.profilePhoto,
     });
 
-    // Save to localUser
-    setLocalUser((prevState) => {
-      const updatedUser = {
-        ...prevState,
-        id: user.id,
-        phone: user.phone_number,
-        name: user.name,
-        profilePhoto: user.profile_image_url,
-      };
-      console.log("[handleOnboardingComplete] Updated localUser:", updatedUser);
-      return updatedUser;
-    });
+    // Update localUser
+    setLocalUser((prev) => ({
+      ...prev,
+      id: user.id,
+      phone: user.phone_number,
+      name: user.name,
+      profilePhoto: user.profile_image_url,
+      paypalEmail: user.paypal_email || "",
+    }));
 
     setShowOnboardingForm(false);
 
-    // If no deal found => base mode => this new user is the creator
     if (!dealFound) {
+      // base mode => new user is creator
       setCardData((prevCardData) => ({
         ...prevCardData,
         creatorId: user.id,
         name: user.name,
         profilePhoto: user.profile_image_url,
       }));
-      // Open the CardForm to create a new deal
       openCardForm();
       return;
     }
 
-    // If we do have a deal => shared mode
+    // shared mode
     if (cardData.creatorId === user.id) {
-      // The user actually owns this deal
+      // user owns deal
       if (postOnboardingAction === "CARD_FORM" || postOnboardingAction === "COUPON_TAP") {
         openCardForm();
       }
     } else {
-      // The user is just a visitor
+      // user is visitor
       if (postOnboardingAction === "COUPON_TAP" || postOnboardingAction === "SAVE_SHEET") {
         setShowSaveSheet(true);
       }
     }
   };
 
-  // "Claim" => triggers SaveSheet or asks user to onboard
+  // "Grab" => triggers Payment if the card has a cost, else the SaveSheet
   const handleSave = () => {
     if (!localUser.id) {
       setPostOnboardingAction("SAVE_SHEET");
       setShowOnboardingForm(true);
+      return;
+    }
+
+    // If the deal has a price > 0 and user != creator => pop Payment overlay
+    if (cardData.value > 0 && cardData.creatorId !== localUser.id) {
+      setShowPayment(true);
     } else {
+      // If 0 or user is creator, let them just grab
       setShowSaveSheet(true);
     }
   };
 
-  // finalizeSave => logs "claimed" activity
+  // finalizeSave => logs "grabbed" activity
   const finalizeSave = async () => {
-    if (!cardData.id) return;
-    if (!localUser.id) return;
+    if (!cardData.id || !localUser.id) return;
 
     try {
       const freshUser = await upsertUser({
@@ -293,7 +297,7 @@ function TheRealDeal() {
       await addActivity({
         userId: freshUser.id,
         dealId: cardData.id,
-        action: "claimed gift card",
+        action: "grabbed gift card",
       });
 
       alert("Gift card saved to your wallet!");
@@ -303,11 +307,8 @@ function TheRealDeal() {
     }
   };
 
-  /**
-   * handleSaveCard => user created/updated the deal in CardForm
-   */
+  // user saved/updated card in CardForm
   const handleSaveCard = async (formData) => {
-    // Overwrite the local card data with new form data
     setCardData((prev) => ({
       ...prev,
       id: formData.id,
@@ -326,15 +327,12 @@ function TheRealDeal() {
     await refetchDealById(formData.id);
   };
 
-  // if user taps on the profile picture in the Card
   const handleProfileClick = () => {
     if (!localUser.id) return;
     setShowProfileSheet(true);
   };
 
-  // ---------------
-  // Render
-  // ---------------
+  // Render states
   if (loading) {
     return (
       <div className="min-h-screen flex flex-col bg-black">
@@ -379,6 +377,21 @@ function TheRealDeal() {
             cardData={cardData}
           />
         </div>
+      )}
+
+      {/* Payment Overlay */}
+      {showPayment && !showOnboardingForm && (
+        <Payment
+          onClose={() => {
+            setShowPayment(false);
+            // after successful payment, automatically open save sheet
+            setShowSaveSheet(true);
+          }}
+          dealData={{
+            ...cardData,
+            creatorPayPalEmail: fetchedDeal?.creatorPayPalEmail
+          }}
+        />
       )}
 
       {showSaveSheet && (

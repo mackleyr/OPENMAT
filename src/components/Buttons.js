@@ -37,7 +37,7 @@ function Buttons({ onSave }) {
     }
   };
 
-  // Right button => "Claim"
+  // Right button => "Grabm"
   const handleSaveClick = async () => {
     if (!onSave) return;
     try {
@@ -61,9 +61,9 @@ function Buttons({ onSave }) {
         onClick={handleCopyClick}
       />
 
-      {/* Right => Claim */}
+      {/* Right => Grab */}
       <Button
-        label={isRightClicked ? "Claimed!" : "Claim"}
+        label={isRightClicked ? "Grabbed!" : "Grab"}
         type="secondary"
         onClick={handleSaveClick}
       />

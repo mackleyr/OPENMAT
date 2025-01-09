@@ -9,7 +9,7 @@ function App() {
       {/* Base path => no external deal => user is new creator */}
       <Route path="/" element={<TheRealDeal />} />
 
-      {/* Shared path => existing deal => user can claim or edit if they're the creator */}
+      {/* Shared path => existing deal => user can grab or edit if they're the creator */}
       <Route path="/share/:creatorName/:dealId" element={<TheRealDeal />} />
     </Routes>
   );

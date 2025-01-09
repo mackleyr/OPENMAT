@@ -1,3 +1,5 @@
+// src/components/CardForm.jsx
+
 import React, { useState } from "react";
 import Card from "./Card";
 import Text from "../config/Text";
@@ -8,6 +10,7 @@ import { useActivity } from "../contexts/ActivityContext";
 function CardForm({ onClose, onSave, cardData }) {
   const [formState, setFormState] = useState({
     id: cardData.id ?? null,
+    // store as string, but it's numeric in DB
     dealValue: cardData.value ?? "",
     dealTitle: cardData.title ?? "",
     dealDescription: cardData.description ?? "",
@@ -57,11 +60,10 @@ function CardForm({ onClose, onSave, cardData }) {
         creator_id: userId,
         title: formState.dealTitle,
         background: formState.dealImage,
-        deal_value: formState.dealValue,
+        // pass numeric => parseFloat
+        deal_value: parseFloat(formState.dealValue) || 0,
         creatorName: formState.name,
         description: formState.dealDescription,
-        // Important: do NOT forcibly generate a new link here
-        // regenLink: true, // only if you REALLY want a new link
       };
 
       let dealResult;
@@ -95,6 +97,7 @@ function CardForm({ onClose, onSave, cardData }) {
       // Pass the updated data back to TheRealDeal => handleSaveCard
       onSave?.({
         ...formState,
+        dealValue: dealPayload.deal_value.toString(),
         id: dealResult.id,
         share_link: dealResult.share_link,
       });
@@ -147,7 +150,8 @@ function CardForm({ onClose, onSave, cardData }) {
             <div className="flex items-center">
               <span className="text-black mr-2 font-medium">$</span>
               <input
-                type="text"
+                type="number"
+                step="0.01"
                 placeholder="Dollars"
                 value={formState.dealValue}
                 onChange={handleValueChange}

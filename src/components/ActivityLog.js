@@ -79,7 +79,7 @@ function ActivityLog({ onProfileClick, dealId, userId }) {
           })
         ) : (
           <Text type="medium" role="tertiary">
-            No activity yet. Share your link.
+            No action yet. Share your link.
           </Text>
         )}
       </div>

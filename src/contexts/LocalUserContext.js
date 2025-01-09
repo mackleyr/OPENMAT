@@ -10,6 +10,7 @@ export const LocalUserProvider = ({ children }) => {
     phone: "",
     name: "",
     profilePhoto: "",
+    paypalEmail: "", // NEW
   };
 
   const [localUser, setLocalUser] = useState(initialLocalUser);
