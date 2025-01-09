@@ -1,5 +1,4 @@
 // src/services/dealsService.js
-
 import { supabase } from "../supabaseClient";
 
 export const createDeal = async ({

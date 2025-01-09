@@ -1,5 +1,4 @@
 // src/components/CardForm.jsx
-
 import React, { useState } from "react";
 import Card from "./Card";
 import Text from "../config/Text";
@@ -60,7 +59,7 @@ function CardForm({ onClose, onSave, cardData }) {
         creator_id: userId,
         title: formState.dealTitle,
         background: formState.dealImage,
-        // pass numeric => parseFloat
+        // parseFloat to ensure numeric
         deal_value: parseFloat(formState.dealValue) || 0,
         creatorName: formState.name,
         description: formState.dealDescription,
@@ -72,7 +71,9 @@ function CardForm({ onClose, onSave, cardData }) {
         console.log("[CardForm] => updating existing deal with ID:", formState.id);
         dealResult = await updateDeal({
           dealId: formState.id,
-          ...dealPayload,
+          title: dealPayload.title,
+          background: dealPayload.background,
+          deal_value: dealPayload.deal_value,
         });
         console.log("[CardForm] => updateDeal => returned =>", dealResult);
 
@@ -128,7 +129,7 @@ function CardForm({ onClose, onSave, cardData }) {
         overflow: "visible",
       }}
     >
-      {/* This top section is the "card preview" */}
+      {/* Card Preview */}
       <div className="flex flex-col w-full flex-grow items-start">
         <Card isInForm={true} cardData={previewCardData} />
 
@@ -197,7 +198,7 @@ function CardForm({ onClose, onSave, cardData }) {
         </div>
       </div>
 
-      {/* The "Complete" button at the bottom */}
+      {/* "Complete" button */}
       <div className="w-full max-w-md mt-auto">
         <Button
           onClick={handleDone}
