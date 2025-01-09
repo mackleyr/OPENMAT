@@ -1,15 +1,15 @@
+// src/components/CardSide.jsx
 import React, { useEffect, useRef, useState } from "react";
-import Profile from "./Profile"; // Ensure the path is correct
-import Text from "../config/Text"; // Ensure the path is correct
-import defaultProfile from "../assets/profile.svg"; // Ensure these assets exist
-import defaultBackground from "../assets/background.svg"; // Ensure these assets exist
-import logo from "../assets/logo.svg"; // Ensure this asset exists
+import Profile from "./Profile";
+import Text from "../config/Text";
+import defaultProfile from "../assets/profile.svg";
+import defaultBackground from "../assets/background.svg";
+import logo from "../assets/logo.svg";
 
 function CardSide({ cardData }) {
   const containerRef = useRef(null);
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
 
-  // Monitor size to compute scaling
   useEffect(() => {
     if (!containerRef.current) return;
     const observer = new ResizeObserver(([entry]) => {
@@ -24,15 +24,15 @@ function CardSide({ cardData }) {
 
   const baseWidth = 400;
   const scale = dimensions.width ? dimensions.width / baseWidth : 1;
-  console.log("[CardSide] cardData received:", cardData);
 
+  console.log("[CardSide] cardData received:", cardData);
   const { value, title, image, name, profilePhoto } = cardData || {};
   console.log("[CardSide] => value:", value, "title:", title, "image:", image);
 
   const displayName = name || "";
   const displayPhoto = profilePhoto || defaultProfile;
-  console.log("[CardSide] displayName:", displayName);
-  console.log("[CardSide] displayPhoto:", displayPhoto);
+  console.log("[CardSide] => displayName:", displayName);
+  console.log("[CardSide] => displayPhoto:", displayPhoto);
 
   const backgroundSrc = image || defaultBackground;
 
@@ -47,29 +47,8 @@ function CardSide({ cardData }) {
         background: `url(${backgroundSrc}) center/cover no-repeat`,
       }}
     >
-      {/* TOP gradient */}
-      <div
-        className="absolute top-0 left-0 w-full"
-        style={{
-          height: "25%",
-          background: "linear-gradient(to bottom, rgba(0,0,0,0.5), transparent)",
-          pointerEvents: "none",
-          zIndex: 1,
-        }}
-      />
-
-      {/* BOTTOM gradient */}
-      <div
-        className="absolute bottom-0 left-0 w-full"
-        style={{
-          height: "25%",
-          background: "linear-gradient(to top, rgba(0,0,0,0.5), transparent)",
-          pointerEvents: "none",
-          zIndex: 1,
-        }}
-      />
-
-      {/* Profile + Name (top-left) */}
+      {/* Some overlays, e.g. top/bottom gradients */}
+      {/* Profile + Name */}
       <div
         className="absolute flex items-center"
         style={{
@@ -82,25 +61,21 @@ function CardSide({ cardData }) {
         <Profile size={50 * scale} src={displayPhoto} />
         {displayName && (
           <div className="ml-2">
-            <Text
-              type="large"
-              role="white"
-              style={{ fontSize: `${0.9 * scale}rem` }}
-            >
+            <Text type="large" role="white" style={{ fontSize: `${0.9 * scale}rem` }}>
               {displayName}
             </Text>
           </div>
         )}
       </div>
 
-      {/* Value (top-right) */}
+      {/* Value in top-right */}
       {value && (
         <div
           className="absolute flex flex-col items-center"
           style={{
             top: "5%",
             right: "5%",
-            backgroundColor: "rgba(0, 0, 0, 0.5)",
+            backgroundColor: "rgba(0,0,0,0.5)",
             padding: "4px 8px",
             borderRadius: "8px",
             textAlign: "center",
@@ -108,25 +83,16 @@ function CardSide({ cardData }) {
             zIndex: 2,
           }}
         >
-          <Text
-            type="large"
-            role="white"
-            style={{ fontSize: `${1.3 * scale}rem` }}
-          >
+          <Text type="large" role="white" style={{ fontSize: `${1.3 * scale}rem` }}>
             ${value}
           </Text>
-          <Text
-            type="large"
-            role="white"
-            className="mt-1"
-            style={{ fontSize: `${0.8 * scale}rem` }}
-          >
+          <Text type="large" role="white" className="mt-1" style={{ fontSize: `${0.8 * scale}rem` }}>
             Gift Card
           </Text>
         </div>
       )}
 
-      {/* Title (center) */}
+      {/* Title in center */}
       {title && (
         <div
           className="absolute flex flex-col items-center text-center"
@@ -134,11 +100,10 @@ function CardSide({ cardData }) {
             top: "50%",
             left: "50%",
             transform: "translate(-50%, -50%)",
-            backgroundColor: "rgba(0, 0, 0, 0.5)",
+            backgroundColor: "rgba(0,0,0,0.5)",
             padding: "8px 12px",
             borderRadius: "12px",
             maxWidth: "75%",
-            wordWrap: "break-word",
             fontSize: `${scale}rem`,
             zIndex: 2,
           }}
@@ -153,7 +118,7 @@ function CardSide({ cardData }) {
         </div>
       )}
 
-      {/* Logo (bottom-right) */}
+      {/* Logo bottom-right */}
       <img
         src={logo}
         alt="Logo"

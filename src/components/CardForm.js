@@ -9,11 +9,10 @@ import { useActivity } from "../contexts/ActivityContext";
 function CardForm({ onClose, onSave, cardData }) {
   const [formState, setFormState] = useState({
     id: cardData.id ?? null,
-    // store as string, but it's numeric in DB
-    dealValue: cardData.value ?? "",
+    dealValue: cardData.value ?? "",        // numeric stored as string in state
     dealTitle: cardData.title ?? "",
     dealDescription: cardData.description ?? "",
-    dealImage: cardData.image ?? null,
+    dealImage: cardData.image ?? null,      // base64 or URL
     name: cardData.name ?? "",
     profilePhoto: cardData.profilePhoto ?? "",
     localUserId: cardData.creatorId ?? null,
@@ -21,7 +20,9 @@ function CardForm({ onClose, onSave, cardData }) {
 
   const { addActivity } = useActivity();
 
-  // Handlers for each input
+  console.log("[CardForm] => initial formState:", formState);
+
+  // Input Handlers
   const handleValueChange = (e) => {
     setFormState((prev) => ({ ...prev, dealValue: e.target.value }));
   };
@@ -31,8 +32,6 @@ function CardForm({ onClose, onSave, cardData }) {
   const handleDescriptionChange = (e) => {
     setFormState((prev) => ({ ...prev, dealDescription: e.target.value }));
   };
-
-  // Handle file upload => convert to Data URL => store in dealImage
   const handleImageUpload = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -43,62 +42,60 @@ function CardForm({ onClose, onSave, cardData }) {
     reader.readAsDataURL(file);
   };
 
-  // Called when user hits "Complete"
+  // "Complete" button
   const handleDone = async () => {
     console.log("[CardForm] => handleDone with formState:", formState);
 
     try {
-      const userId = formState.localUserId;
-      if (!userId) {
+      if (!formState.localUserId) {
         alert("No local user ID found. Cannot create or update deal.");
         return;
       }
-
-      // Prepare the payload for createDeal / updateDeal
+      // Prepare payload for createDeal / updateDeal
       const dealPayload = {
-        creator_id: userId,
+        creator_id: formState.localUserId,
         title: formState.dealTitle,
-        background: formState.dealImage,
-        // parseFloat to ensure numeric
+        background: formState.dealImage,               // pass base64 or URL
         deal_value: parseFloat(formState.dealValue) || 0,
-        creatorName: formState.name,
+        creatorName: formState.name,                   // for share link
         description: formState.dealDescription,
       };
 
       let dealResult;
       if (formState.id) {
-        // We have an existing deal => update
-        console.log("[CardForm] => updating existing deal with ID:", formState.id);
+        // Existing deal => update
+        console.log("[CardForm] => calling updateDeal =>", dealPayload);
         dealResult = await updateDeal({
           dealId: formState.id,
           title: dealPayload.title,
           background: dealPayload.background,
           deal_value: dealPayload.deal_value,
+          description: dealPayload.description,
         });
         console.log("[CardForm] => updateDeal => returned =>", dealResult);
 
         addActivity({
-          userId,
+          userId: formState.localUserId,
           dealId: dealResult.id,
           action: "updated gift card",
         });
       } else {
         // brand-new => create
-        console.log("[CardForm] => creating a new deal =>", dealPayload);
+        console.log("[CardForm] => calling createDeal =>", dealPayload);
         dealResult = await createDeal(dealPayload);
         console.log("[CardForm] => createDeal => returned =>", dealResult);
 
         addActivity({
-          userId,
+          userId: formState.localUserId,
           dealId: dealResult.id,
           action: "created gift card",
         });
       }
 
-      // Pass the updated data back to TheRealDeal => handleSaveCard
+      // Pass updated data back to TheRealDeal => handleSaveCard
       onSave?.({
         ...formState,
-        dealValue: dealPayload.deal_value.toString(),
+        dealValue: dealPayload.deal_value.toString(), // keep string version in local form
         id: dealResult.id,
         share_link: dealResult.share_link,
       });
@@ -109,7 +106,7 @@ function CardForm({ onClose, onSave, cardData }) {
     }
   };
 
-  // For the live preview in the form
+  // For the live preview
   const previewCardData = {
     value: formState.dealValue,
     title: formState.dealTitle,
@@ -117,37 +114,25 @@ function CardForm({ onClose, onSave, cardData }) {
     name: formState.name,
     profilePhoto: formState.profilePhoto,
   };
-
-  console.log("[CardForm] previewCardData:", previewCardData);
+  console.log("[CardForm] => previewCardData:", previewCardData);
 
   return (
-    <div
-      className="relative w-full h-full flex flex-col items-center p-[5%]"
-      style={{
-        backgroundColor: "transparent",
-        boxSizing: "border-box",
-        overflow: "visible",
-      }}
-    >
+    <div className="relative w-full h-full flex flex-col items-center p-4">
       {/* Card Preview */}
       <div className="flex flex-col w-full flex-grow items-start">
         <Card isInForm={true} cardData={previewCardData} />
 
-        <div
-          className="flex flex-col bg-white rounded-lg overflow-hidden px-[5%] box-border w-full max-w-lg mt-4"
-          style={{ height: "auto" }}
-        >
+        <div className="flex flex-col bg-white rounded-lg overflow-hidden px-4 w-full max-w-lg mt-4">
           <div className="flex justify-between items-center mb-4 border-b border-gray-300 pb-4">
             <Text type="large" role="primary" className="text-left">
               Create or Update
             </Text>
           </div>
 
+          {/* Inputs */}
           <div className="grid grid-cols-[auto_1fr] gap-y-4 gap-x-4 text-left">
             {/* Deal Value */}
-            <Text type="medium" role="tertiary">
-              Value
-            </Text>
+            <Text type="medium" role="tertiary">Value</Text>
             <div className="flex items-center">
               <span className="text-black mr-2 font-medium">$</span>
               <input
@@ -161,9 +146,7 @@ function CardForm({ onClose, onSave, cardData }) {
             </div>
 
             {/* Deal Title */}
-            <Text type="medium" role="tertiary">
-              Title
-            </Text>
+            <Text type="medium" role="tertiary">Title</Text>
             <input
               type="text"
               placeholder="Add a title"
@@ -173,9 +156,7 @@ function CardForm({ onClose, onSave, cardData }) {
             />
 
             {/* Deal Description */}
-            <Text type="medium" role="tertiary">
-              Description
-            </Text>
+            <Text type="medium" role="tertiary">Description</Text>
             <textarea
               rows={2}
               placeholder="Optional description"
@@ -185,9 +166,7 @@ function CardForm({ onClose, onSave, cardData }) {
             />
 
             {/* Deal Image */}
-            <Text type="medium" role="tertiary">
-              Image
-            </Text>
+            <Text type="medium" role="tertiary">Image</Text>
             <input
               type="file"
               accept="image/*"
@@ -203,12 +182,8 @@ function CardForm({ onClose, onSave, cardData }) {
         <Button
           onClick={handleDone}
           type="secondary"
-          className="w-full rounded-full font-semibold transition-all duration-150"
-          style={{
-            padding: "clamp(1.25rem, 2.5%, 3rem)",
-            fontSize: "clamp(1.25rem, 2vw, 3rem)",
-            textAlign: "center",
-          }}
+          className="w-full rounded-full font-semibold transition-all"
+          style={{ padding: "1rem", fontSize: "1.25rem", textAlign: "center" }}
         >
           Complete
         </Button>
