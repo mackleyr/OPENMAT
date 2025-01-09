@@ -71,13 +71,12 @@ function TheRealDeal() {
       return;
     }
 
-    const { id, title, background, deal_value, description, share_link, users } = dealRow;
+    const { id, title, background, deal_value, share_link, users } = dealRow;
     const normalizedDeal = {
       id,
       title,
       image: background,
       value: deal_value,
-      description,
       share_link,
       creatorId: users?.id ?? null,
       creatorName: users?.name ?? "",
@@ -118,13 +117,12 @@ function TheRealDeal() {
         return;
       }
 
-      const { id, title, background, deal_value, description, share_link, users } = dealRow;
+      const { id, title, background, deal_value, share_link, users } = dealRow;
       const normalizedDeal = {
         id,
         title,
         image: background,
         value: deal_value,
-        description,
         share_link,
         creatorId: users?.id ?? null,
         creatorName: users?.name ?? "",
@@ -180,7 +178,6 @@ function TheRealDeal() {
       value: fetchedDeal.value,
       image: fetchedDeal.image,
       share_link: fetchedDeal.share_link,
-      description: fetchedDeal.description,
     }));
     setCurrentDealId(fetchedDeal.id);
   }, [fetchedDeal, setCardData, cardData.id]);
@@ -331,7 +328,6 @@ function TheRealDeal() {
       image: formData.dealImage,
       value: formData.dealValue,
       title: formData.dealTitle,
-      description: formData.dealDescription,
       name: formData.name,
       profilePhoto: formData.profilePhoto,
       share_link: formData.share_link || prev.share_link,
