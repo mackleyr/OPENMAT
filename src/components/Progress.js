@@ -1,11 +1,9 @@
-// src/components/Progress.js
-
 import React from 'react';
 import { textColors } from '../config/Colors';
 import Text from '../config/Text';
 
-function Progress({ currentStep, totalSteps }) {
-  const steps = Array.from({ length: totalSteps }, (_, i) => i + 1); // Generate steps [1, 2, 3]
+function Progress({ currentStep, totalSteps = 4 }) {
+  const steps = Array.from({ length: totalSteps }, (_, i) => i + 1);
 
   return (
     <div
@@ -22,8 +20,8 @@ function Progress({ currentStep, totalSteps }) {
           ? textColors.white
           : 'rgba(255, 255, 255, 0.2)';
         const textColor = isActive
-          ? textColors.primary 
-          : 'rgba(255, 255, 255, 0.2)'; 
+          ? textColors.primary
+          : 'rgba(255, 255, 255, 0.2)';
 
         return (
           <div
@@ -36,12 +34,7 @@ function Progress({ currentStep, totalSteps }) {
               fontWeight: 'bold',
             }}
           >
-            <Text
-              type="large"
-              style={{
-                color: textColor,
-              }}
-            >
+            <Text type="large" style={{ color: textColor }}>
               {step}
             </Text>
           </div>
