@@ -7,7 +7,6 @@ const clientSecret = process.env.PAYPAL_CLIENT_SECRET;
 function environment() {
   return new paypal.core.LiveEnvironment(clientId, clientSecret);
 }
-
 function client() {
   return new paypal.core.PayPalHttpClient(environment());
 }
@@ -20,7 +19,7 @@ export default async function handler(req, res) {
   try {
     const { orderId } = req.body;
     const request = new paypal.orders.OrdersCaptureRequest(orderId);
-    request.requestBody({}); // no extra data needed
+    request.requestBody({}); // no extra data
 
     const capture = await client().execute(request);
     return res.status(200).json(capture.result);
