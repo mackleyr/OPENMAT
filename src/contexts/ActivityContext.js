@@ -1,6 +1,11 @@
-// src/contexts/ActivityContext.js
-
-import React, { createContext, useContext, useState, useRef, useCallback } from "react";
+// src/contexts/ActivityContext.jsx
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useRef,
+  useCallback,
+} from "react";
 import { supabase } from "../supabaseClient";
 
 const ActivityContext = createContext();
@@ -9,8 +14,8 @@ export const ActivityProvider = ({ children }) => {
   const [activities, setActivities] = useState([]);
   const channelRef = useRef(null);
 
+  // fetchDealActivities => pulls all activities for a deal + sets up realtime
   const fetchDealActivities = useCallback(async (dealId) => {
-    console.log("[ActivityContext] => fetchDealActivities(", dealId, ")...");
     try {
       setActivities([]);
 
@@ -28,31 +33,23 @@ export const ActivityProvider = ({ children }) => {
         .eq("deal_id", dealId)
         .order("created_at", { ascending: false });
 
-      if (error) {
-        console.error("[ActivityContext] => Error fetching deal’s activities:", error);
-      } else {
-        console.log("[ActivityContext] => Successfully fetched deal’s activities:", data);
-        setActivities(data || []);
+      if (!error && data) {
+        setActivities(data);
       }
 
       // Realtime subscription
-      console.log("[ActivityContext] => Setting up realtime subscription for deal_id=", dealId);
       if (channelRef.current) {
         supabase.removeChannel(channelRef.current);
         channelRef.current = null;
       }
-
       const channel = supabase.channel(`activities-deal-${dealId}`);
       channel.on(
         "postgres_changes",
         { event: "*", schema: "public", table: "activities" },
         async (payload) => {
-          console.log("[ActivityContext] => Realtime event:", payload.eventType, payload.new);
           if (payload.eventType === "INSERT" && payload.new.deal_id === dealId) {
-            console.log("[ActivityContext] => Realtime (INSERT) for this deal:", payload.new);
-            const newId = payload.new.id;
-            // fetch the joined row
-            const { data: joinedRow, error: joinError } = await supabase
+            // fetch the inserted row with join
+            const { data: joinedRow } = await supabase
               .from("activities")
               .select(
                 `
@@ -63,11 +60,9 @@ export const ActivityProvider = ({ children }) => {
                   )
                 `
               )
-              .eq("id", newId)
+              .eq("id", payload.new.id)
               .single();
-
-            if (!joinError && joinedRow) {
-              console.log("[ActivityContext] => Joined new activity =>", joinedRow);
+            if (joinedRow) {
               setActivities((prev) => [joinedRow, ...prev]);
             }
           }
@@ -76,38 +71,28 @@ export const ActivityProvider = ({ children }) => {
       channel.subscribe();
       channelRef.current = channel;
     } catch (err) {
-      console.error("[ActivityContext] => fetchDealActivities caught error:", err);
+      console.error("[ActivityContext] => fetchDealActivities error:", err);
     }
   }, []);
 
+  // addActivity => inserts a new activity
   const addActivity = async ({ userId, dealId, action }) => {
-    console.log("[ActivityContext] => addActivity() called with:", { userId, dealId, action });
-
-    if (!userId || !dealId) {
-      console.log("[ActivityContext] => Missing userId or dealId. Skipping insert.");
-      return;
-    }
-
-    const { data, error } = await supabase
-      .from("activities")
-      .insert([{ user_id: userId, deal_id: dealId, action }])
-      .select("*");
-
-    if (error) {
-      console.error("[ActivityContext] => Error inserting activity to DB:", error);
-    } else {
-      console.log("[ActivityContext] => Inserted activity =>", data);
+    try {
+      if (!userId || !dealId) return;
+      await supabase
+        .from("activities")
+        .insert([{ user_id: userId, deal_id: dealId, action }]);
       // Realtime will pick it up
+    } catch (err) {
+      console.error("[ActivityContext] => addActivity error:", err);
     }
   };
 
-  const getActivitiesByDeal = (dealId) => {
-    return activities.filter((a) => a.deal_id === dealId);
-  };
-
-  const getActivitiesByUser = (userId) => {
-    return activities.filter((a) => a.user_id === userId);
-  };
+  // Utility for filtering
+  const getActivitiesByDeal = (dealId) =>
+    activities.filter((a) => a.deal_id === dealId);
+  const getActivitiesByUser = (userId) =>
+    activities.filter((a) => a.user_id === userId);
 
   return (
     <ActivityContext.Provider

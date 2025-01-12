@@ -9,9 +9,9 @@ import { useActivity } from "../contexts/ActivityContext";
 function CardForm({ onClose, onSave, cardData }) {
   const [formState, setFormState] = useState({
     id: cardData.id ?? null,
-    dealValue: cardData.value ?? "",        // numeric stored as string in state
+    dealValue: cardData.value ?? "",
     dealTitle: cardData.title ?? "",
-    dealImage: cardData.image ?? null,      // base64 or URL
+    dealImage: cardData.image ?? null,
     name: cardData.name ?? "",
     profilePhoto: cardData.profilePhoto ?? "",
     localUserId: cardData.creatorId ?? null,
@@ -19,15 +19,11 @@ function CardForm({ onClose, onSave, cardData }) {
 
   const { addActivity } = useActivity();
 
-  console.log("[CardForm] => initial formState:", formState);
-
-  // Input Handlers
-  const handleValueChange = (e) => {
+  // Input handlers
+  const handleValueChange = (e) =>
     setFormState((prev) => ({ ...prev, dealValue: e.target.value }));
-  };
-  const handleTitleChange = (e) => {
+  const handleTitleChange = (e) =>
     setFormState((prev) => ({ ...prev, dealTitle: e.target.value }));
-  };
   const handleImageUpload = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -38,58 +34,47 @@ function CardForm({ onClose, onSave, cardData }) {
     reader.readAsDataURL(file);
   };
 
-  // "Complete" button
   const handleDone = async () => {
-    console.log("[CardForm] => handleDone with formState:", formState);
-
     try {
       if (!formState.localUserId) {
         alert("No local user ID found. Cannot create or update deal.");
         return;
       }
-      // Prepare payload for createDeal / updateDeal
       const dealPayload = {
         creator_id: formState.localUserId,
         title: formState.dealTitle,
-        background: formState.dealImage,               // pass base64 or URL
+        background: formState.dealImage,
         deal_value: parseFloat(formState.dealValue) || 0,
-        creatorName: formState.name,                   // for share link
+        creatorName: formState.name,
       };
 
       let dealResult;
       if (formState.id) {
-        // Existing deal => update
-        console.log("[CardForm] => calling updateDeal =>", dealPayload);
+        // update existing
         dealResult = await updateDeal({
           dealId: formState.id,
           title: dealPayload.title,
           background: dealPayload.background,
           deal_value: dealPayload.deal_value,
         });
-        console.log("[CardForm] => updateDeal => returned =>", dealResult);
-
-        addActivity({
+        await addActivity({
           userId: formState.localUserId,
           dealId: dealResult.id,
           action: "updated gift card",
         });
       } else {
-        // brand-new => create
-        console.log("[CardForm] => calling createDeal =>", dealPayload);
+        // create new
         dealResult = await createDeal(dealPayload);
-        console.log("[CardForm] => createDeal => returned =>", dealResult);
-
-        addActivity({
+        await addActivity({
           userId: formState.localUserId,
           dealId: dealResult.id,
           action: "created gift card",
         });
       }
 
-      // Pass updated data back to TheRealDeal => handleSaveCard
       onSave?.({
         ...formState,
-        dealValue: dealPayload.deal_value.toString(), // keep string version in local form
+        dealValue: dealPayload.deal_value.toString(),
         id: dealResult.id,
         share_link: dealResult.share_link,
       });
@@ -100,7 +85,7 @@ function CardForm({ onClose, onSave, cardData }) {
     }
   };
 
-  // For the live preview
+  // For live preview
   const previewCardData = {
     value: formState.dealValue,
     title: formState.dealTitle,
@@ -108,14 +93,12 @@ function CardForm({ onClose, onSave, cardData }) {
     name: formState.name,
     profilePhoto: formState.profilePhoto,
   };
-  console.log("[CardForm] => previewCardData:", previewCardData);
 
   return (
     <div className="relative w-full h-full flex flex-col items-center p-4">
-      {/* Card Preview */}
+      {/* Preview */}
       <div className="flex flex-col w-full flex-grow items-start">
         <Card isInForm={true} cardData={previewCardData} />
-
         <div className="flex flex-col bg-white rounded-lg overflow-hidden px-4 w-full max-w-lg mt-4">
           <div className="flex justify-between items-center mb-4 border-b border-gray-300 pb-4">
             <Text type="large" role="primary" className="text-left">
@@ -125,7 +108,6 @@ function CardForm({ onClose, onSave, cardData }) {
 
           {/* Inputs */}
           <div className="grid grid-cols-[auto_1fr] gap-y-4 gap-x-4 text-left">
-            {/* Deal Value */}
             <Text type="medium" role="tertiary">Value</Text>
             <div className="flex items-center">
               <span className="text-black mr-2 font-medium">$</span>
@@ -139,7 +121,6 @@ function CardForm({ onClose, onSave, cardData }) {
               />
             </div>
 
-            {/* Deal Title */}
             <Text type="medium" role="tertiary">Title</Text>
             <input
               type="text"
@@ -149,7 +130,6 @@ function CardForm({ onClose, onSave, cardData }) {
               className="border border-gray-300 rounded-md px-2 py-1 text-black focus:ring-1 focus:outline-none"
             />
 
-            {/* Deal Image */}
             <Text type="medium" role="tertiary">Image</Text>
             <input
               type="file"

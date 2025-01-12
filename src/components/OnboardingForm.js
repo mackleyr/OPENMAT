@@ -1,32 +1,18 @@
+// src/components/OnboardingForm.jsx
 import React, { useState } from "react";
 import Text from "../config/Text";
 import Profile from "./Profile";
 import { mainColor, textColors } from "../config/Colors";
-import { sendVerificationCode, checkVerificationCode } from "../services/twilioClient";
 
 /**
- * OnboardingForm flow:
- * Step 1: Connect PayPal
- * Step 2: Phone + verification
- * Step 3: Name
- * Step 4: Photo
- *
- * We removed the "Phone Verified! Tap next." screen.
- * The user must click "Send Code" or "Verify" on step 2.
+ * A minimal form for capturing PayPal email + name/photo
  */
-
 function OnboardingForm({ onComplete }) {
-  // Steps
   const steps = [
     {
-      title: "Get Paid",
-      subtext: "Connect PayPal to receive payments.",
-      inputType: "paypal", // new step
-    },
-    {
-      title: "What's your Phone Number?",
-      subtext: "Your number unlocks deals.",
-      inputType: "phone",
+      title: "Connect your PayPal",
+      subtext: "to receive payments.",
+      inputType: "paypal",
     },
     {
       title: "What's your Name?",
@@ -43,135 +29,43 @@ function OnboardingForm({ onComplete }) {
   const [currentStep, setCurrentStep] = useState(1);
   const currentStepData = steps[currentStep - 1];
 
-  // 1) PayPal connect (placeholder)
+  // 1) PayPal
   const [paypalEmail, setPaypalEmail] = useState("");
 
-  // 2) Phone + verification
-  const [phone, setPhone] = useState("");
-  const [showCodeField, setShowCodeField] = useState(false);
-  const [verificationCode, setVerificationCode] = useState("");
-  const [isVerified, setIsVerified] = useState(false);
-
-  // 3) Name
+  // 2) Name
   const [name, setName] = useState("");
 
-  // 4) Photo
+  // 3) Photo
   const [profilePhoto, setProfilePhoto] = useState("");
   const [isUploading, setIsUploading] = useState(false);
 
-  /**
-   * formatPhone():
-   * 1) Strip out all non-digits
-   * 2) Limit to 10 digits
-   * 3) Insert parentheses and dash => (###) ###-####
-   */
-  function formatPhone(value) {
-    let digits = value.replace(/\D/g, "");
-    if (digits.length > 10) {
-      digits = digits.substring(0, 10);
-    }
-    if (digits.length <= 3) {
-      return `(${digits}`;
-    } else if (digits.length <= 6) {
-      return `(${digits.substring(0, 3)}) ${digits.substring(3)}`;
-    } else {
-      return `(${digits.substring(0, 3)}) ${digits.substring(3, 6)}-${digits.substring(6)}`;
-    }
-  }
-
-  const handlePhoneChange = (rawValue) => {
-    const formatted = formatPhone(rawValue);
-    setPhone(formatted);
-  };
-
-  // PayPal OAuth (placeholder).
-  // In reality, you'd redirect to PayPal or open a popup to do actual OAuth.
-  const handleConnectPayPal = async () => {
-    // Just pretend we got "someuser@paypal.com" from OAuth
-    const fakeEmailFromOAuth = "someuser@paypal.com";
-    setPaypalEmail(fakeEmailFromOAuth);
-    alert(`PayPal connected with: ${fakeEmailFromOAuth}`);
-  };
-
-  // Twilio logic
-  const handleSendOrCheckCode = async () => {
-    if (!showCodeField) {
-      // "Send code"
-      const digits = phone.replace(/\D/g, "");
-      if (digits.length !== 10) {
-        alert("Please enter exactly 10 digits for a US phone.");
-        return;
-      }
-      const e164 = `+1${digits}`;
-      try {
-        await sendVerificationCode(e164);
-        setShowCodeField(true);
-      } catch (err) {
-        alert(`Error sending verification code: ${err.message}`);
-      }
-    } else {
-      // "Verify code"
-      const digits = phone.replace(/\D/g, "");
-      const e164 = `+1${digits}`;
-      try {
-        const success = await checkVerificationCode(e164, verificationCode);
-        if (success) {
-          setIsVerified(true);
-          setShowCodeField(false);
-          setVerificationCode("");
-        } else {
-          alert("Code incorrect or expired");
-        }
-      } catch (err) {
-        alert(`Error verifying code: ${err.message}`);
-      }
-    }
-  };
-
-  // Validation
   const isValid = () => {
-    switch (currentStepData.inputType) {
-      case "paypal":
-        // Let them proceed after they've connected?
-        // If we require an actual PayPal email, check it:
-        return paypalEmail.length > 3;
-      case "phone":
-        // Must be verified
-        return isVerified;
-      case "text":
-        // Name
-        return name.trim().length >= 2;
-      case "photo":
-        return !!profilePhoto;
-      default:
-        return false;
+    if (currentStepData.inputType === "paypal") {
+      return paypalEmail.trim().length > 3;
     }
+    if (currentStepData.inputType === "text") {
+      return name.trim().length >= 2;
+    }
+    if (currentStepData.inputType === "photo") {
+      return !!profilePhoto;
+    }
+    return false;
   };
 
-  // Next
-  const handleNext = async () => {
-    if (currentStepData.inputType === "paypal") {
-      // If we haven't connected PayPal yet, do that first:
-      if (!paypalEmail) {
-        alert("Please connect PayPal first!");
-        return;
-      }
-    } else if (currentStepData.inputType === "phone" && !isVerified) {
-      // If phone is not verified, attempt to send or verify code
-      await handleSendOrCheckCode();
-      return;
-    }
+  const buttonLabel = () => {
+    if (currentStep < steps.length) return "Next";
+    return "Complete";
+  };
 
-    // Move to next step or finish
+  const handleBottomButton = () => {
+    // If not last step => next
     if (currentStep < steps.length) {
       setCurrentStep(currentStep + 1);
       return;
     }
-
-    // Completed => pass data
+    // final => pass data
     onComplete?.({
-      paypalEmail,
-      phone: phone.replace(/\D/g, ""),
+      paypalEmail: paypalEmail.trim(),
       name: name.trim(),
       profilePhoto,
     });
@@ -183,78 +77,35 @@ function OnboardingForm({ onComplete }) {
       style={{ backgroundColor: mainColor }}
     >
       <div className="flex flex-col items-center justify-center flex-1 w-full max-w-lg">
-        {/* Title */}
         <Text type="large" role="white" className="text-center">
           {currentStepData.title}
         </Text>
-        {/* Subtext */}
         {currentStepData.subtext && (
           <Text type="small" role="white" className="text-center py-[2.5%]">
             {currentStepData.subtext}
           </Text>
         )}
 
-        {/* Step 1 => "paypal" */}
         {currentStepData.inputType === "paypal" && (
-          <button
-            onClick={handleConnectPayPal}
-            className="mt-8 px-4 py-2 rounded-full font-semibold"
-            style={{
-              backgroundColor: textColors.white,
-              color: textColors.primary,
-              fontSize: "1.25rem",
-            }}
-          >
-            Connect PayPal
-          </button>
+          <input
+            type="email"
+            value={paypalEmail}
+            onChange={(e) => setPaypalEmail(e.target.value)}
+            placeholder="PayPal Email"
+            className="bg-transparent border-none outline-none w-full text-center text-white mt-4 text-2xl"
+          />
         )}
 
-        {/* Step 2 => phone + code */}
-        {currentStepData.inputType === "phone" && (
-          <>
-            {!showCodeField && !isVerified && (
-              <input
-                type="tel"
-                value={phone}
-                onChange={(e) => handlePhoneChange(e.target.value)}
-                placeholder="(123) 456-7890"
-                className="bg-transparent border-none outline-none w-full text-center text-white mt-4 text-2xl"
-              />
-            )}
-            {showCodeField && !isVerified && (
-              <div className="flex flex-col mt-4 items-center">
-                <Text type="small" role="white">
-                  Enter the 6-digit code:
-                </Text>
-                <input
-                  type="text"
-                  value={verificationCode}
-                  onChange={(e) => setVerificationCode(e.target.value)}
-                  placeholder="123456"
-                  className="bg-transparent border-none outline-none w-full text-center text-white mt-2 text-2xl"
-                />
-              </div>
-            )}
-            {isVerified && (
-              <Text type="medium" role="white" className="mt-4">
-                Phone Verified!
-              </Text>
-            )}
-          </>
-        )}
-
-        {/* Step 3 => name */}
         {currentStepData.inputType === "text" && (
           <input
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="Name"
+            placeholder="Your Name"
             className="bg-transparent border-none outline-none w-full text-center text-white mt-4 text-2xl"
           />
         )}
 
-        {/* Step 4 => photo */}
         {currentStepData.inputType === "photo" && (
           <div
             className="flex items-center justify-center mt-4 relative cursor-pointer"
@@ -299,10 +150,10 @@ function OnboardingForm({ onComplete }) {
         )}
       </div>
 
-      {/* Next or Complete Button */}
+      {/* The bottom button */}
       <div className="w-full max-w-md px-4">
         <button
-          onClick={handleNext}
+          onClick={handleBottomButton}
           disabled={!isValid() || isUploading}
           className="w-full rounded-full font-semibold transition-all duration-150 text-center"
           style={{
@@ -315,7 +166,7 @@ function OnboardingForm({ onComplete }) {
             marginTop: "2rem",
           }}
         >
-          {currentStep < steps.length ? "Next" : "Complete"}
+          {buttonLabel()}
         </button>
       </div>
     </div>

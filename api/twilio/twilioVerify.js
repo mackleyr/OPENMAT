@@ -1,4 +1,4 @@
-// /api/twilioVerify.js
+// /api/twilio/twilioVerify.js
 import twilio from "twilio";
 
 const accountSid = process.env.TWILIO_ACCOUNT_SID;

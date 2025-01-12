@@ -1,42 +1,37 @@
 // src/services/usersService.js
-
-import { supabase } from '../supabaseClient';
+import { supabase } from "../supabaseClient";
 
 /**
- * upsertUser:
- * 1) Takes { phone_number, name, profile_image_url }
- * 2) .upsert() by phone_number so the same phone yields same user record
- * 3) After success, store user.id in localStorage
+ * upsertUser => ensures a single user row keyed by paypal_email
  */
-export const upsertUser = async ({ phone_number, name, profile_image_url }) => {
-  console.log('upsertUser(): Attempting to upsert user =>', { phone_number, name });
+export const upsertUser = async ({
+  paypal_email,
+  name,
+  profile_image_url,
+}) => {
+  console.log("upsertUser(): Attempting upsert =>", {
+    paypal_email,
+    name,
+    profile_image_url,
+  });
 
+  // upsert by paypal_email
   const { data: user, error } = await supabase
-    .from('users')
+    .from("users")
     .upsert(
-      {
-        phone_number,
-        name,
-        profile_image_url,
-      },
-      { onConflict: 'phone_number' } 
+      { paypal_email, name, profile_image_url },
+      { onConflict: "paypal_email" }
     )
-    .select('*')
+    .select("*")
     .single();
 
-  console.log('upsertUser(): Supabase returned => data:', user, 'error:', error);
+  console.log("upsertUser(): Supabase returned =>", user, "error:", error);
+  if (error) throw error;
 
-  if (error) {
-    console.error('upsertUser(): supabase error:', error);
-    throw error;
+  // Store user.id so we remain "signed in" for the session
+  if (user?.id) {
+    window.localStorage.setItem("userId", user.id);
   }
 
-  console.log('upsertUser() success =>', user);
-
-  // Store user.id in localStorage for persistent login
-  if (user && user.id) {
-    window.localStorage.setItem('userId', user.id);
-  }
-
-  return user; // This includes user.id
+  return user;
 };

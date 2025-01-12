@@ -1,4 +1,5 @@
-import React, { createContext, useState, useContext } from "react";
+// src/contexts/CardContext.jsx
+import React, { createContext, useContext, useState } from "react";
 
 const CardContext = createContext();
 
@@ -12,25 +13,27 @@ export const CardProvider = ({ children }) => {
     value: "",
     image: null,
     share_link: "",
-    expires: null,
+    description: "",
   };
 
   const [cardData, rawSetCardData] = useState(initialCardData);
 
-  // logs old/new data so we know who is calling it
   const debugSetCardData = (updater, debugLabel = "UNLABELED_CALL") => {
     rawSetCardData((prev) => {
       const newValue =
         typeof updater === "function" ? updater(prev) : { ...prev, ...updater };
-      console.log(`[CardContext.debugSetCardData] => label: ${debugLabel}
-oldValue:`, prev, `
-newValue:`, newValue);
+      console.log(
+        `[CardContext.debugSetCardData] => label: ${debugLabel}
+oldValue:`,
+        prev,
+        "\nnewValue:",
+        newValue
+      );
       return newValue;
     });
   };
 
   const resetCardData = () => {
-    console.log("CardContext.resetCardData(): resetting to initial deal data.");
     debugSetCardData(initialCardData, "resetCardData");
   };
 
@@ -38,7 +41,7 @@ newValue:`, newValue);
     <CardContext.Provider
       value={{
         cardData,
-        setCardData: debugSetCardData, 
+        setCardData: debugSetCardData,
         resetCardData,
       }}
     >
