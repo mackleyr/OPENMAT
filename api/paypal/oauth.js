@@ -25,9 +25,8 @@ const app = express();
  * Because Vercel mounts this file at "/api/paypal/oauth",
  * we typically expect Express to see the path as "/".
  */
-app.get("/", async (req, res) => {
-  console.log("[oauth.js] => Entered GET / handler");
-  console.log("[oauth.js] => Express sees path =>", req.path, "url =>", req.url);
+app.get(["/", "/api/paypal/oauth"], async (req, res) => {
+    console.log("[oauth.js] => Express sees path =>", req.path);
 
   try {
     const { code } = req.query;
