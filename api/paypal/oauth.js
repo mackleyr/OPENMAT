@@ -1,29 +1,37 @@
-// pages/api/paypal/oauth.js
+/**
+ * /api/paypal/oauth.js
+ *
+ * Express-like route to handle PayPal OAuth handshake:
+ *  1. If no 'code' => redirect user to PayPal sign-in.
+ *  2. If 'code' => exchange for token, get user info, then redirect to your React app.
+ */
+
+import express from "express";
 import querystring from "querystring";
 import fetch from "node-fetch";
 
-const clientId = process.env.PAYPAL_CLIENT_ID;
+const router = express.Router();
+
+// From .env
+const clientId = process.env.PAYPAL_CLIENT_ID; 
 const clientSecret = process.env.PAYPAL_CLIENT_SECRET;
-const APP_URL = process.env.REACT_APP_DOMAIN || "http://localhost:3000";
+// This is where we ultimately want to send the user (your React app's domain).
+const APP_URL = process.env.REACT_APP_DOMAIN || "https://www.and.deals";
 
-// This route either:
-// 1) If there's no "code", redirects to PayPal's login/authorize
-// 2) If there's a "code", does the token exchange + fetch user info, returns user to Onboarding
-export default async function handler(req, res) {
-  const { code } = req.query;
-
-  // If no code => redirect user to PayPal
-  if (!code) {
-    const redirectURI = `${APP_URL}/api/paypal/oauth`; 
-    // Use "openid profile email" scope so we can get user info
-    const paypalAuthUrl = `https://www.paypal.com/signin/authorize?response_type=code&client_id=${clientId}&scope=openid profile email&redirect_uri=${encodeURIComponent(
-      redirectURI
-    )}`;
-    return res.redirect(paypalAuthUrl);
-  }
-
-  // If we have code => exchange for token
+router.get("/paypal/oauth", async (req, res) => {
   try {
+    const { code } = req.query;
+
+    // Step 1: No 'code'? => We redirect user to PayPal to sign in
+    if (!code) {
+      const redirectURI = `${APP_URL}/api/paypal/oauth`; // This route
+      const paypalAuthUrl = `https://www.paypal.com/signin/authorize?response_type=code&client_id=${clientId}&scope=openid profile email&redirect_uri=${encodeURIComponent(
+        redirectURI
+      )}`;
+      return res.redirect(paypalAuthUrl);
+    }
+
+    // Step 2: We got a 'code'. Exchange it for an access token
     const tokenResponse = await fetch("https://api-m.paypal.com/v1/oauth2/token", {
       method: "POST",
       headers: {
@@ -39,41 +47,49 @@ export default async function handler(req, res) {
 
     if (!tokenResponse.ok) {
       const errData = await tokenResponse.json();
-      console.error("Exchange code error =>", errData);
-      return res.status(400).json({ error: "Exchange failed", details: errData });
+      console.error("PayPal token exchange error =>", errData);
+      return res
+        .status(400)
+        .json({ error: "Token exchange failed", details: errData });
     }
 
     const tokenJson = await tokenResponse.json();
     const accessToken = tokenJson.access_token;
 
-    // Use the token to get user info
-    const userInfoResp = await fetch(
+    // Step 3: Use the access token to get user info
+    const userinfoResp = await fetch(
       "https://api-m.paypal.com/v1/identity/oauth2/userinfo?schema=paypalv1.1",
       {
         headers: { Authorization: `Bearer ${accessToken}` },
       }
     );
-
-    if (!userInfoResp.ok) {
-      const errData = await userInfoResp.json();
-      console.error("Fetch user info error =>", errData);
-      return res.status(400).json({ error: "Userinfo failed", details: errData });
+    if (!userinfoResp.ok) {
+      const errData = await userinfoResp.json();
+      console.error("PayPal user info error =>", errData);
+      return res
+        .status(400)
+        .json({ error: "User info request failed", details: errData });
     }
 
-    const userInfo = await userInfoResp.json();
-    console.log("PayPal userinfo =>", userInfo);
+    const userinfo = await userinfoResp.json();
+    console.log("PayPal userinfo =>", userinfo);
 
-    const paypalEmail = userInfo.email;
-    const userName = userInfo.name || userInfo.given_name || "New User";
+    // Extract the user’s PayPal email and name
+    const paypalEmail = userinfo.email;
+    const userName =
+      userinfo.name || userinfo.given_name || userinfo.family_name || "New User";
 
-    // Redirect user back to /onboarding w/ verified email & name
-    const finalUrl = `${APP_URL}/onboarding?paypal_email=${encodeURIComponent(
+    // Step 4: Redirect back to your React app with query params
+    // so it can auto-fill the OnboardingForm
+    const finalUrl = `${APP_URL}?paypal_email=${encodeURIComponent(
       paypalEmail
     )}&name=${encodeURIComponent(userName)}`;
 
     return res.redirect(finalUrl);
   } catch (err) {
-    console.error("OAuth error =>", err);
+    console.error("PayPal OAuth error =>", err);
     return res.status(500).json({ error: err.message });
   }
-}
+});
+
+export default router;

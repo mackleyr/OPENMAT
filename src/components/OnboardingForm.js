@@ -5,8 +5,7 @@ import Profile from "./Profile";
 import { mainColor, textColors } from "../config/Colors";
 
 /**
- * A minimal form for capturing PayPal email + name/photo,
- * but the "PayPal" step is a real OAuth handshake, no placeholders.
+ * Minimal form for capturing PayPal (via real OAuth), name, and photo.
  */
 function OnboardingForm({ onComplete }) {
   const steps = [
@@ -27,30 +26,37 @@ function OnboardingForm({ onComplete }) {
     },
   ];
 
+  // Current step in the onboarding flow
   const [currentStep, setCurrentStep] = useState(1);
-  const currentStepData = steps[currentStep - 1];
 
-  // Verified PayPal data from OAuth callback
+  // Form data
   const [paypalEmail, setPaypalEmail] = useState("");
-  // Additional user data
   const [name, setName] = useState("");
   const [profilePhoto, setProfilePhoto] = useState("");
   const [isUploading, setIsUploading] = useState(false);
 
-  // If returning from /api/paypal/oauth with ?paypal_email=...&name=...
+  // On mount, check if we have ?paypal_email=..., ?name=...
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const returnedEmail = params.get("paypal_email");
     const returnedName = params.get("name");
-    if (returnedEmail) setPaypalEmail(returnedEmail);
-    if (returnedName) setName(returnedName);
+
+    if (returnedEmail) {
+      setPaypalEmail(returnedEmail);
+      // Because step #1 is effectively "Connect PayPal," skip to step #2
+      setCurrentStep(2);
+    }
+    if (returnedName) {
+      setName(returnedName);
+    }
   }, []);
 
-  // Step validation
+  const currentStepData = steps[currentStep - 1];
+
+  // Checks if the user can advance
   const isValid = () => {
     if (currentStepData.inputType === "paypal") {
-      // We rely on the actual verified PayPal email
-      return paypalEmail.trim().length > 3;
+      return paypalEmail.trim().length > 3; // Means we have a PayPal email
     }
     if (currentStepData.inputType === "text") {
       return name.trim().length >= 2;
@@ -61,19 +67,30 @@ function OnboardingForm({ onComplete }) {
     return false;
   };
 
-  // Bottom button
+  // Button label changes by step
   const buttonLabel = () => {
+    if (currentStepData.inputType === "paypal" && !paypalEmail) {
+      return "Connect PayPal";
+    }
     if (currentStep < steps.length) return "Next";
     return "Complete";
   };
 
+  // The main bottom button
   const handleBottomButton = () => {
-    // If not last step => next
+    // Step #1 => if no PayPal email, we do real OAuth
+    if (currentStepData.inputType === "paypal" && !paypalEmail) {
+      handlePayPalConnect();
+      return;
+    }
+
+    // If not on the last step, go next
     if (currentStep < steps.length) {
       setCurrentStep(currentStep + 1);
       return;
     }
-    // final => pass data
+
+    // If last step => pass data up
     onComplete?.({
       paypalEmail: paypalEmail.trim(),
       name: name.trim(),
@@ -81,8 +98,9 @@ function OnboardingForm({ onComplete }) {
     });
   };
 
-  const handlePayPalSignIn = () => {
-    // Real OAuth: calls your server route
+  // Actually perform the PayPal OAuth
+  const handlePayPalConnect = () => {
+    // Kicks off the handshake at /api/paypal/oauth
     window.location.href = "/api/paypal/oauth";
   };
 
@@ -101,27 +119,14 @@ function OnboardingForm({ onComplete }) {
           </Text>
         )}
 
-        {/* Step 1 => PayPal OAuth */}
-        {currentStepData.inputType === "paypal" && (
-          <div className="mt-4 flex flex-col items-center">
-            {!paypalEmail && (
-              <button
-                onClick={handlePayPalSignIn}
-                className="bg-white text-black px-4 py-2 rounded-full font-semibold"
-              >
-                Sign in with PayPal
-              </button>
-            )}
-            {paypalEmail && (
-              <Text type="medium" role="white" className="text-center mt-2">
-                Verified PayPal: <br />
-                <span style={{ color: textColors.tertiary }}>{paypalEmail}</span>
-              </Text>
-            )}
-          </div>
+        {/* If we're on step #1 but have a PayPal email, show it */}
+        {currentStepData.inputType === "paypal" && paypalEmail && (
+          <Text type="medium" role="white" className="text-center mt-4">
+            Verified PayPal: {paypalEmail}
+          </Text>
         )}
 
-        {/* Step 2 => Name */}
+        {/* Step #2 => name input */}
         {currentStepData.inputType === "text" && (
           <input
             type="text"
@@ -132,7 +137,7 @@ function OnboardingForm({ onComplete }) {
           />
         )}
 
-        {/* Step 3 => Photo */}
+        {/* Step #3 => photo */}
         {currentStepData.inputType === "photo" && (
           <div
             className="flex items-center justify-center mt-4 relative cursor-pointer"
@@ -177,6 +182,7 @@ function OnboardingForm({ onComplete }) {
         )}
       </div>
 
+      {/* Single bottom button => "Connect PayPal" or "Next" or "Complete" */}
       <div className="w-full max-w-md px-4">
         <button
           onClick={handleBottomButton}
@@ -184,9 +190,9 @@ function OnboardingForm({ onComplete }) {
           className="w-full rounded-full font-semibold transition-all duration-150 text-center"
           style={{
             backgroundColor:
-              isValid() && !isUploading ? textColors.white : "rgba(255, 255, 255, 0.2)",
+              isValid() && !isUploading ? textColors.white : "rgba(255,255,255,0.2)",
             color:
-              isValid() && !isUploading ? textColors.primary : "rgba(255, 255, 255, 0.2)",
+              isValid() && !isUploading ? textColors.primary : "rgba(255,255,255,0.2)",
             padding: "1rem",
             fontSize: "1.25rem",
             marginTop: "2rem",

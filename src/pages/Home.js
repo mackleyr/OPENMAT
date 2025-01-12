@@ -1,4 +1,4 @@
-// src/pages/Home.jsx (renamed to Home or keep it as is)
+// src/pages/Home.jsx
 import React, { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
 import { useCard } from "../contexts/CardContext";
