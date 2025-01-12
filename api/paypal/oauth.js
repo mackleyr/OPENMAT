@@ -9,11 +9,9 @@
 import express from "express";
 import querystring from "querystring";
 
-// From .env
+// Read environment variables
 const clientId = process.env.PAYPAL_CLIENT_ID;
 const clientSecret = process.env.PAYPAL_CLIENT_SECRET;
-
-// This is where we ultimately want to send the user (your React app).
 const APP_URL = process.env.REACT_APP_DOMAIN || "https://www.and.deals";
 
 // Create the Express app
@@ -21,14 +19,14 @@ const app = express();
 
 /**
  * GET /paypal/oauth
- * - Step 1: If no "code", redirect to PayPal.
- * - Step 2: If "code" exists, exchange for token, get user info, redirect back to your React app.
+ * Step 1: If no "code", redirect user to PayPal's login
+ * Step 2: If "code" exists, exchange for token, get user info, redirect back to your React app
  */
 app.get("/paypal/oauth", async (req, res) => {
   try {
     const { code } = req.query;
 
-    // Step 1: No 'code'? => Redirect user to PayPal to sign in
+    // Step 1: No 'code'? => redirect to PayPal sign-in
     if (!code) {
       const redirectURI = `${APP_URL}/api/paypal/oauth`; // This route
       const paypalAuthUrl = `https://www.paypal.com/signin/authorize?response_type=code&client_id=${clientId}&scope=openid profile email&redirect_uri=${encodeURIComponent(
@@ -37,7 +35,7 @@ app.get("/paypal/oauth", async (req, res) => {
       return res.redirect(paypalAuthUrl);
     }
 
-    // Step 2: We got 'code'. Exchange it for an access token (built-in fetch on Node 18)
+    // Step 2: We have 'code'. Exchange it for an access token
     const tokenResponse = await fetch("https://api-m.paypal.com/v1/oauth2/token", {
       method: "POST",
       headers: {
@@ -53,7 +51,7 @@ app.get("/paypal/oauth", async (req, res) => {
 
     if (!tokenResponse.ok) {
       const errData = await tokenResponse.json();
-      console.error("PayPal token exchange error =>", errData);
+      console.error("PayPal token exchange error:", errData);
       return res.status(400).json({
         error: "Token exchange failed",
         details: errData,
@@ -63,7 +61,7 @@ app.get("/paypal/oauth", async (req, res) => {
     const tokenJson = await tokenResponse.json();
     const accessToken = tokenJson.access_token;
 
-    // Step 3: Use the access token to get user info
+    // Fetch user info from PayPal
     const userinfoResp = await fetch(
       "https://api-m.paypal.com/v1/identity/oauth2/userinfo?schema=paypalv1.1",
       {
@@ -73,7 +71,7 @@ app.get("/paypal/oauth", async (req, res) => {
 
     if (!userinfoResp.ok) {
       const errData = await userinfoResp.json();
-      console.error("PayPal user info error =>", errData);
+      console.error("PayPal user info error:", errData);
       return res.status(400).json({
         error: "User info request failed",
         details: errData,
@@ -83,12 +81,12 @@ app.get("/paypal/oauth", async (req, res) => {
     const userinfo = await userinfoResp.json();
     console.log("PayPal userinfo =>", userinfo);
 
-    // Extract the user’s PayPal email and name
+    // Extract user’s PayPal email and name
     const paypalEmail = userinfo.email;
     const userName =
       userinfo.name || userinfo.given_name || userinfo.family_name || "New User";
 
-    // Step 4: Redirect back to your React app with ?paypal_email=... & name=...
+    // Final redirect back to your React app with ?paypal_email=... & name=...
     const finalUrl = `${APP_URL}?paypal_email=${encodeURIComponent(
       paypalEmail
     )}&name=${encodeURIComponent(userName)}`;
@@ -102,7 +100,7 @@ app.get("/paypal/oauth", async (req, res) => {
 
 /**
  * Export a default function for Vercel to invoke.
- * This is crucial so that Vercel sees `(req, res) => app(req, res)`.
+ * This ensures Vercel sees (req, res) => app(req, res).
  */
 export default (req, res) => {
   return app(req, res);
