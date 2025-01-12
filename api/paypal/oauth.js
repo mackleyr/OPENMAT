@@ -1,7 +1,7 @@
 /**
  * /api/paypal/oauth.js
  *
- * Express-like route to handle PayPal OAuth handshake:
+ * Express-based route to handle PayPal OAuth handshake:
  *  1. If no 'code' => redirect user to PayPal sign-in.
  *  2. If 'code' => exchange for token, get user info, then redirect to your React app.
  */
@@ -9,15 +9,22 @@
 import express from "express";
 import querystring from "querystring";
 
-const router = express.Router();
-
 // From .env
-const clientId = process.env.PAYPAL_CLIENT_ID; 
+const clientId = process.env.PAYPAL_CLIENT_ID;
 const clientSecret = process.env.PAYPAL_CLIENT_SECRET;
-// This is where we ultimately want to send the user (your React app's domain).
+
+// This is where we ultimately want to send the user (your React app).
 const APP_URL = process.env.REACT_APP_DOMAIN || "https://www.and.deals";
 
-router.get("/paypal/oauth", async (req, res) => {
+// Create the Express app
+const app = express();
+
+/**
+ * GET /paypal/oauth
+ * - Step 1: If no "code", redirect to PayPal.
+ * - Step 2: If "code" exists, exchange for token, get user info, redirect back to your React app.
+ */
+app.get("/paypal/oauth", async (req, res) => {
   try {
     const { code } = req.query;
 
@@ -30,7 +37,7 @@ router.get("/paypal/oauth", async (req, res) => {
       return res.redirect(paypalAuthUrl);
     }
 
-    // Step 2: Got 'code'. Exchange it for an access token, using the built-in fetch in Node 18
+    // Step 2: We got 'code'. Exchange it for an access token (built-in fetch on Node 18)
     const tokenResponse = await fetch("https://api-m.paypal.com/v1/oauth2/token", {
       method: "POST",
       headers: {
@@ -93,4 +100,10 @@ router.get("/paypal/oauth", async (req, res) => {
   }
 });
 
-export default router;
+/**
+ * Export a default function for Vercel to invoke.
+ * This is crucial so that Vercel sees `(req, res) => app(req, res)`.
+ */
+export default (req, res) => {
+  return app(req, res);
+};
