@@ -4,26 +4,31 @@
  * Express-based PayPal OAuth:
  *   1. If no 'code', redirect user to PayPal sign-in.
  *   2. If 'code', exchange for token, get user info, redirect back to React.
+ * 
+ * We only want this OAuth flow triggered on certain user actions
+ * (like tapping "Connect PayPal," "Grab," etc.). So the client
+ * should only call /api/paypal/oauth if the user actually wants to OAuth.
  */
 
 import express from "express";
 import querystring from "querystring";
 
-// Env vars
 const clientId = process.env.PAYPAL_CLIENT_ID;
 const clientSecret = process.env.PAYPAL_CLIENT_SECRET;
 const APP_URL = process.env.REACT_APP_DOMAIN || "https://www.and.deals";
 
-// Create an Express app
+// Create Express app
 const app = express();
 
 /**
- *  GET /
- *  Because Vercel mounts this file at "/api/paypal/oauth",
- *  the route is effectively "/api/paypal/oauth" in production.
+ * GET /
+ * Because Vercel mounts this file at "/api/paypal/oauth",
+ * we typically expect Express to see the path as "/".
  */
 app.get("/", async (req, res) => {
   console.log("[oauth.js] => Entered GET / handler");
+  console.log("[oauth.js] => Express sees path =>", req.path, "url =>", req.url);
+
   try {
     const { code } = req.query;
     console.log("[oauth.js] => Query params =>", req.query);
@@ -55,9 +60,10 @@ app.get("/", async (req, res) => {
     if (!tokenResponse.ok) {
       const errData = await tokenResponse.json();
       console.error("[oauth.js] => Token exchange error:", errData);
-      return res
-        .status(400)
-        .json({ error: "Token exchange failed", details: errData });
+      return res.status(400).json({
+        error: "Token exchange failed",
+        details: errData,
+      });
     }
 
     const tokenJson = await tokenResponse.json();
@@ -74,9 +80,10 @@ app.get("/", async (req, res) => {
     if (!userInfoResp.ok) {
       const errData = await userInfoResp.json();
       console.error("[oauth.js] => User info error:", errData);
-      return res
-        .status(400)
-        .json({ error: "User info request failed", details: errData });
+      return res.status(400).json({
+        error: "User info request failed",
+        details: errData,
+      });
     }
 
     const userinfo = await userInfoResp.json();
@@ -89,15 +96,28 @@ app.get("/", async (req, res) => {
     console.log(
       `[oauth.js] => Done! Redirecting back to ${APP_URL} with query params: paypal_email=${paypalEmail}, name=${userName}`
     );
-    const finalUrl = `${APP_URL}?paypal_email=${encodeURIComponent(
-      paypalEmail
-    )}&name=${encodeURIComponent(userName)}`;
+    const finalUrl = `${APP_URL}?paypal_email=${encodeURIComponent(paypalEmail)}&name=${encodeURIComponent(
+      userName
+    )}`;
 
     return res.redirect(finalUrl);
   } catch (err) {
     console.error("[oauth.js] => PayPal OAuth error:", err);
     return res.status(500).json({ error: err.message });
   }
+});
+
+/**
+ * CATCH-ALL for debugging
+ * This helps see if the request matched "/api/paypal/oauth" but is hitting
+ * some sub-path that we didn't define. We'll log the path we see, then 404.
+ */
+app.use((req, res) => {
+  console.log("[oauth.js] => Express catch-all => path =>", req.path);
+  return res.status(404).json({
+    error: "No matching route in /api/paypal/oauth.js",
+    path: req.path,
+  });
 });
 
 /**
