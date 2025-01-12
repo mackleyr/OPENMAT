@@ -8,6 +8,7 @@ import { mainColor, textColors } from "../config/Colors";
  * Minimal form for capturing PayPal (via real OAuth), name, and photo.
  */
 function OnboardingForm({ onComplete }) {
+  // Define each step
   const steps = [
     {
       title: "Connect your PayPal",
@@ -26,7 +27,7 @@ function OnboardingForm({ onComplete }) {
     },
   ];
 
-  // Current step in the onboarding flow
+  // Current step (1-based)
   const [currentStep, setCurrentStep] = useState(1);
 
   // Form data
@@ -35,7 +36,7 @@ function OnboardingForm({ onComplete }) {
   const [profilePhoto, setProfilePhoto] = useState("");
   const [isUploading, setIsUploading] = useState(false);
 
-  // On mount, check if we have ?paypal_email=..., ?name=...
+  // On mount => parse ?paypal_email=..., ?name=... from the URL
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const returnedEmail = params.get("paypal_email");
@@ -43,7 +44,7 @@ function OnboardingForm({ onComplete }) {
 
     if (returnedEmail) {
       setPaypalEmail(returnedEmail);
-      // Because step #1 is effectively "Connect PayPal," skip to step #2
+      // Because step #1 is “Connect PayPal,” skip to step #2 if we have an email
       setCurrentStep(2);
     }
     if (returnedName) {
@@ -53,44 +54,58 @@ function OnboardingForm({ onComplete }) {
 
   const currentStepData = steps[currentStep - 1];
 
-  // Checks if the user can advance
+  /**
+   * Determines whether we enable or disable the bottom button
+   * based on the current step’s inputType.
+   */
   const isValid = () => {
     if (currentStepData.inputType === "paypal") {
-      return paypalEmail.trim().length > 3; // Means we have a PayPal email
+      // Step #1 => We ALWAYS enable so the user can click “Connect PayPal.”
+      // They won't have a PayPal email yet at this point.
+      return true;
     }
     if (currentStepData.inputType === "text") {
-      return name.trim().length >= 2;
+      return name.trim().length >= 2; // e.g. require at least 2 chars
     }
     if (currentStepData.inputType === "photo") {
-      return !!profilePhoto;
+      return !!profilePhoto; // require a photo
     }
     return false;
   };
 
-  // Button label changes by step
+  /**
+   * Decides how the bottom button is labeled
+   * e.g. "Connect PayPal," "Next," or "Complete"
+   */
   const buttonLabel = () => {
+    // Step 1 => If no verified email => say “Connect PayPal”
     if (currentStepData.inputType === "paypal" && !paypalEmail) {
       return "Connect PayPal";
     }
+    // If not last step => "Next"
     if (currentStep < steps.length) return "Next";
+
+    // If last step => "Complete"
     return "Complete";
   };
 
-  // The main bottom button
+  /**
+   * Single bottom button click logic
+   */
   const handleBottomButton = () => {
-    // Step #1 => if no PayPal email, we do real OAuth
+    // If step #1 => we attempt PayPal connect if we have no paypalEmail
     if (currentStepData.inputType === "paypal" && !paypalEmail) {
       handlePayPalConnect();
       return;
     }
 
-    // If not on the last step, go next
+    // If not on the last step => go next
     if (currentStep < steps.length) {
       setCurrentStep(currentStep + 1);
       return;
     }
 
-    // If last step => pass data up
+    // If last step => call onComplete with user data
     onComplete?.({
       paypalEmail: paypalEmail.trim(),
       name: name.trim(),
@@ -98,9 +113,11 @@ function OnboardingForm({ onComplete }) {
     });
   };
 
-  // Actually perform the PayPal OAuth
+  /**
+   * Actually triggers the PayPal OAuth flow.
+   */
   const handlePayPalConnect = () => {
-    // Kicks off the handshake at /api/paypal/oauth
+    // Redirect the user to your PayPal OAuth endpoint
     window.location.href = "/api/paypal/oauth";
   };
 
@@ -113,13 +130,14 @@ function OnboardingForm({ onComplete }) {
         <Text type="large" role="white" className="text-center">
           {currentStepData.title}
         </Text>
+
         {currentStepData.subtext && (
           <Text type="small" role="white" className="text-center py-[2.5%]">
             {currentStepData.subtext}
           </Text>
         )}
 
-        {/* If we're on step #1 but have a PayPal email, show it */}
+        {/* Step #1 => if we do have PayPal email, show it; otherwise user can click Connect */}
         {currentStepData.inputType === "paypal" && paypalEmail && (
           <Text type="medium" role="white" className="text-center mt-4">
             Verified PayPal: {paypalEmail}
@@ -137,7 +155,7 @@ function OnboardingForm({ onComplete }) {
           />
         )}
 
-        {/* Step #3 => photo */}
+        {/* Step #3 => profile photo */}
         {currentStepData.inputType === "photo" && (
           <div
             className="flex items-center justify-center mt-4 relative cursor-pointer"
@@ -182,7 +200,7 @@ function OnboardingForm({ onComplete }) {
         )}
       </div>
 
-      {/* Single bottom button => "Connect PayPal" or "Next" or "Complete" */}
+      {/* The bottom button => “Connect PayPal,” “Next,” or “Complete” */}
       <div className="w-full max-w-md px-4">
         <button
           onClick={handleBottomButton}
