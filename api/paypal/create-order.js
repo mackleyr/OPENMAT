@@ -1,4 +1,4 @@
-// pages/api/paypal/create-order.js
+// api/paypal/create-order.js
 import paypal from "@paypal/checkout-server-sdk";
 
 // Partner Fees Requirements:

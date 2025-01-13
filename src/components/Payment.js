@@ -1,79 +1,115 @@
 // src/components/Payment.jsx
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
+import { PayPalScriptProvider, PayPalButtons } from "@paypal/react-paypal-js";
 import { useLocalUser } from "../contexts/LocalUserContext";
-import { createOrder, captureOrder } from "../services/paypalService";
 import { useActivity } from "../contexts/ActivityContext";
 
 export default function Payment({ onClose, dealData }) {
   const { localUser } = useLocalUser();
   const { addActivity } = useActivity();
-  const [orderId, setOrderId] = useState(null);
-  const [loading, setLoading] = useState(false);
+  const [isCapturing, setIsCapturing] = useState(false);
 
-  useEffect(() => {
-    // On mount, create a PayPal order
-    if (!localUser.id) {
-      alert("Please sign in first.");
-      return;
-    }
-    (async () => {
-      setLoading(true);
-      try {
-        const id = await createOrder({
-          amount: dealData.value,
-          payeeEmail: dealData.creatorPayPalEmail,
-        });
-        setOrderId(id);
-      } catch (err) {
-        alert("Error creating PayPal order");
-        console.error(err);
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, [dealData, localUser.id]);
+  if (!dealData?.value || !dealData?.creatorPayPalEmail) {
+    return (
+      <div className="absolute inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50">
+        <div className="bg-white p-6 rounded-md">
+          <p>Invalid deal info. Missing value or payee email.</p>
+          <button onClick={onClose}>Close</button>
+        </div>
+      </div>
+    );
+  }
 
-  const handleCapture = async () => {
-    if (!orderId) return;
-    setLoading(true);
+  const amount = dealData.value.toString();
+  const payeeEmail = dealData.creatorPayPalEmail;
+
+  const handleApprove = async (orderID) => {
     try {
-      const result = await captureOrder(orderId);
-      console.log("Payment success =>", result);
+      setIsCapturing(true);
+      // 1) POST to /api/paypal/capture-order
+      const captureRes = await fetch("/api/paypal/capture-order", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderId: orderID }),
+      });
+      const captureData = await captureRes.json();
+      if (!captureRes.ok) throw new Error(captureData.error || "Capture failed");
 
-      // Log an activity
+      console.log("[Payment] => PayPal capture success =>", captureData);
+
+      // 2) Log the “grabbed gift card” activity in Supabase
       await addActivity({
         userId: localUser.id,
         dealId: dealData.id,
         action: "grabbed gift card",
       });
 
-      alert("Payment successful! Gift card grabbed.");
+      alert("Payment successful! You grabbed the gift card.");
       onClose?.();
     } catch (err) {
-      console.error("captureOrder error =>", err);
-      alert("Payment failed");
+      console.error("[Payment] => handleApprove => error =>", err);
+      alert("Error capturing payment.");
     } finally {
-      setLoading(false);
+      setIsCapturing(false);
     }
   };
 
   return (
-    <div className="absolute inset-0 bg-black bg-opacity-70 flex flex-col items-center justify-center z-50">
-      <div className="bg-white p-6 rounded-md w-80 text-center">
-        <h2 className="text-xl mb-2">Complete Payment</h2>
-        <p>Amount: ${dealData.value}</p>
-        <p>Payee: {dealData.creatorPayPalEmail}</p>
-        {!orderId && <p>Initializing PayPal order...</p>}
-        {orderId && !loading && (
-          <button onClick={handleCapture} className="bg-blue-600 text-white w-full p-2 mt-4">
-            Capture Payment
+    <PayPalScriptProvider
+      options={{
+        "client-id": process.env.REACT_APP_PAYPAL_CLIENT_ID || "TEST",
+        currency: "USD",
+      }}
+    >
+      <div className="absolute inset-0 bg-black bg-opacity-70 flex flex-col items-center justify-center z-50">
+        <div className="bg-white p-6 rounded-md w-80 text-center relative">
+          <button
+            onClick={onClose}
+            className="absolute top-2 right-2 text-xl font-bold"
+          >
+            ✕
           </button>
-        )}
-        {loading && <p>Processing...</p>}
-        <button onClick={onClose} className="bg-gray-400 w-full p-2 mt-2">
-          Cancel
-        </button>
+          <h2 className="text-xl mb-2">Grab Gift Card</h2>
+          <p className="text-md mb-4">
+            Pay <strong>${amount}</strong> to {payeeEmail}
+          </p>
+
+          <PayPalButtons
+            fundingSource={undefined}
+            createOrder={async () => {
+              // 1) Call our server to create an order
+              const createRes = await fetch("/api/paypal/create-order", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  amount,
+                  payeeEmail,
+                }),
+              });
+              const createData = await createRes.json();
+              if (!createRes.ok) {
+                throw new Error(createData.error || "Create order failed");
+              }
+              return createData.id; // The order ID
+            }}
+            onApprove={async (data) => {
+              // PayPal passes us data.orderID
+              await handleApprove(data.orderID);
+            }}
+            onCancel={() => {
+              console.log("User canceled PayPal payment");
+              onClose?.();
+            }}
+            onError={(err) => {
+              console.error("PayPalButtons onError =>", err);
+              alert("PayPal checkout error.");
+            }}
+            style={{ layout: "vertical", color: "blue", shape: "rect", label: "paypal" }}
+          />
+
+          {isCapturing && <p>Capturing payment...</p>}
+        </div>
       </div>
-    </div>
+    </PayPalScriptProvider>
   );
 }

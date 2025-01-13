@@ -1,4 +1,4 @@
-// pages/api/paypal/capture-order.js
+// api/paypal/capture-order.js
 import paypal from "@paypal/checkout-server-sdk";
 
 const clientId = process.env.PAYPAL_CLIENT_ID;
