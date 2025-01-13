@@ -1,19 +1,19 @@
-// src/components/OnboardingForm.jsx
 import React, { useState, useEffect } from "react";
 import Text from "../config/Text";
 import Profile from "./Profile";
 import { mainColor, textColors } from "../config/Colors";
 
 /**
- * Minimal form for capturing PayPal (via real OAuth), name, and photo.
+ * Minimal form for capturing user email, name, and photo
+ * (We’re temporarily skipping real PayPal OAuth.)
  */
 function OnboardingForm({ onComplete }) {
-  // Define each step
+  // Steps
   const steps = [
     {
-      title: "Connect your PayPal",
-      subtext: "to receive payments.",
-      inputType: "paypal",
+      title: "Enter Your Email",
+      subtext: "We use this for notifications & payments.",
+      inputType: "paypal", // rename if you prefer, but we keep "paypal" for simplicity
     },
     {
       title: "What's your Name?",
@@ -27,7 +27,6 @@ function OnboardingForm({ onComplete }) {
     },
   ];
 
-  // Current step (1-based)
   const [currentStep, setCurrentStep] = useState(1);
 
   // Form data
@@ -36,7 +35,7 @@ function OnboardingForm({ onComplete }) {
   const [profilePhoto, setProfilePhoto] = useState("");
   const [isUploading, setIsUploading] = useState(false);
 
-  // On mount => parse ?paypal_email=..., ?name=... from the URL
+  // If we had ?paypal_email=..., ?name=... in the URL, parse them
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const returnedEmail = params.get("paypal_email");
@@ -44,8 +43,7 @@ function OnboardingForm({ onComplete }) {
 
     if (returnedEmail) {
       setPaypalEmail(returnedEmail);
-      // Because step #1 is “Connect PayPal,” skip to step #2 if we have an email
-      setCurrentStep(2);
+      setCurrentStep(2); // skip to name step
     }
     if (returnedName) {
       setName(returnedName);
@@ -54,71 +52,40 @@ function OnboardingForm({ onComplete }) {
 
   const currentStepData = steps[currentStep - 1];
 
-  /**
-   * Determines whether we enable or disable the bottom button
-   * based on the current step’s inputType.
-   */
+  // Validation per step
   const isValid = () => {
     if (currentStepData.inputType === "paypal") {
-      // Step #1 => We ALWAYS enable so the user can click “Connect PayPal.”
-      // They won't have a PayPal email yet at this point.
-      return true;
+      // NOW we require user to type an email
+      return paypalEmail.trim().length > 4; // or any minimal check
     }
     if (currentStepData.inputType === "text") {
-      return name.trim().length >= 2; // e.g. require at least 2 chars
+      return name.trim().length >= 2; 
     }
     if (currentStepData.inputType === "photo") {
-      return !!profilePhoto; // require a photo
+      return !!profilePhoto;
     }
     return false;
   };
 
-  /**
-   * Decides how the bottom button is labeled
-   * e.g. "Connect PayPal," "Next," or "Complete"
-   */
+  // Button label
   const buttonLabel = () => {
-    // Step 1 => If no verified email => say “Connect PayPal”
-    if (currentStepData.inputType === "paypal" && !paypalEmail) {
-      return "Connect PayPal";
-    }
-    // If not last step => "Next"
     if (currentStep < steps.length) return "Next";
-
-    // If last step => "Complete"
     return "Complete";
   };
 
-  /**
-   * Single bottom button click logic
-   */
+  // The main click
   const handleBottomButton = () => {
-    // If step #1 => we attempt PayPal connect if we have no paypalEmail
-    if (currentStepData.inputType === "paypal" && !paypalEmail) {
-      handlePayPalConnect();
-      return;
-    }
-
     // If not on the last step => go next
     if (currentStep < steps.length) {
       setCurrentStep(currentStep + 1);
       return;
     }
-
-    // If last step => call onComplete with user data
+    // If last step => pass data
     onComplete?.({
       paypalEmail: paypalEmail.trim(),
       name: name.trim(),
       profilePhoto,
     });
-  };
-
-  /**
-   * Actually triggers the PayPal OAuth flow.
-   */
-  const handlePayPalConnect = () => {
-    // Redirect the user to your PayPal OAuth endpoint
-    window.location.href = "/api/paypal/oauth";
   };
 
   return (
@@ -137,25 +104,29 @@ function OnboardingForm({ onComplete }) {
           </Text>
         )}
 
-        {/* Step #1 => if we do have PayPal email, show it; otherwise user can click Connect */}
-        {currentStepData.inputType === "paypal" && paypalEmail && (
-          <Text type="medium" role="white" className="text-center mt-4">
-            Verified PayPal: {paypalEmail}
-          </Text>
-        )}
-
-        {/* Step #2 => name input */}
-        {currentStepData.inputType === "text" && (
+        {/* Step #1 => user manually enters email */}
+        {currentStepData.inputType === "paypal" && (
           <input
-            type="text"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="Your Name"
+            type="email"
+            placeholder="Your Email"
+            value={paypalEmail}
+            onChange={(e) => setPaypalEmail(e.target.value)}
             className="bg-transparent border-none outline-none w-full text-center text-white mt-4 text-2xl"
           />
         )}
 
-        {/* Step #3 => profile photo */}
+        {/* Step #2 => name */}
+        {currentStepData.inputType === "text" && (
+          <input
+            type="text"
+            placeholder="Your Name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            className="bg-transparent border-none outline-none w-full text-center text-white mt-4 text-2xl"
+          />
+        )}
+
+        {/* Step #3 => photo */}
         {currentStepData.inputType === "photo" && (
           <div
             className="flex items-center justify-center mt-4 relative cursor-pointer"
@@ -200,7 +171,7 @@ function OnboardingForm({ onComplete }) {
         )}
       </div>
 
-      {/* The bottom button => “Connect PayPal,” “Next,” or “Complete” */}
+      {/* Bottom Button => "Next" or "Complete" */}
       <div className="w-full max-w-md px-4">
         <button
           onClick={handleBottomButton}
