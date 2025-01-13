@@ -180,7 +180,7 @@ function Home() {
   // if user taps card => either edit or save
   const handleCardTap = () => {
     if (!localUser.id) {
-      // show minimal "onboarding" to get user’s PayPal email or name
+      // show minimal "onboarding"
       setPostOnboardingAction("COUPON_TAP");
       setShowOnboardingForm(true);
       return;
@@ -217,7 +217,7 @@ function Home() {
   const handleOnboardingComplete = async (userData) => {
     console.log("[Home] => handleOnboardingComplete => userData =>", userData);
     try {
-      // Upsert by paypal_email
+      // Upsert by email
       const user = await upsertUser({
         paypal_email: userData.paypalEmail,
         name: userData.name,
@@ -232,8 +232,8 @@ function Home() {
       });
       setShowOnboardingForm(false);
 
-      // If no deal => new user => open CardForm
       if (!dealFound) {
+        // new user => open CardForm
         setCardData((prev) => ({
           ...prev,
           creatorId: user.id,
@@ -375,7 +375,7 @@ function Home() {
             setShowPayment(false);
             setShowSaveSheet(true);
           }}
-          dealData={{ ...cardData, creatorPayPalEmail: fetchedDeal?.creatorPayPalEmail }}
+          dealData={{ ...cardData }}
         />
       )}
 

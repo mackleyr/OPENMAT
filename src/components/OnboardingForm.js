@@ -55,11 +55,11 @@ function OnboardingForm({ onComplete }) {
   // Validation per step
   const isValid = () => {
     if (currentStepData.inputType === "paypal") {
-      // NOW we require user to type an email
-      return paypalEmail.trim().length > 4; // or any minimal check
+      // Must type an email to proceed
+      return paypalEmail.trim().length > 4;
     }
     if (currentStepData.inputType === "text") {
-      return name.trim().length >= 2; 
+      return name.trim().length >= 2;
     }
     if (currentStepData.inputType === "photo") {
       return !!profilePhoto;
@@ -75,7 +75,7 @@ function OnboardingForm({ onComplete }) {
 
   // The main click
   const handleBottomButton = () => {
-    // If not on the last step => go next
+    // Not last step => go next
     if (currentStep < steps.length) {
       setCurrentStep(currentStep + 1);
       return;
@@ -104,7 +104,7 @@ function OnboardingForm({ onComplete }) {
           </Text>
         )}
 
-        {/* Step #1 => user manually enters email */}
+        {/* Step #1 => user enters email */}
         {currentStepData.inputType === "paypal" && (
           <input
             type="email"
