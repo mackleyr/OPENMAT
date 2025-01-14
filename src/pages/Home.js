@@ -1,3 +1,4 @@
+// src/pages/Home.jsx
 import React, { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
 
@@ -138,27 +139,22 @@ function Home() {
   };
 
   /* ------------------------------------------------------------------
-   *  6) Tapping the Card => updated logic
-   * ------------------------------------------------------------------
-   *   - If NO deal => open CardForm for new deal.
-   *   - If deal => check if user is creator:
-   *       - If yes => open CardForm to edit
-   *       - If no => if deal_value>0 => Payment => SaveSheet else => SaveSheet
-   */
+   *  Tapping the Card
+   * ------------------------------------------------------------------ */
   const handleCardTap = () => {
     withOnboardCheck(() => {
-      // If no deal in cardData => open a new card form
+      // If no deal => open CardForm for new
       if (!cardData.id) {
         setShowCardForm(true);
         return;
       }
 
-      // If deal present => check creator
+      // If deal => is the user the creator?
       const isCreator = cardData.creatorId === localUser.id;
       if (isCreator) {
         openCardForm();
       } else {
-        // if not the creator => check value
+        // Not creator => Payment => SaveSheet if value>0, else SaveSheet
         if (parseFloat(cardData.value) > 0) {
           setShowPayment(true);
         } else {
@@ -177,7 +173,7 @@ function Home() {
     setShowCardForm(true);
   };
 
-  // The "+" button => just open card form
+  // The "+" button => open card form
   const handleOpenCardForm = () => {
     withOnboardCheck(() => {
       openCardForm();
@@ -195,7 +191,7 @@ function Home() {
     });
   };
 
-  // Finalize => log "grabbed gift card"
+  // finalize => log "grabbed gift card"
   const finalizeSave = async () => {
     if (!cardData.id || !localUser.id) return;
     try {
@@ -218,7 +214,25 @@ function Home() {
 
   // after user saves/updates card in CardForm
   const handleSaveCard = async (formData) => {
-    // Update CardContext
+    // 1) Upsert the user with new changes
+    try {
+      const updatedUser = await upsertUser({
+        paypal_email: formData.userPayPalEmail,
+        name: formData.userName,
+        profile_image_url: formData.userProfilePhoto,
+      });
+      setLocalUser({
+        id: updatedUser.id,
+        paypalEmail: updatedUser.paypal_email,
+        name: updatedUser.name || "",
+        profilePhoto: updatedUser.profile_image_url || "",
+      });
+    } catch (err) {
+      console.error("[Home] => handleSaveCard => UpsertUser => error =>", err);
+      alert("Error updating your user data.");
+    }
+
+    // 2) Update CardContext with the deal fields
     setCardData((prev) => ({
       ...prev,
       id: formData.id,
@@ -227,17 +241,19 @@ function Home() {
       value: formData.dealValue,
       title: formData.dealTitle,
       description: formData.dealDescription,
-      name: formData.name,
-      profilePhoto: formData.profilePhoto,
+      name: formData.userName,
+      profilePhoto: formData.userProfilePhoto,
       share_link: formData.share_link || prev.share_link,
     }));
 
+    // close form
     setShowCardForm(false);
-    // Re-fetch from the DB (new or updated deal)
+
+    // re-fetch from DB
     await fetchDeal({ dealId: formData.id });
   };
 
-  // tapping user’s profile => open profile sheet
+  // tapping user’s profile
   const handleProfileClick = () => {
     withOnboardCheck(() => {
       setShowProfileSheet(true);
@@ -274,9 +290,10 @@ function Home() {
           <ActivityLog dealId={cardData.id} />
         </div>
       </div>
+
       <Footer />
 
-      {/* Floating + Button => Open card form */}
+      {/* Floating + Button => open card form */}
       <AddButton onOpenCardForm={handleOpenCardForm} />
 
       {/* Overlays */}
@@ -291,7 +308,12 @@ function Home() {
           <CardForm
             onClose={() => setShowCardForm(false)}
             onSave={handleSaveCard}
-            cardData={cardData}
+            cardData={{
+              ...cardData,
+              userPayPalEmail: localUser.paypalEmail,
+              userName: localUser.name,
+              userProfilePhoto: localUser.profilePhoto,
+            }}
           />
         </div>
       )}
