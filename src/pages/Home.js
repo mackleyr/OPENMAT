@@ -17,7 +17,7 @@ import OnboardingForm from "../components/OnboardingForm";
 import ProfileSheet from "../components/ProfileSheet";
 import SaveSheet from "../components/SaveSheet";
 import Payment from "../components/Payment";
-import "../index.css"; // Important for your Tailwind or other global styles
+import "../index.css";
 
 import { supabase } from "../supabaseClient";
 import { upsertUser } from "../services/usersService";
@@ -27,7 +27,7 @@ function Home() {
   const { localUser, setLocalUser } = useLocalUser();
   const { addActivity, fetchDealActivities } = useActivity();
 
-  // Route params for /share/<creatorName>/<dealId>
+  // Read possible /share/<creatorName>/<dealId> from the URL
   const { creatorName, dealId } = useParams();
 
   // Overlays
@@ -37,7 +37,7 @@ function Home() {
   const [showProfileSheet, setShowProfileSheet] = useState(false);
   const [showPayment, setShowPayment] = useState(false);
 
-  // We'll store a callback if user must onboard first
+  // If we must onboard first, store the callback
   const [pendingAction, setPendingAction] = useState(null);
 
   // Deal states
@@ -46,9 +46,9 @@ function Home() {
   const [fetchedDeal, setFetchedDeal] = useState(null);
   const [currentDealId, setCurrentDealId] = useState(null);
 
-  /* ---------------------------------------------------------
-   *  1) Fetch Deal from share_link if /share/<creatorName>/<dealId>
-   * --------------------------------------------------------- */
+  /* ------------------------------------------------------------------
+   *  1) fetchDeal => get row by share_link
+   * ------------------------------------------------------------------ */
   const fetchDeal = async (shareLink) => {
     try {
       const { data: dealRow, error } = await supabase
@@ -95,9 +95,9 @@ function Home() {
     }
   };
 
-  /* ---------------------------------------------------------
-   *  2) If we already know deal ID => refetch (after create/update)
-   * --------------------------------------------------------- */
+  /* ------------------------------------------------------------------
+   *  2) refetchDealById => if we know a deal ID (post-create/update)
+   * ------------------------------------------------------------------ */
   const refetchDealById = useCallback(async (idArg) => {
     if (!idArg) return;
     try {
@@ -142,9 +142,9 @@ function Home() {
     }
   }, []);
 
-  /* ---------------------------------------------------------
-   *  3) On mount => if we have /share/<creatorName>/<dealId>
-   * --------------------------------------------------------- */
+  /* ------------------------------------------------------------------
+   *  3) on mount => if /share/<creatorName>/<dealId>, fetch
+   * ------------------------------------------------------------------ */
   useEffect(() => {
     if (!creatorName || !dealId) {
       setLoading(false);
@@ -156,15 +156,13 @@ function Home() {
     fetchDeal(shareURL);
   }, [creatorName, dealId]);
 
-  /* ---------------------------------------------------------
-   *  4) Once we have fetchedDeal => store in CardContext
-   * --------------------------------------------------------- */
+  // once we have fetchedDeal => store in CardContext
   useEffect(() => {
     if (!fetchedDeal) {
       setCurrentDealId(null);
       return;
     }
-    if (cardData.id === fetchedDeal.id) return; // skip re-setting if same
+    if (cardData.id === fetchedDeal.id) return; // skip if same
     setCardData((prev) => ({
       ...prev,
       id: fetchedDeal.id,
@@ -180,17 +178,16 @@ function Home() {
     setCurrentDealId(fetchedDeal.id);
   }, [fetchedDeal, cardData.id, setCardData]);
 
-  // Once we have currentDealId => fetch activities
+  // once we have currentDealId => fetch activities
   useEffect(() => {
     if (currentDealId) {
       fetchDealActivities(currentDealId);
     }
   }, [currentDealId, fetchDealActivities]);
 
-  /* ---------------------------------------------------------
-   *  5) "withOnboardCheck" => if not onboard => show form;
-   *      else run the callback
-   * --------------------------------------------------------- */
+  /* ------------------------------------------------------------------
+   *  4) withOnboardCheck => if !localUser.id => onboard
+   * ------------------------------------------------------------------ */
   const withOnboardCheck = (actionFn) => {
     if (!localUser.id) {
       setPendingAction(() => actionFn);
@@ -200,12 +197,13 @@ function Home() {
     }
   };
 
-  /* ---------------------------------------------------------
-   *  6) Onboarding complete => store user => run pendingAction if any
-   * --------------------------------------------------------- */
+  /* ------------------------------------------------------------------
+   *  5) after onboarding => upsert user => run pendingAction
+   * ------------------------------------------------------------------ */
   const handleOnboardingComplete = async (userData) => {
     console.log("[Home] => handleOnboardingComplete => userData =>", userData);
     try {
+      // Upsert by email
       const user = await upsertUser({
         paypal_email: userData.paypalEmail,
         name: userData.name,
@@ -226,7 +224,7 @@ function Home() {
         return;
       }
 
-      // If new user & no deal => open CardForm
+      // if brand new user => no deal => open card form
       if (!dealFound) {
         setCardData((prev) => ({
           ...prev,
@@ -237,23 +235,20 @@ function Home() {
         setShowCardForm(true);
         return;
       }
-
-      // If there's a deal => do nothing extra
+      // if there's a deal => do nothing special
     } catch (err) {
       console.error("[Home] => handleOnboardingComplete => error =>", err);
       alert("Error onboarding user.");
     }
   };
 
-  /* ---------------------------------------------------------
-   *  7) Action Handlers: CardTap, AddButton, Grab, etc.
-   * --------------------------------------------------------- */
+  /* ------------------------------------------------------------------
+   *  6) user interactions => card tap, add button, "grab" button, etc.
+   * ------------------------------------------------------------------ */
 
   // (A) Tapping the Card
   const handleCardTap = () => {
     withOnboardCheck(() => {
-      // If a deal & user is the creator => open CardForm
-      // else => SaveSheet
       if (dealFound && cardData.creatorId === localUser.id) {
         openCardForm();
       } else {
@@ -263,7 +258,7 @@ function Home() {
   };
 
   const openCardForm = () => {
-    // If there's an existing deal & user is NOT the creator => block
+    // if there's an existing deal & user is NOT the creator => block
     if (dealFound && cardData.creatorId !== localUser.id) {
       alert("You cannot edit a deal you didn't create.");
       return;
@@ -271,10 +266,9 @@ function Home() {
     setShowCardForm(true);
   };
 
-  // (B) The "+" Add Button
+  // (B) The "+" button
   const handleOpenCardForm = () => {
     withOnboardCheck(() => {
-      // If user wants to create a fresh deal or edit if no deal
       openCardForm();
     });
   };
@@ -290,7 +284,7 @@ function Home() {
     });
   };
 
-  // Called after the user closes SaveSheet => logs "grabbed gift card"
+  // finalize => logs "grabbed gift card"
   const finalizeSave = async () => {
     if (!cardData.id || !localUser.id) return;
     try {
@@ -311,7 +305,7 @@ function Home() {
     }
   };
 
-  // After user saves/updates card in CardForm
+  // after user saves/updates card in CardForm
   const handleSaveCard = async (formData) => {
     setCardData((prev) => ({
       ...prev,
@@ -330,16 +324,18 @@ function Home() {
     await refetchDealById(formData.id);
   };
 
-  // Tapping the user’s avatar
+  // tapping user’s profile
   const handleProfileClick = () => {
     withOnboardCheck(() => {
       setShowProfileSheet(true);
     });
   };
 
-  /* ---------------------------------------------------------
-   *  8) Rendering & UI
-   * --------------------------------------------------------- */
+  /* ------------------------------------------------------------------
+   *  7) Rendering
+   * ------------------------------------------------------------------ */
+
+  // If loading => black background
   if (loading) {
     return (
       <div className="min-h-screen flex flex-col bg-black">
@@ -347,6 +343,7 @@ function Home() {
       </div>
     );
   }
+  // If a share link was used but no deal found => black background
   if (creatorName && dealId && !dealFound) {
     return (
       <div className="min-h-screen flex flex-col bg-black">
@@ -356,23 +353,26 @@ function Home() {
   }
 
   return (
-    <MainContainer>
-      {/* Outer container with your usual flex layout & black background */}
-      <div className="flex flex-col h-full bg-black text-white">
-        <div className="flex-1 flex flex-col px-4 py-4 items-center overflow-hidden">
-          <Card onCardTap={handleCardTap} onProfileClick={handleProfileClick} />
-          <div className="w-full max-w-[768px] flex flex-col mt-4 h-full">
-            {/* “Buttons” component => “onSave” might be renamed “onGrab,” etc. */}
-            <Buttons onSave={handleSave} />
-            <ActivityLog dealId={cardData.id || currentDealId} />
-          </div>
+    // <MainContainer> for white background, etc.
+    <MainContainer className="relative w-full h-full flex flex-col items-center bg-white text-black">
+      {/* Some folks wrap a black outer <div> if you want the device frame black. 
+          But if everything is in MainContainer, you can skip that. */}
+
+      <div className="flex-1 flex flex-col px-4 py-4 items-center w-full max-w-[768px] overflow-hidden">
+        <Card onCardTap={handleCardTap} onProfileClick={handleProfileClick} />
+
+        <div className="w-full mt-4 h-full flex flex-col">
+          <Buttons onSave={handleSave} />
+          <ActivityLog dealId={cardData.id || currentDealId} />
         </div>
-        <Footer />
       </div>
+
+      <Footer />
 
       {/* Floating + Button => open card form */}
       <AddButton onOpenCardForm={handleOpenCardForm} />
 
+      {/* Overlays, all nested in MainContainer */}
       {showOnboardingForm && (
         <div className="absolute inset-0 z-50 bg-white">
           <OnboardingForm onComplete={handleOnboardingComplete} />
