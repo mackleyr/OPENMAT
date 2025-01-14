@@ -1,11 +1,16 @@
-// src/pages/Home.jsx
-
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
+
+// Contexts
 import { useCard } from "../contexts/CardContext";
 import { useLocalUser } from "../contexts/LocalUserContext";
 import { useActivity } from "../contexts/ActivityContext";
 
+// Hooks & Services
+import { useFetchDeal } from "../hooks/useFetchDeal";
+import { upsertUser } from "../services/usersService";
+
+// Components
 import MainContainer from "../components/MainContainer";
 import Footer from "../components/Footer";
 import Card from "../components/Card";
@@ -19,40 +24,41 @@ import SaveSheet from "../components/SaveSheet";
 import Payment from "../components/Payment";
 import "../index.css";
 
-import { upsertUser } from "../services/usersService";
-import { useFetchDeal } from "../hooks/useFetchDeal";
-
 function Home() {
   const { cardData, setCardData } = useCard();
   const { localUser, setLocalUser } = useLocalUser();
   const { addActivity, fetchDealActivities } = useActivity();
 
-  // Read possible /share/<creatorName>/<dealId> from the URL
   const { creatorName, dealId } = useParams();
 
-  // Overlays
+  // Overlay states
   const [showOnboardingForm, setShowOnboardingForm] = useState(false);
   const [showCardForm, setShowCardForm] = useState(false);
   const [showSaveSheet, setShowSaveSheet] = useState(false);
   const [showProfileSheet, setShowProfileSheet] = useState(false);
   const [showPayment, setShowPayment] = useState(false);
 
-  // If we must onboard first, store the callback
+  // If we must onboard first, store a "pending action"
   const [pendingAction, setPendingAction] = useState(null);
 
-  // Use our custom hook to fetch either by shareLink or by ID
+  // Build share URL if we got /share/<creatorName>/<dealId>
   const baseUrl = process.env.REACT_APP_DOMAIN || window.location.origin;
-  const shareURL =
-    creatorName && dealId ? `${baseUrl}/share/${creatorName}/${dealId}` : null;
+  const shareURL = creatorName && dealId
+    ? `${baseUrl}/share/${creatorName}/${dealId}`
+    : null;
 
-  const { deal: fetchedDeal, loading, error, fetchDeal } = useFetchDeal({
-    initialShareLink: shareURL,
-  });
+  // 1) Use our custom hook to load a deal
+  const {
+    deal: fetchedDeal,
+    loading,
+    error,
+    fetchDeal,
+  } = useFetchDeal({ initialShareLink: shareURL });
 
-  // Once we have a fetchedDeal => store in CardContext; also fetch activities
+  // 2) Store new fetchedDeal in CardContext & fetch activities
   useEffect(() => {
     if (fetchedDeal) {
-      // If the card context has the same ID, skip updates
+      // Skip if cardData is already the same deal
       if (cardData.id === fetchedDeal.id) return;
 
       setCardData((prev) => ({
@@ -70,7 +76,7 @@ function Home() {
 
       fetchDealActivities(fetchedDeal.id);
     } else {
-      // If no fetchedDeal, clear context or do nothing
+      // If no fetchedDeal, optionally reset our CardContext
       setCardData((prev) => ({
         ...prev,
         id: null,
@@ -83,7 +89,7 @@ function Home() {
   }, [fetchedDeal, cardData.id, setCardData, fetchDealActivities]);
 
   /* ------------------------------------------------------------------
-   *  withOnboardCheck => if !localUser.id => onboard
+   *  Onboarding Flow => withOnboardCheck
    * ------------------------------------------------------------------ */
   const withOnboardCheck = (actionFn) => {
     if (!localUser.id) {
@@ -94,9 +100,6 @@ function Home() {
     }
   };
 
-  /* ------------------------------------------------------------------
-   *  after onboarding => upsert user => run pendingAction
-   * ------------------------------------------------------------------ */
   const handleOnboardingComplete = async (userData) => {
     try {
       const user = await upsertUser({
@@ -104,7 +107,6 @@ function Home() {
         name: userData.name,
         profile_image_url: userData.profilePhoto,
       });
-
       setLocalUser({
         id: user.id,
         paypalEmail: user.paypal_email,
@@ -119,8 +121,7 @@ function Home() {
         return;
       }
 
-      // If brand new user => no deal => open card form
-      // (since there's no fetchedDeal or error at this point)
+      // If brand new user => open the CardForm only if there's no fetchedDeal
       if (!fetchedDeal && !error) {
         setCardData((prev) => ({
           ...prev,
@@ -130,7 +131,6 @@ function Home() {
         }));
         setShowCardForm(true);
       }
-      // Else, do nothing
     } catch (err) {
       console.error("[Home] => handleOnboardingComplete => error =>", err);
       alert("Error onboarding user.");
@@ -138,37 +138,53 @@ function Home() {
   };
 
   /* ------------------------------------------------------------------
-   *  user interactions => card tap, add button, "grab" button, etc.
-   * ------------------------------------------------------------------ */
-
-  // (A) Tapping the Card
+   *  6) Tapping the Card => updated logic
+   * ------------------------------------------------------------------
+   *   - If NO deal => open CardForm for new deal.
+   *   - If deal => check if user is creator:
+   *       - If yes => open CardForm to edit
+   *       - If no => if deal_value>0 => Payment => SaveSheet else => SaveSheet
+   */
   const handleCardTap = () => {
     withOnboardCheck(() => {
-      if (fetchedDeal && fetchedDeal.creatorId === localUser.id) {
+      // If no deal in cardData => open a new card form
+      if (!cardData.id) {
+        setShowCardForm(true);
+        return;
+      }
+
+      // If deal present => check creator
+      const isCreator = cardData.creatorId === localUser.id;
+      if (isCreator) {
         openCardForm();
       } else {
-        setShowSaveSheet(true);
+        // if not the creator => check value
+        if (parseFloat(cardData.value) > 0) {
+          setShowPayment(true);
+        } else {
+          setShowSaveSheet(true);
+        }
       }
     });
   };
 
   const openCardForm = () => {
-    // if there's an existing deal & user is NOT the creator => block
-    if (fetchedDeal && fetchedDeal.creatorId !== localUser.id) {
+    // If there's a deal & user is NOT the creator => block editing
+    if (cardData.id && cardData.creatorId !== localUser.id) {
       alert("You cannot edit a deal you didn't create.");
       return;
     }
     setShowCardForm(true);
   };
 
-  // (B) The "+" button
+  // The "+" button => just open card form
   const handleOpenCardForm = () => {
     withOnboardCheck(() => {
       openCardForm();
     });
   };
 
-  // (C) "Grab" => if cost>0 => Payment, else => SaveSheet
+  // "Grab" => if cost>0 => Payment, else => SaveSheet
   const handleSave = () => {
     withOnboardCheck(() => {
       if (parseFloat(cardData.value) > 0 && cardData.creatorId !== localUser.id) {
@@ -179,7 +195,7 @@ function Home() {
     });
   };
 
-  // finalize => logs "grabbed gift card"
+  // Finalize => log "grabbed gift card"
   const finalizeSave = async () => {
     if (!cardData.id || !localUser.id) return;
     try {
@@ -217,11 +233,11 @@ function Home() {
     }));
 
     setShowCardForm(false);
-    // Re-fetch from the DB (now we have a new or updated deal)
+    // Re-fetch from the DB (new or updated deal)
     await fetchDeal({ dealId: formData.id });
   };
 
-  // tapping user’s profile
+  // tapping user’s profile => open profile sheet
   const handleProfileClick = () => {
     withOnboardCheck(() => {
       setShowProfileSheet(true);
@@ -231,8 +247,6 @@ function Home() {
   /* ------------------------------------------------------------------
    *  Render
    * ------------------------------------------------------------------ */
-
-  // If loading => black background
   if (loading) {
     return (
       <div className="min-h-screen flex flex-col bg-black">
@@ -241,7 +255,7 @@ function Home() {
     );
   }
 
-  // If we had a share link but got an error or no deal => show "Deal not found"
+  // If we tried to load a share link & got an error or no deal => "Deal not found"
   const triedToLoadShareLink = creatorName && dealId;
   if (triedToLoadShareLink && (!fetchedDeal || error)) {
     return (
@@ -255,16 +269,14 @@ function Home() {
     <MainContainer className="relative w-full h-full flex flex-col items-center bg-white text-black">
       <div className="flex-1 flex flex-col px-4 py-4 items-center w-full max-w-[768px] overflow-hidden">
         <Card onCardTap={handleCardTap} onProfileClick={handleProfileClick} />
-
         <div className="w-full mt-4 h-full flex flex-col">
           <Buttons onSave={handleSave} />
           <ActivityLog dealId={cardData.id} />
         </div>
       </div>
-
       <Footer />
 
-      {/* Floating + Button => open card form */}
+      {/* Floating + Button => Open card form */}
       <AddButton onOpenCardForm={handleOpenCardForm} />
 
       {/* Overlays */}

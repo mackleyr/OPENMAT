@@ -1,4 +1,3 @@
-// src/components/CardForm.jsx
 import React, { useState } from "react";
 import Card from "./Card";
 import Text from "../config/Text";
@@ -15,6 +14,7 @@ function CardForm({ onClose, onSave, cardData }) {
     name: cardData.name ?? "",
     profilePhoto: cardData.profilePhoto ?? "",
     localUserId: cardData.creatorId ?? null,
+    dealDescription: cardData.description ?? "",
   });
 
   const { addActivity } = useActivity();
@@ -24,6 +24,9 @@ function CardForm({ onClose, onSave, cardData }) {
     setFormState((prev) => ({ ...prev, dealValue: e.target.value }));
   const handleTitleChange = (e) =>
     setFormState((prev) => ({ ...prev, dealTitle: e.target.value }));
+  const handleDescriptionChange = (e) =>
+    setFormState((prev) => ({ ...prev, dealDescription: e.target.value }));
+
   const handleImageUpload = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -46,6 +49,7 @@ function CardForm({ onClose, onSave, cardData }) {
         background: formState.dealImage,
         deal_value: parseFloat(formState.dealValue) || 0,
         creatorName: formState.name,
+        description: formState.dealDescription,
       };
 
       let dealResult;
@@ -56,6 +60,7 @@ function CardForm({ onClose, onSave, cardData }) {
           title: dealPayload.title,
           background: dealPayload.background,
           deal_value: dealPayload.deal_value,
+          description: dealPayload.description,
         });
         await addActivity({
           userId: formState.localUserId,
@@ -78,7 +83,6 @@ function CardForm({ onClose, onSave, cardData }) {
         id: dealResult.id,
         share_link: dealResult.share_link,
       });
-      onClose?.();
     } catch (err) {
       console.error("[CardForm]: Error =>", err);
       alert("Error creating/updating deal.");
@@ -92,6 +96,7 @@ function CardForm({ onClose, onSave, cardData }) {
     image: formState.dealImage,
     name: formState.name,
     profilePhoto: formState.profilePhoto,
+    description: formState.dealDescription,
   };
 
   return (
@@ -99,10 +104,11 @@ function CardForm({ onClose, onSave, cardData }) {
       {/* Preview */}
       <div className="flex flex-col w-full flex-grow items-start">
         <Card isInForm={true} cardData={previewCardData} />
+
         <div className="flex flex-col bg-white rounded-lg overflow-hidden px-4 w-full max-w-lg mt-4">
           <div className="flex justify-between items-center mb-4 border-b border-gray-300 pb-4">
             <Text type="large" role="primary" className="text-left">
-              Create or Update
+              {formState.id ? "Update Deal" : "Create Deal"}
             </Text>
           </div>
 
@@ -130,6 +136,15 @@ function CardForm({ onClose, onSave, cardData }) {
               className="border border-gray-300 rounded-md px-2 py-1 text-black focus:ring-1 focus:outline-none"
             />
 
+            <Text type="medium" role="tertiary">Description</Text>
+            <input
+              type="text"
+              placeholder="Describe your gift card"
+              value={formState.dealDescription}
+              onChange={handleDescriptionChange}
+              className="border border-gray-300 rounded-md px-2 py-1 text-black focus:ring-1 focus:outline-none"
+            />
+
             <Text type="medium" role="tertiary">Image</Text>
             <input
               type="file"
@@ -150,6 +165,16 @@ function CardForm({ onClose, onSave, cardData }) {
           style={{ padding: "1rem", fontSize: "1.25rem", textAlign: "center" }}
         >
           Complete
+        </Button>
+
+        {/* Optional Close Button */}
+        <Button
+          onClick={onClose}
+          type="tertiary"
+          className="w-full rounded-full font-semibold transition-all mt-2"
+          style={{ padding: "1rem", fontSize: "1.25rem", textAlign: "center" }}
+        >
+          Cancel
         </Button>
       </div>
     </div>
