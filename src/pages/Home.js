@@ -1,10 +1,9 @@
-// src/pages/Home.jsx
-
 import React, { useState, useEffect, useCallback } from "react";
 import { useParams } from "react-router-dom";
 import { useCard } from "../contexts/CardContext";
 import { useLocalUser } from "../contexts/LocalUserContext";
 import { useActivity } from "../contexts/ActivityContext";
+
 import MainContainer from "../components/MainContainer";
 import Footer from "../components/Footer";
 import Card from "../components/Card";
@@ -16,17 +15,37 @@ import OnboardingForm from "../components/OnboardingForm";
 import ProfileSheet from "../components/ProfileSheet";
 import SaveSheet from "../components/SaveSheet";
 import Payment from "../components/Payment";
-import "../index.css";
 
 import { supabase } from "../supabaseClient";
 import { upsertUser } from "../services/usersService";
 
+/**
+ * Rules Recap:
+ *
+ * 1. Card Tap
+ *    - If no deal => after onboarding => CardForm
+ *    - If deal => after onboarding => SaveSheet
+ *
+ * 2. Add Button
+ *    - If no deal => after onboarding => CardForm
+ *    - If deal => after onboarding => CardForm (user wants to create/edit anyway)
+ *
+ * 3. Copy Link
+ *    - If deal => copy immediately (no onboard needed)
+ *    - If no deal => button is disabled
+ *
+ * 4. Grab
+ *    - If no deal => button is disabled
+ *    - If deal => if localUser is creator => can't grab
+ *               => if localUser is not creator => after onboarding => Payment if value>0 else SaveSheet
+ *
+ * 5. If user tries to edit but not the creator => blocked
+ */
 function Home() {
   const { cardData, setCardData } = useCard();
   const { localUser, setLocalUser } = useLocalUser();
   const { addActivity, fetchDealActivities } = useActivity();
 
-  // Route params see if the user visited link
   const { creatorName, dealId } = useParams();
 
   // Overlays
@@ -36,7 +55,7 @@ function Home() {
   const [showProfileSheet, setShowProfileSheet] = useState(false);
   const [showPayment, setShowPayment] = useState(false);
 
-  // Overlay callback
+  // We store a callback in state if user must onboard first.
   const [pendingAction, setPendingAction] = useState(null);
 
   // Deal states
@@ -45,9 +64,9 @@ function Home() {
   const [fetchedDeal, setFetchedDeal] = useState(null);
   const [currentDealId, setCurrentDealId] = useState(null);
 
-  // ----------------------------------------------------------------
-  // 1) Fetch a deal from the share_link ("https://www.and.deals/share/name/id")
-  // ----------------------------------------------------------------
+  /* ------------------------------------------------------------------
+   *  1) Fetch Deal from share_link, if we have /share/<creatorName>/<dealId>
+   * ------------------------------------------------------------------ */
   const fetchDeal = async (shareLink) => {
     try {
       const { data: dealRow, error } = await supabase
@@ -94,9 +113,7 @@ function Home() {
     }
   };
 
-  // ----------------------------------------------------------------
-  // 2) If we already know the deal ID => refetch (e.g. after create/update)
-  // ----------------------------------------------------------------
+  // If we know the deal ID => refetch by ID (used after creating/updating)
   const refetchDealById = useCallback(async (idArg) => {
     if (!idArg) return;
     try {
@@ -141,9 +158,7 @@ function Home() {
     }
   }, []);
 
-  // ----------------------------------------------------------------
-  // 3) On mount => if route is /share/<creatorName>/<dealId>, fetch the deal
-  // ----------------------------------------------------------------
+  // On mount => if we have a share link => fetch
   useEffect(() => {
     if (!creatorName || !dealId) {
       setLoading(false);
@@ -177,35 +192,34 @@ function Home() {
     setCurrentDealId(fetchedDeal.id);
   }, [fetchedDeal, cardData.id, setCardData]);
 
-  // Once we have currentDealId => fetch activities
+  // fetch activities once we have currentDealId
   useEffect(() => {
     if (currentDealId) {
       fetchDealActivities(currentDealId);
     }
   }, [currentDealId, fetchDealActivities]);
 
-  // ----------------------------------------------------------------
-  // 4) "withOnboardCheck": a unified helper
-  // If user not onboarded, we store the callback & show form.
-  // If user is onboarded, we run the callback right away.
-  // ----------------------------------------------------------------
+  /* ------------------------------------------------------------------
+   *  2) "withOnboardCheck" => if user is not onboarded => show Onboarding
+   *      otherwise => run the callback
+   * ------------------------------------------------------------------ */
   const withOnboardCheck = (actionFn) => {
     if (!localUser.id) {
-      setPendingAction(() => actionFn); // store the callback
+      // store callback for after onboarding
+      setPendingAction(() => actionFn);
       setShowOnboardingForm(true);
     } else {
       actionFn();
     }
   };
 
-  // ----------------------------------------------------------------
-  // 5) Onboarding complete => store user => then if we have pendingAction => run it
-  // If there's no pendingAction, we do the "first-time user" logic
-  // ----------------------------------------------------------------
+  /* ------------------------------------------------------------------
+   *  3) Onboarding complete => upsert user => if pendingAction => run it
+   *      else if no deal => open CardForm automatically
+   * ------------------------------------------------------------------ */
   const handleOnboardingComplete = async (userData) => {
     console.log("[Home] => handleOnboardingComplete => userData =>", userData);
     try {
-      // Upsert by email
       const user = await upsertUser({
         paypal_email: userData.paypalEmail,
         name: userData.name,
@@ -220,16 +234,15 @@ function Home() {
       });
       setShowOnboardingForm(false);
 
-      // If we have a pending callback => run it
       if (typeof pendingAction === "function") {
-        pendingAction(); // do the originally intended action
+        // run the pending action
+        pendingAction();
         setPendingAction(null);
         return;
       }
 
-      // Otherwise => maybe brand new user with no deal loaded
+      // If brand new user and no deal => open CardForm
       if (!dealFound) {
-        // new user => open CardForm right away
         setCardData((prev) => ({
           ...prev,
           creatorId: user.id,
@@ -240,57 +253,67 @@ function Home() {
         return;
       }
 
-      // If we do have a deal
-      // If I'm the creator => maybe open card form if this is a "COUPON_TAP" scenario
-      if (cardData.creatorId === user.id) {
-        console.log("User is the deal creator. (No pendingAction, so no direct callback.)");
-        // No direct action, but you could do something if you like
-      } else {
-        console.log("User is a visitor for an existing deal. (No pendingAction => do nothing.)");
-      }
+      // If there's an existing deal and I'm the creator => maybe do nothing
+      // If there's an existing deal and I'm not => also do nothing
     } catch (err) {
       console.error("[Home] => handleOnboardingComplete => error =>", err);
       alert("Error onboarding user.");
     }
   };
 
-  // ----------------------------------------------------------------
-  // 6) Card Taps => If I'm the creator => Edit form; else open SaveSheet
-  // But we unify the "onboard check" via withOnboardCheck
-  // ----------------------------------------------------------------
+  /* ------------------------------------------------------------------
+   *  4) Action Handlers (Card Tap, Add Button, Copy Link, Grab)
+   * ------------------------------------------------------------------ */
+
+  // (A) Card Tap
   const handleCardTap = () => {
     withOnboardCheck(() => {
-      // If user is onboarded => do the real card tap logic
-      if (dealFound && cardData.creatorId === localUser.id) {
-        openCardForm();
+      if (!dealFound) {
+        // No deal => create new
+        setShowCardForm(true);
       } else {
+        // If a deal => open SaveSheet
         setShowSaveSheet(true);
       }
     });
   };
 
-  const openCardForm = () => {
-    if (dealFound && cardData.creatorId !== localUser.id) {
-      alert("You cannot edit a deal you didn't create.");
-      return;
-    }
-    setShowCardForm(true);
-  };
-
-  // For the floating "+" button => we also use withOnboardCheck
-  const handleOpenCardForm = () => {
+  // (B) Add Button
+  const handleAddDeal = () => {
     withOnboardCheck(() => {
-      openCardForm();
+      // If no deal => new CardForm
+      // If a deal => also open CardForm (the user wants to create or edit a new one)
+      setShowCardForm(true);
     });
   };
 
-  // ----------------------------------------------------------------
-  // 7) "Grab" => triggers Payment if there's cost; else SaveSheet
-  // But again, unify with withOnboardCheck
-  // ----------------------------------------------------------------
-  const handleSave = () => {
+  // (C) Copy Link
+  const handleCopyLink = () => {
+    if (!dealFound) {
+      // No deal => button is disabled (UI side)
+      return;
+    }
+    // We DO NOT require onboard for link copying.
+    // So we just copy share_link
+    if (cardData.share_link) {
+      navigator.clipboard.writeText(cardData.share_link);
+      alert("Deal link copied!");
+    }
+  };
+
+  // (D) Grab
+  const handleGrab = () => {
+    // if no deal => button is disabled => do nothing
+    if (!dealFound) return;
+    // if user is the creator => can't grab
+    if (localUser.id && localUser.id === cardData.creatorId) {
+      alert("You can't grab your own deal.");
+      return;
+    }
+    // Otherwise => onboard => Payment if cost > 0, else SaveSheet
     withOnboardCheck(() => {
-      if (parseFloat(cardData.value) > 0 && cardData.creatorId !== localUser.id) {
+      const cost = parseFloat(cardData.value || "0");
+      if (cost > 0) {
         setShowPayment(true);
       } else {
         setShowSaveSheet(true);
@@ -298,11 +321,12 @@ function Home() {
     });
   };
 
-  // finalizeSave => logs "grabbed" activity (used after SaveSheet closes)
+  /* ------------------------------------------------------------------
+   *  5) finalizeSave => logs "grabbed" (only after SaveSheet)
+   * ------------------------------------------------------------------ */
   const finalizeSave = async () => {
     if (!cardData.id || !localUser.id) return;
     try {
-      // Ensure we have an up-to-date user in Supabase
       const freshUser = await upsertUser({
         paypal_email: localUser.paypalEmail,
         name: localUser.name,
@@ -320,8 +344,16 @@ function Home() {
     }
   };
 
-  // After user saves/updates card in CardForm
+  /* ------------------------------------------------------------------
+   *  6) Save/Update Card => after CardForm
+   * ------------------------------------------------------------------ */
   const handleSaveCard = async (formData) => {
+    // If user tries to edit but is not the creator => block
+    if (dealFound && cardData.creatorId && cardData.creatorId !== localUser.id) {
+      alert("You cannot edit a deal you didn't create.");
+      return;
+    }
+
     setCardData((prev) => ({
       ...prev,
       id: formData.id,
@@ -334,21 +366,21 @@ function Home() {
       profilePhoto: formData.profilePhoto,
       share_link: formData.share_link || prev.share_link,
     }));
-    setCurrentDealId(formData.id);
     setShowCardForm(false);
+    setCurrentDealId(formData.id);
     await refetchDealById(formData.id);
   };
 
-  // For tapping the user’s profile picture
+  // Profile avatar click => onboard => open ProfileSheet
   const handleProfileClick = () => {
     withOnboardCheck(() => {
       setShowProfileSheet(true);
     });
   };
 
-  // ----------------------------------------------------------------
-  // 8) Rendering
-  // ----------------------------------------------------------------
+  /* ------------------------------------------------------------------
+   *  7) Render
+   * ------------------------------------------------------------------ */
   if (loading) {
     return (
       <div className="min-h-screen flex flex-col bg-black">
@@ -356,7 +388,6 @@ function Home() {
       </div>
     );
   }
-
   if (creatorName && dealId && !dealFound) {
     return (
       <div className="min-h-screen flex flex-col bg-black">
@@ -369,40 +400,53 @@ function Home() {
     <MainContainer>
       <div className="flex flex-col h-full">
         <div className="flex-1 flex flex-col px-4 py-4 items-center overflow-hidden">
+          {/* Card => tapping it calls handleCardTap */}
           <Card onCardTap={handleCardTap} onProfileClick={handleProfileClick} />
           <div className="w-full max-w-[768px] flex flex-col mt-4 h-full">
-            <Buttons onSave={handleSave} />
+            {/* Buttons => has "onSave" that we rename to "onGrab" if you like */}
+            <Buttons
+              onSave={handleGrab}
+              onCopyLink={handleCopyLink} // if you have a "Copy Link" button
+            />
             <ActivityLog dealId={cardData.id || currentDealId} />
           </div>
         </div>
         <Footer />
       </div>
 
-      {/* Floating (+) Button => open card form */}
-      <AddButton onOpenCardForm={handleOpenCardForm} />
+      {/* Floating + Button => create/edit a new deal */}
+      <AddButton onOpenCardForm={handleAddDeal} />
 
+      {/* Onboarding form => shown if not localUser.id */}
       {showOnboardingForm && (
         <div className="absolute inset-0 z-50 bg-white">
           <OnboardingForm onComplete={handleOnboardingComplete} />
         </div>
       )}
 
+      {/* CardForm => for creating/updating deals */}
       {showCardForm && !showOnboardingForm && (
         <div className="absolute inset-0 z-50 bg-white">
-          <CardForm onClose={() => setShowCardForm(false)} onSave={handleSaveCard} cardData={cardData} />
+          <CardForm
+            onClose={() => setShowCardForm(false)}
+            onSave={handleSaveCard}
+            cardData={cardData}
+          />
         </div>
       )}
 
+      {/* Payment => if user is grabbing + cost > 0 */}
       {showPayment && !showOnboardingForm && (
         <Payment
           onClose={() => {
             setShowPayment(false);
             setShowSaveSheet(true);
           }}
-          dealData={{ ...cardData }}
+          dealData={cardData}
         />
       )}
 
+      {/* SaveSheet => for grabbing deals with cost=0, or post-payment */}
       {showSaveSheet && (
         <div className="absolute inset-0 z-50">
           <SaveSheet
@@ -415,6 +459,7 @@ function Home() {
         </div>
       )}
 
+      {/* ProfileSheet => if user taps their avatar */}
       {showProfileSheet && (
         <div className="absolute inset-0 z-50">
           <ProfileSheet onClose={() => setShowProfileSheet(false)} />
