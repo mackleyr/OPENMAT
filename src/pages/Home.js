@@ -22,6 +22,7 @@ import CardForm from "../components/CardForm";
 import ProfileSheet from "../components/ProfileSheet";
 import SaveSheet from "../components/SaveSheet";
 import Payment from "../components/Payment";
+import "../index.css";
 
 function Home() {
   const navigate = useNavigate();
@@ -34,7 +35,7 @@ function Home() {
   // URL path params => /share/<creatorName>/<dealId>
   const { creatorName, dealId } = useParams();
 
-  // Overlays
+  // Overlay states
   const [showCardForm, setShowCardForm] = useState(false);
   const [showSaveSheet, setShowSaveSheet] = useState(false);
   const [showProfileSheet, setShowProfileSheet] = useState(false);
@@ -90,15 +91,12 @@ function Home() {
 
   /* ------------------------------------------------------------------
    *  PayPal OAuth
-   *  - If the user is anonymous => we redirect to /api/paypal/oauth
-   *  - On return, we see ?paypal_email=...&name=..., upsert in Supabase,
-   *    store in localUser, then remove those query params.
    * ------------------------------------------------------------------ */
-  const initiatePayPalOAuth = () => {
+  const initiatePayPalAuth = () => {
     window.location.href = "/api/paypal/oauth";
   };
 
-  // On mount / page refresh, see if PayPal sent user info
+  // On mount, see if PayPal sent user info
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const paypalEmail = params.get("paypal_email");
@@ -135,7 +133,7 @@ function Home() {
    * ------------------------------------------------------------------ */
   const withPayPalAuthCheck = (actionFn) => {
     if (!localUser.id) {
-      initiatePayPalOAuth();
+      initiatePayPalAuth();
     } else {
       actionFn();
     }
@@ -165,7 +163,7 @@ function Home() {
     });
   };
 
-  // The "+" => create new
+  // The "+" => open card form
   const handleOpenCardForm = () => {
     withPayPalAuthCheck(() => {
       setShowCardForm(true);
@@ -186,16 +184,14 @@ function Home() {
     });
   };
 
-  // finalize => but note your Payment.jsx also logs "grabbed gift card"
-  // so you can decide if you want to keep or remove it here
+  // Called after user closes the SaveSheet
   const finalizeSave = async () => {
-    // Just show success if you want. Or optionally record “grabbed gift card” here
     alert("Gift card saved!");
   };
 
-  // after user saves/updates in CardForm
+  // After user saves/updates the card in CardForm
   const handleSaveCard = async (formData) => {
-    // 1) Upsert the user data with the new changes from the form
+    // 1) Upsert user data from the form
     try {
       const updatedUser = await upsertUser({
         paypal_email: formData.userPayPalEmail,
@@ -228,7 +224,7 @@ function Home() {
       share_link: formData.share_link || prev.share_link,
     }));
 
-    // 3) Close form and re-fetch from DB
+    // 3) Re-fetch from DB, then close the overlay
     setShowCardForm(false);
     if (formData.id) {
       await fetchDeal({ dealId: formData.id });
@@ -245,6 +241,7 @@ function Home() {
   /* ------------------------------------------------------------------
    *  Render
    * ------------------------------------------------------------------ */
+  // Loading state
   if (loading) {
     return (
       <div className="min-h-screen flex flex-col bg-black">
@@ -253,7 +250,7 @@ function Home() {
     );
   }
 
-  // If we tried to load a share link but no deal found => "Deal not found"
+  // If we tried to load a share link but got no deal => "Deal not found"
   const triedToLoadShareLink = creatorName && dealId;
   if (triedToLoadShareLink && (!fetchedDeal || error)) {
     return (
@@ -265,16 +262,20 @@ function Home() {
 
   return (
     <MainContainer className="relative w-full h-full flex flex-col items-center bg-white text-black">
-      <div className="flex-1 flex flex-col px-4 py-4 items-center w-full max-w-[768px]">
+      {/* Main content area */}
+      <div className="flex-1 flex flex-col px-4 py-4 items-center w-full max-w-[768px] overflow-hidden">
         <Card onCardTap={handleCardTap} onProfileClick={handleProfileClick} />
-        <div className="w-full mt-4 flex flex-col">
+
+        <div className="w-full mt-4 h-full flex flex-col">
           <Buttons onSave={handleSave} />
           <ActivityLog dealId={cardData.id} />
         </div>
       </div>
 
+      {/* Footer */}
       <Footer />
 
+      {/* Floating + Button */}
       <AddButton onOpenCardForm={handleOpenCardForm} />
 
       {/* Overlays */}
@@ -298,12 +299,11 @@ function Home() {
         <Payment
           onClose={() => {
             setShowPayment(false);
-            setShowSaveSheet(true); 
-            // or if you don't want to open SaveSheet automatically, remove this
+            setShowSaveSheet(true);
           }}
           dealData={{
             ...cardData,
-            // The Payment code references creatorPayPalEmail => we ensure it’s set:
+            // Payment might look for creatorPayPalEmail. If it's not set:
             creatorPayPalEmail: cardData?.creatorPayPalEmail || localUser.paypalEmail,
           }}
         />
