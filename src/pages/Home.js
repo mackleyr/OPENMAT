@@ -1,6 +1,6 @@
 // src/pages/Home.jsx
 import React, { useState, useEffect } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 
 // Contexts
 import { useCard } from "../contexts/CardContext";
@@ -19,36 +19,33 @@ import Buttons from "../components/Buttons";
 import ActivityLog from "../components/ActivityLog";
 import AddButton from "../components/AddButton";
 import CardForm from "../components/CardForm";
-import OnboardingForm from "../components/OnboardingForm";
 import ProfileSheet from "../components/ProfileSheet";
 import SaveSheet from "../components/SaveSheet";
 import Payment from "../components/Payment";
-import "../index.css";
 
 function Home() {
+  const navigate = useNavigate();
+
+  // Global contexts
   const { cardData, setCardData } = useCard();
   const { localUser, setLocalUser } = useLocalUser();
   const { addActivity, fetchDealActivities } = useActivity();
 
+  // URL path params => /share/<creatorName>/<dealId>
   const { creatorName, dealId } = useParams();
 
-  // Overlay states
-  const [showOnboardingForm, setShowOnboardingForm] = useState(false);
+  // Overlays
   const [showCardForm, setShowCardForm] = useState(false);
   const [showSaveSheet, setShowSaveSheet] = useState(false);
   const [showProfileSheet, setShowProfileSheet] = useState(false);
   const [showPayment, setShowPayment] = useState(false);
 
-  // If we must onboard first, store a "pending action"
-  const [pendingAction, setPendingAction] = useState(null);
-
-  // Build share URL if we got /share/<creatorName>/<dealId>
+  // Decide the share URL
   const baseUrl = process.env.REACT_APP_DOMAIN || window.location.origin;
-  const shareURL = creatorName && dealId
-    ? `${baseUrl}/share/${creatorName}/${dealId}`
-    : null;
+  const shareURL =
+    creatorName && dealId ? `${baseUrl}/share/${creatorName}/${dealId}` : null;
 
-  // 1) Use our custom hook to load a deal
+  // 1) Load deal from Supabase (via our custom hook)
   const {
     deal: fetchedDeal,
     loading,
@@ -56,14 +53,13 @@ function Home() {
     fetchDeal,
   } = useFetchDeal({ initialShareLink: shareURL });
 
-  // 2) Store new fetchedDeal in CardContext & fetch activities
+  // 2) After we get a fetchedDeal, store it in CardContext + fetch activities
   useEffect(() => {
     if (fetchedDeal) {
-      // Skip if cardData is already the same deal
+      // If same ID, skip
       if (cardData.id === fetchedDeal.id) return;
 
-      setCardData((prev) => ({
-        ...prev,
+      setCardData({
         id: fetchedDeal.id,
         creatorId: fetchedDeal.creatorId,
         name: fetchedDeal.creatorName,
@@ -73,88 +69,93 @@ function Home() {
         image: fetchedDeal.image,
         share_link: fetchedDeal.share_link,
         description: fetchedDeal.description,
-      }));
+      });
 
       fetchDealActivities(fetchedDeal.id);
     } else {
-      // If no fetchedDeal, optionally reset our CardContext
-      setCardData((prev) => ({
-        ...prev,
+      // If no fetchedDeal, clear CardContext
+      setCardData({
         id: null,
+        creatorId: null,
+        name: "",
+        profilePhoto: "",
         title: "",
-        value: "0",
+        value: "",
         image: null,
+        share_link: "",
         description: "",
-      }));
+      });
     }
   }, [fetchedDeal, cardData.id, setCardData, fetchDealActivities]);
 
   /* ------------------------------------------------------------------
-   *  Onboarding Flow => withOnboardCheck
+   *  PayPal OAuth
+   *  - If the user is anonymous => we redirect to /api/paypal/oauth
+   *  - On return, we see ?paypal_email=...&name=..., upsert in Supabase,
+   *    store in localUser, then remove those query params.
    * ------------------------------------------------------------------ */
-  const withOnboardCheck = (actionFn) => {
+  const initiatePayPalOAuth = () => {
+    window.location.href = "/api/paypal/oauth";
+  };
+
+  // On mount / page refresh, see if PayPal sent user info
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const paypalEmail = params.get("paypal_email");
+    const userName = params.get("name");
+
+    if (paypalEmail) {
+      // Upsert user
+      upsertUser({
+        paypal_email: paypalEmail,
+        name: userName || "New User",
+        profile_image_url: "",
+      })
+        .then((user) => {
+          setLocalUser({
+            id: user.id,
+            paypalEmail: user.paypal_email,
+            name: user.name || "",
+            profilePhoto: user.profile_image_url || "",
+          });
+        })
+        .catch((err) => {
+          console.error("[Home] PayPal OAuth Upsert Error =>", err);
+        })
+        .finally(() => {
+          params.delete("paypal_email");
+          params.delete("name");
+          navigate({ search: params.toString() }, { replace: true });
+        });
+    }
+  }, [setLocalUser, navigate]);
+
+  /* ------------------------------------------------------------------
+   *  Helper => withPayPalAuthCheck
+   * ------------------------------------------------------------------ */
+  const withPayPalAuthCheck = (actionFn) => {
     if (!localUser.id) {
-      setPendingAction(() => actionFn);
-      setShowOnboardingForm(true);
+      initiatePayPalOAuth();
     } else {
       actionFn();
     }
   };
 
-  const handleOnboardingComplete = async (userData) => {
-    try {
-      const user = await upsertUser({
-        paypal_email: userData.paypalEmail,
-        name: userData.name,
-        profile_image_url: userData.profilePhoto,
-      });
-      setLocalUser({
-        id: user.id,
-        paypalEmail: user.paypal_email,
-        name: user.name || "",
-        profilePhoto: user.profile_image_url || "",
-      });
-      setShowOnboardingForm(false);
-
-      if (typeof pendingAction === "function") {
-        pendingAction();
-        setPendingAction(null);
-        return;
-      }
-
-      // If brand new user => open the CardForm only if there's no fetchedDeal
-      if (!fetchedDeal && !error) {
-        setCardData((prev) => ({
-          ...prev,
-          creatorId: user.id,
-          name: user.name,
-          profilePhoto: user.profile_image_url,
-        }));
-        setShowCardForm(true);
-      }
-    } catch (err) {
-      console.error("[Home] => handleOnboardingComplete => error =>", err);
-      alert("Error onboarding user.");
-    }
-  };
-
   /* ------------------------------------------------------------------
-   *  Tapping the Card
+   *  Tapping the card => create/edit or "grab"
    * ------------------------------------------------------------------ */
   const handleCardTap = () => {
-    withOnboardCheck(() => {
-      // If no deal => open CardForm for new
+    withPayPalAuthCheck(() => {
       if (!cardData.id) {
+        // No deal => create new
         setShowCardForm(true);
         return;
       }
-
-      // If deal => is the user the creator?
       const isCreator = cardData.creatorId === localUser.id;
       if (isCreator) {
-        openCardForm();
+        setShowCardForm(true);
       } else {
-        // Not creator => Payment => SaveSheet if value>0, else SaveSheet
+        // Grab => if value>0 => Payment, else free
         if (parseFloat(cardData.value) > 0) {
           setShowPayment(true);
         } else {
@@ -164,26 +165,20 @@ function Home() {
     });
   };
 
-  const openCardForm = () => {
-    // If there's a deal & user is NOT the creator => block editing
-    if (cardData.id && cardData.creatorId !== localUser.id) {
-      alert("You cannot edit a deal you didn't create.");
-      return;
-    }
-    setShowCardForm(true);
-  };
-
-  // The "+" button => open card form
+  // The "+" => create new
   const handleOpenCardForm = () => {
-    withOnboardCheck(() => {
-      openCardForm();
+    withPayPalAuthCheck(() => {
+      setShowCardForm(true);
     });
   };
 
-  // "Grab" => if cost>0 => Payment, else => SaveSheet
+  // "Grab" => Payment or free
   const handleSave = () => {
-    withOnboardCheck(() => {
-      if (parseFloat(cardData.value) > 0 && cardData.creatorId !== localUser.id) {
+    withPayPalAuthCheck(() => {
+      if (
+        parseFloat(cardData.value) > 0 &&
+        cardData.creatorId !== localUser.id
+      ) {
         setShowPayment(true);
       } else {
         setShowSaveSheet(true);
@@ -191,36 +186,23 @@ function Home() {
     });
   };
 
-  // finalize => log "grabbed gift card"
+  // finalize => but note your Payment.jsx also logs "grabbed gift card"
+  // so you can decide if you want to keep or remove it here
   const finalizeSave = async () => {
-    if (!cardData.id || !localUser.id) return;
-    try {
-      const freshUser = await upsertUser({
-        paypal_email: localUser.paypalEmail,
-        name: localUser.name,
-        profile_image_url: localUser.profilePhoto,
-      });
-      await addActivity({
-        userId: freshUser.id,
-        dealId: cardData.id,
-        action: "grabbed gift card",
-      });
-      alert("Gift card saved!");
-    } catch (err) {
-      console.error("[Home] => finalizeSave => error =>", err);
-      alert("Error saving deal.");
-    }
+    // Just show success if you want. Or optionally record “grabbed gift card” here
+    alert("Gift card saved!");
   };
 
-  // after user saves/updates card in CardForm
+  // after user saves/updates in CardForm
   const handleSaveCard = async (formData) => {
-    // 1) Upsert the user with new changes
+    // 1) Upsert the user data with the new changes from the form
     try {
       const updatedUser = await upsertUser({
         paypal_email: formData.userPayPalEmail,
         name: formData.userName,
         profile_image_url: formData.userProfilePhoto,
       });
+
       setLocalUser({
         id: updatedUser.id,
         paypalEmail: updatedUser.paypal_email,
@@ -228,11 +210,11 @@ function Home() {
         profilePhoto: updatedUser.profile_image_url || "",
       });
     } catch (err) {
-      console.error("[Home] => handleSaveCard => UpsertUser => error =>", err);
+      console.error("[Home] => handleSaveCard => upsertUser => error =>", err);
       alert("Error updating your user data.");
     }
 
-    // 2) Update CardContext with the deal fields
+    // 2) Update cardData in context
     setCardData((prev) => ({
       ...prev,
       id: formData.id,
@@ -246,16 +228,16 @@ function Home() {
       share_link: formData.share_link || prev.share_link,
     }));
 
-    // close form
+    // 3) Close form and re-fetch from DB
     setShowCardForm(false);
-
-    // re-fetch from DB
-    await fetchDeal({ dealId: formData.id });
+    if (formData.id) {
+      await fetchDeal({ dealId: formData.id });
+    }
   };
 
-  // tapping user’s profile
+  // Tapping user’s profile => show ProfileSheet
   const handleProfileClick = () => {
-    withOnboardCheck(() => {
+    withPayPalAuthCheck(() => {
       setShowProfileSheet(true);
     });
   };
@@ -271,7 +253,7 @@ function Home() {
     );
   }
 
-  // If we tried to load a share link & got an error or no deal => "Deal not found"
+  // If we tried to load a share link but no deal found => "Deal not found"
   const triedToLoadShareLink = creatorName && dealId;
   if (triedToLoadShareLink && (!fetchedDeal || error)) {
     return (
@@ -283,9 +265,9 @@ function Home() {
 
   return (
     <MainContainer className="relative w-full h-full flex flex-col items-center bg-white text-black">
-      <div className="flex-1 flex flex-col px-4 py-4 items-center w-full max-w-[768px] overflow-hidden">
+      <div className="flex-1 flex flex-col px-4 py-4 items-center w-full max-w-[768px]">
         <Card onCardTap={handleCardTap} onProfileClick={handleProfileClick} />
-        <div className="w-full mt-4 h-full flex flex-col">
+        <div className="w-full mt-4 flex flex-col">
           <Buttons onSave={handleSave} />
           <ActivityLog dealId={cardData.id} />
         </div>
@@ -293,23 +275,17 @@ function Home() {
 
       <Footer />
 
-      {/* Floating + Button => open card form */}
       <AddButton onOpenCardForm={handleOpenCardForm} />
 
       {/* Overlays */}
-      {showOnboardingForm && (
-        <div className="absolute inset-0 z-50 bg-white">
-          <OnboardingForm onComplete={handleOnboardingComplete} />
-        </div>
-      )}
-
-      {showCardForm && !showOnboardingForm && (
+      {showCardForm && (
         <div className="absolute inset-0 z-50 bg-white">
           <CardForm
             onClose={() => setShowCardForm(false)}
             onSave={handleSaveCard}
             cardData={{
               ...cardData,
+              // Pre-populate user fields from localUser
               userPayPalEmail: localUser.paypalEmail,
               userName: localUser.name,
               userProfilePhoto: localUser.profilePhoto,
@@ -318,13 +294,18 @@ function Home() {
         </div>
       )}
 
-      {showPayment && !showOnboardingForm && (
+      {showPayment && (
         <Payment
           onClose={() => {
             setShowPayment(false);
-            setShowSaveSheet(true);
+            setShowSaveSheet(true); 
+            // or if you don't want to open SaveSheet automatically, remove this
           }}
-          dealData={{ ...cardData }}
+          dealData={{
+            ...cardData,
+            // The Payment code references creatorPayPalEmail => we ensure it’s set:
+            creatorPayPalEmail: cardData?.creatorPayPalEmail || localUser.paypalEmail,
+          }}
         />
       )}
 

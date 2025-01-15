@@ -37,7 +37,7 @@ export default function Payment({ onClose, dealData }) {
 
       console.log("[Payment] => PayPal capture success =>", captureData);
 
-      // 2) Log the “grabbed gift card” activity in Supabase
+      // 2) Log “grabbed gift card”
       await addActivity({
         userId: localUser.id,
         dealId: dealData.id,

@@ -1,3 +1,4 @@
+// src/components/CardForm.jsx
 import React, { useState } from "react";
 import Card from "./Card";
 import Text from "../config/Text";
@@ -5,26 +6,32 @@ import Button from "./Button";
 import { createDeal, updateDeal } from "../services/dealsService";
 import { useActivity } from "../contexts/ActivityContext";
 
+/**
+ * cardData prop is an object containing:
+ * {
+ *   id, value, title, description, image, creatorId,
+ *   userPayPalEmail, userName, userProfilePhoto
+ * }
+ */
 function CardForm({ onClose, onSave, cardData }) {
   const [formState, setFormState] = useState({
     // Deal fields
-    id: cardData.id ?? null,
-    dealValue: cardData.value ?? "",
-    dealTitle: cardData.title ?? "",
-    dealDescription: cardData.description ?? "",
-    dealImage: cardData.image ?? null,
+    id: cardData?.id ?? null,
+    dealValue: cardData?.value ?? "0",
+    dealTitle: cardData?.title ?? "",
+    dealDescription: cardData?.description ?? "",
+    dealImage: cardData?.image ?? null,
+    localUserId: cardData?.creatorId ?? null,
+
     // User fields
-    userPayPalEmail: cardData.userPayPalEmail ?? "",
-    userName: cardData.userName ?? "",
-    userProfilePhoto: cardData.userProfilePhoto ?? "",
-    localUserId: cardData.creatorId ?? null,
+    userPayPalEmail: cardData?.userPayPalEmail ?? "",
+    userName: cardData?.userName ?? "",
+    userProfilePhoto: cardData?.userProfilePhoto ?? "",
   });
 
   const { addActivity } = useActivity();
 
-  // --------------------------
   // Deal field handlers
-  // --------------------------
   const handleValueChange = (e) =>
     setFormState((prev) => ({ ...prev, dealValue: e.target.value }));
 
@@ -44,9 +51,7 @@ function CardForm({ onClose, onSave, cardData }) {
     reader.readAsDataURL(file);
   };
 
-  // --------------------------
   // User field handlers
-  // --------------------------
   const handleUserPayPalChange = (e) =>
     setFormState((prev) => ({ ...prev, userPayPalEmail: e.target.value }));
 
@@ -63,15 +68,16 @@ function CardForm({ onClose, onSave, cardData }) {
     reader.readAsDataURL(file);
   };
 
-  // --------------------------
   // On "Complete"
-  // --------------------------
   const handleDone = async () => {
     try {
+      // We rely on Home.jsx to do the actual upsert of user
+      // so here we only create/update the deal 
       if (!formState.localUserId) {
         alert("No local user ID found. Cannot create or update deal.");
         return;
       }
+
       const dealPayload = {
         creator_id: formState.localUserId,
         title: formState.dealTitle,
@@ -105,44 +111,41 @@ function CardForm({ onClose, onSave, cardData }) {
         });
       }
 
+      // Finally, call parent’s onSave => which will upsert user data + re-fetch
       onSave?.({
         ...formState,
         id: dealResult.id,
         share_link: dealResult.share_link,
       });
     } catch (err) {
-      console.error("[CardForm]: Error =>", err);
+      console.error("[CardForm] handleDone =>", err);
       alert("Error creating/updating deal.");
     }
   };
 
-  // For live preview
+  // For the Card preview
   const previewCardData = {
     value: formState.dealValue,
     title: formState.dealTitle,
     image: formState.dealImage,
+    description: formState.dealDescription,
     name: formState.userName,
     profilePhoto: formState.userProfilePhoto,
-    description: formState.dealDescription,
   };
 
-  // --------------------------
-  // Render
-  // --------------------------
   return (
     <div className="flex flex-col w-full h-full p-2 text-sm bg-white">
-      {/** 
-       * We'll lay this out so that everything fits on typical phone screens:
-       * - The card preview up top, limited height
-       * - The form fields in the middle
-       * - The "Complete" button at the bottom 
-       */}
-      <div className="flex-shrink-0 flex items-center justify-center mb-2" style={{ maxHeight: "40%" }}>
+      {/* Card Preview */}
+      <div
+        className="flex-shrink-0 flex items-center justify-center mb-2"
+        style={{ maxHeight: "40%" }}
+      >
         <div className="w-full max-w-sm">
           <Card isInForm={true} cardData={previewCardData} />
         </div>
       </div>
 
+      {/* Deal + User Fields */}
       <div className="flex flex-col flex-grow w-full max-w-sm mx-auto overflow-hidden">
         <div className="bg-white w-full space-y-4">
           <div className="border-b pb-2">
@@ -164,7 +167,7 @@ function CardForm({ onClose, onSave, cardData }) {
                 placeholder="0.00"
                 value={formState.dealValue}
                 onChange={handleValueChange}
-                className="border border-gray-300 rounded-md px-1 py-0.5 text-black focus:ring-1 focus:outline-none flex-1"
+                className="border border-gray-300 rounded-md px-1 py-0.5 text-black"
               />
             </div>
 
@@ -176,7 +179,7 @@ function CardForm({ onClose, onSave, cardData }) {
               placeholder="Add a title"
               value={formState.dealTitle}
               onChange={handleTitleChange}
-              className="border border-gray-300 rounded-md px-1 py-0.5 text-black focus:ring-1 focus:outline-none"
+              className="border border-gray-300 rounded-md px-1 py-0.5 text-black"
             />
 
             <Text type="small" role="tertiary" className="text-sm">
@@ -186,26 +189,25 @@ function CardForm({ onClose, onSave, cardData }) {
               type="file"
               accept="image/*"
               onChange={handleImageUpload}
-              className="text-black focus:ring-1 focus:outline-none"
+              className="text-black"
             />
           </div>
 
           {/* User Inputs */}
-          <div className="mt-2 border-t pt-2">
-            <Text type="medium" role="primary" className="text-base">
+          <div className="mt-3 border-t pt-3">
+            <Text type="medium" role="primary" className="text-base mb-2">
               Your Info
             </Text>
-
-            <div className="grid grid-cols-[auto_1fr] gap-y-2 gap-x-3 mt-2 items-center">
+            <div className="grid grid-cols-[auto_1fr] gap-y-2 gap-x-3 items-center">
               <Text type="small" role="tertiary" className="text-sm">
-                Email
+                PayPal Email
               </Text>
               <input
                 type="email"
                 placeholder="you@example.com"
                 value={formState.userPayPalEmail}
                 onChange={handleUserPayPalChange}
-                className="border border-gray-300 rounded-md px-1 py-0.5 text-black focus:ring-1 focus:outline-none"
+                className="border border-gray-300 rounded-md px-1 py-0.5 text-black"
               />
 
               <Text type="small" role="tertiary" className="text-sm">
@@ -216,7 +218,7 @@ function CardForm({ onClose, onSave, cardData }) {
                 placeholder="Your Name"
                 value={formState.userName}
                 onChange={handleUserNameChange}
-                className="border border-gray-300 rounded-md px-1 py-0.5 text-black focus:ring-1 focus:outline-none"
+                className="border border-gray-300 rounded-md px-1 py-0.5 text-black"
               />
 
               <Text type="small" role="tertiary" className="text-sm">
@@ -226,19 +228,19 @@ function CardForm({ onClose, onSave, cardData }) {
                 type="file"
                 accept="image/*"
                 onChange={handleUserProfilePhotoChange}
-                className="text-black focus:ring-1 focus:outline-none"
+                className="text-black"
               />
             </div>
           </div>
         </div>
       </div>
 
-      {/* Buttons at the bottom */}
+      {/* Bottom Button(s) */}
       <div className="flex-shrink-0 w-full max-w-sm mx-auto mt-2">
         <Button
           onClick={handleDone}
           type="secondary"
-          className="w-full rounded-full font-semibold transition-all"
+          className="w-full rounded-full font-semibold"
           style={{ padding: "0.75rem", fontSize: "1rem", textAlign: "center" }}
         >
           Complete
