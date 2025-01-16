@@ -35,7 +35,7 @@ app.get(["/", "/api/paypal/oauth"], async (req, res) => {
     // 1) If no code => send user to PayPal sign-in
     if (!code) {
       console.log("[oauth.js] => No 'code' found, redirecting to PayPal sign-in");
-      const redirectURI = `${APP_URL}/api/paypal/oauth`; // This same endpoint
+      const redirectURI = `${APP_URL}/api/paypal/oauth`;
       const paypalAuthUrl = `https://www.paypal.com/signin/authorize?response_type=code&client_id=${clientId}&scope=openid profile email&redirect_uri=${encodeURIComponent(
         redirectURI
       )}`;
@@ -53,7 +53,11 @@ app.get(["/", "/api/paypal/oauth"], async (req, res) => {
         Authorization:
           "Basic " + Buffer.from(`${clientId}:${clientSecret}`).toString("base64"),
       },
-      body: querystring.stringify({ grant_type: "authorization_code", code }),
+      body: querystring.stringify({
+        grant_type: "authorization_code",
+        code,
+        redirect_uri: redirectURI,
+      }),
     });
 
     if (!tokenResponse.ok) {
