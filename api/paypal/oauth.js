@@ -4,10 +4,6 @@
  * Express-based PayPal OAuth:
  *   1. If no 'code', redirect user to PayPal sign-in.
  *   2. If 'code', exchange for token, get user info, redirect back to React.
- * 
- * We only want this OAuth flow triggered on certain user actions
- * (like tapping "Connect PayPal," "Grab," etc.). So the client
- * should only call /api/paypal/oauth if the user actually wants to OAuth.
  */
 
 import express from "express";
@@ -20,32 +16,33 @@ const APP_URL = process.env.REACT_APP_DOMAIN || "https://www.and.deals";
 // Create Express app
 const app = express();
 
-/**
- * GET /
- * Because Vercel mounts this file at "/api/paypal/oauth",
- * we typically expect Express to see the path as "/".
- */
 app.get(["/", "/api/paypal/oauth"], async (req, res) => {
-    console.log("[oauth.js] => Express sees path =>", req.path);
+  console.log("[oauth.js] => Default export invoked => calling app(req, res)");
+  console.log("[oauth.js] => Express sees path =>", req.path);
 
   try {
     const { code } = req.query;
     console.log("[oauth.js] => Query params =>", req.query);
 
+    // Define redirectURI once so we can use it in both branches
+    const redirectURI = `${APP_URL}/api/paypal/oauth`;
+
     // 1) If no code => send user to PayPal sign-in
     if (!code) {
       console.log("[oauth.js] => No 'code' found, redirecting to PayPal sign-in");
-      const redirectURI = `${APP_URL}/api/paypal/oauth`;
+      
+      // Build the authorize URL
       const paypalAuthUrl = `https://www.paypal.com/signin/authorize?response_type=code&client_id=${clientId}&scope=openid profile email&redirect_uri=${encodeURIComponent(
         redirectURI
       )}`;
       console.log("[oauth.js] => PayPal Auth URL =>", paypalAuthUrl);
+      
       return res.redirect(paypalAuthUrl);
     }
 
     console.log("[oauth.js] => 'code' found, exchanging for token...");
 
-    // 2) Exchange 'code' for an access token (using Node 18's built-in fetch)
+    // 2) Exchange 'code' for an access token (using Node 18+ fetch)
     const tokenResponse = await fetch("https://api-m.paypal.com/v1/oauth2/token", {
       method: "POST",
       headers: {
@@ -53,6 +50,7 @@ app.get(["/", "/api/paypal/oauth"], async (req, res) => {
         Authorization:
           "Basic " + Buffer.from(`${clientId}:${clientSecret}`).toString("base64"),
       },
+      // IMPORTANT: Pass the same redirect_uri used above
       body: querystring.stringify({
         grant_type: "authorization_code",
         code,
@@ -73,11 +71,13 @@ app.get(["/", "/api/paypal/oauth"], async (req, res) => {
     const accessToken = tokenJson.access_token;
     console.log("[oauth.js] => Access token received =>", !!accessToken);
 
-    // 3) Use access token to get user info
+    // 3) Use access token to retrieve user info
     console.log("[oauth.js] => Fetching user info from PayPal...");
     const userInfoResp = await fetch(
       "https://api-m.paypal.com/v1/identity/oauth2/userinfo?schema=paypalv1.1",
-      { headers: { Authorization: `Bearer ${accessToken}` } }
+      {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      }
     );
 
     if (!userInfoResp.ok) {
@@ -95,7 +95,7 @@ app.get(["/", "/api/paypal/oauth"], async (req, res) => {
     const paypalEmail = userinfo.email;
     const userName = userinfo.name || userinfo.given_name || "New User";
 
-    // 4) Redirect back to your app
+    // 4) Redirect back to your app with the user’s info in query params
     console.log(
       `[oauth.js] => Done! Redirecting back to ${APP_URL} with query params: paypal_email=${paypalEmail}, name=${userName}`
     );
@@ -112,8 +112,6 @@ app.get(["/", "/api/paypal/oauth"], async (req, res) => {
 
 /**
  * CATCH-ALL for debugging
- * This helps see if the request matched "/api/paypal/oauth" but is hitting
- * some sub-path that we didn't define. We'll log the path we see, then 404.
  */
 app.use((req, res) => {
   console.log("[oauth.js] => Express catch-all => path =>", req.path);
@@ -128,6 +126,5 @@ app.use((req, res) => {
  * We run app(req, res) to handle the route at "/".
  */
 export default (req, res) => {
-  console.log("[oauth.js] => Default export invoked => calling app(req, res)");
   return app(req, res);
 };
