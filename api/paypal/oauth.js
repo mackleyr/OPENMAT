@@ -74,7 +74,7 @@ app.get(["/", "/api/paypal/oauth"], async (req, res) => {
     // 3) Use access token to retrieve user info
     console.log("[oauth.js] => Fetching user info from PayPal...");
     const userInfoResp = await fetch(
-      "https://api-m.paypal.com/v1/identity/oauth2/userinfo?schema=paypalv1.1",
+      "https://api-m.paypal.com/v1/identity/oauth2/userinfo?schema=openid",
       {
         headers: { Authorization: `Bearer ${accessToken}` },
       }
