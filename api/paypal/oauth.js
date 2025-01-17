@@ -41,7 +41,7 @@ app.get(["/", "/api/paypal/oauth"], async (req, res) => {
     }
 
     console.log("[oauth.js] => 'code' found, exchanging for token...");
-    const tokenResponse = await fetch("https://api-m.paypal.com/v1/oauth2/token", {
+    const tokenResponse = await fetch("https://api.paypal.com/v1/oauth2/token", {
       method: "POST",
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",
@@ -74,7 +74,7 @@ app.get(["/", "/api/paypal/oauth"], async (req, res) => {
     // 3) Use access token to retrieve user info
     console.log("[oauth.js] => Fetching user info from PayPal...");
     const userInfoResp = await fetch(
-      "https://api-m.paypal.com/v1/identity/openidconnect/userinfo?schema=openid",
+      "https://api.paypal.com/v1/identity/openidconnect/userinfo?schema=openid",
       {
         headers: {
           Authorization: `Bearer ${accessToken}`,
