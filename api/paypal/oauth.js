@@ -1,9 +1,8 @@
 /**
  * api/paypal/oauth.js
  *
- * Express-based PayPal OAuth:
- *   1. If no 'code', redirect user to PayPal sign-in.
- *   2. If 'code', exchange for token, get user info, redirect back to React.
+ * 1) If no 'code', redirect user to PayPal sign-in.
+ * 2) If 'code', exchange for token, get user info, redirect back to React.
  */
 
 import express from "express";
@@ -24,25 +23,22 @@ app.get(["/", "/api/paypal/oauth"], async (req, res) => {
     const { code } = req.query;
     console.log("[oauth.js] => Query params =>", req.query);
 
-    // Define redirectURI once so we can use it in both branches
     const redirectURI = `${APP_URL}/api/paypal/oauth`;
 
     // 1) If no code => send user to PayPal sign-in
     if (!code) {
       console.log("[oauth.js] => No 'code' found, redirecting to PayPal sign-in");
-      
-      // Build the authorize URL
-      const paypalAuthUrl = `https://www.paypal.com/signin/authorize?response_type=code&client_id=${clientId}&scope=openid profile email&redirect_uri=${encodeURIComponent(
-        redirectURI
-      )}`;
-      console.log("[oauth.js] => PayPal Auth URL =>", paypalAuthUrl);
-      
-      return res.redirect(paypalAuthUrl);
+      const paypalAuthUrl = `https://www.paypal.com/signin/authorize
+        ?response_type=code
+        &client_id=${clientId}
+        &scope=openid profile email
+        &redirect_uri=${encodeURIComponent(redirectURI)}`;
+
+      console.log("[oauth.js] => PayPal Auth URL =>", paypalAuthUrl.replace(/\s+/g, ""));
+      return res.redirect(paypalAuthUrl.replace(/\s+/g, ""));
     }
 
     console.log("[oauth.js] => 'code' found, exchanging for token...");
-
-    // 2) Exchange 'code' for an access token (using Node 18+ fetch)
     const tokenResponse = await fetch("https://api-m.paypal.com/v1/oauth2/token", {
       method: "POST",
       headers: {
@@ -50,7 +46,6 @@ app.get(["/", "/api/paypal/oauth"], async (req, res) => {
         Authorization:
           "Basic " + Buffer.from(`${clientId}:${clientSecret}`).toString("base64"),
       },
-      // IMPORTANT: Pass the same redirect_uri used above
       body: querystring.stringify({
         grant_type: "authorization_code",
         code,
@@ -71,37 +66,67 @@ app.get(["/", "/api/paypal/oauth"], async (req, res) => {
     const accessToken = tokenJson.access_token;
     console.log("[oauth.js] => Access token received =>", !!accessToken);
 
+    // 2.5) Optional: Check tokenJson.scope or tokenJson.id_token
+    console.log("[oauth.js] => tokenJson =>", tokenJson);
+
     // 3) Use access token to retrieve user info
     console.log("[oauth.js] => Fetching user info from PayPal...");
     const userInfoResp = await fetch(
       "https://api-m.paypal.com/v1/identity/openidconnect/userinfo?schema=openid",
       {
-        headers: { Authorization: `Bearer ${accessToken}` },
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          Accept: "application/json", // Ensure JSON
+        },
       }
     );
 
+    // We read the raw text to see if it's HTML or JSON
+    const rawText = await userInfoResp.text();
+    console.log("[oauth.js] => Raw userinfo body =>", rawText);
+
     if (!userInfoResp.ok) {
-      const errData = await userInfoResp.json();
-      console.error("[oauth.js] => User info error:", errData);
+      console.error("[oauth.js] => userinfo status =>", userInfoResp.status);
+      let errData;
+      try {
+        errData = JSON.parse(rawText);
+      } catch {
+        errData = { error: "non-json response", body: rawText };
+      }
+
       return res.status(400).json({
         error: "User info request failed",
         details: errData,
       });
     }
 
-    const userinfo = await userInfoResp.json();
+    // If it is valid JSON, parse it
+    let userinfo;
+    try {
+      userinfo = JSON.parse(rawText);
+    } catch (parseErr) {
+      console.error("[oauth.js] => userinfo parse error =>", parseErr);
+      return res.status(500).json({ error: parseErr.message });
+    }
+
     console.log("[oauth.js] => PayPal userinfo =>", userinfo);
 
-    const paypalEmail = userinfo.email;
-    const userName = userinfo.name || userinfo.given_name || "New User";
+    // 4) Fallbacks for user name and email
+    const paypalEmail = userinfo.email || ""; // we expect some email
+    const userName =
+      userinfo.name ||
+      userinfo.given_name ||
+      paypalEmail || // fallback to their email if name is not present
+      "New User";
 
-    // 4) Redirect back to your app with the user’s info in query params
+    // 5) Redirect back to your app with the user’s info in query params
     console.log(
       `[oauth.js] => Done! Redirecting back to ${APP_URL} with query params: paypal_email=${paypalEmail}, name=${userName}`
     );
-    const finalUrl = `${APP_URL}?paypal_email=${encodeURIComponent(paypalEmail)}&name=${encodeURIComponent(
-      userName
-    )}`;
+
+    const finalUrl = `${APP_URL}?paypal_email=${encodeURIComponent(
+      paypalEmail
+    )}&name=${encodeURIComponent(userName)}`;
 
     return res.redirect(finalUrl);
   } catch (err) {
@@ -110,9 +135,7 @@ app.get(["/", "/api/paypal/oauth"], async (req, res) => {
   }
 });
 
-/**
- * CATCH-ALL for debugging
- */
+// CATCH-ALL
 app.use((req, res) => {
   console.log("[oauth.js] => Express catch-all => path =>", req.path);
   return res.status(404).json({
@@ -121,10 +144,7 @@ app.use((req, res) => {
   });
 });
 
-/**
- * Vercel calls this default export with (req, res).
- * We run app(req, res) to handle the route at "/".
- */
+// Vercel entry point
 export default (req, res) => {
   return app(req, res);
 };
