@@ -28,10 +28,12 @@ app.get(["/", "/api/paypal/oauth"], async (req, res) => {
     // 1) If no code => send user to PayPal sign-in
     if (!code) {
       console.log("[oauth.js] => No 'code' found, redirecting to PayPal sign-in");
-      const paypalAuthUrl = `https://www.paypal.com/signin/authorize
-        ?response_type=code
+      const scopeParam = encodeURIComponent("openid profile email");
+      // => "openid%20profile%20email"
+      
+      const paypalAuthUrl = `https://www.paypal.com/signin/authorize?response_type=code
         &client_id=${clientId}
-        &scope=openid profile email
+        &scope=${scopeParam}
         &redirect_uri=${encodeURIComponent(redirectURI)}`;
 
       console.log("[oauth.js] => PayPal Auth URL =>", paypalAuthUrl.replace(/\s+/g, ""));
