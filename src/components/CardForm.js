@@ -11,11 +11,12 @@ function CardForm({ onClose, onSave, cardData }) {
   const { localUser } = useLocalUser();
   const { addActivity } = useActivity();
 
-  // Form fields for both deal + user data
+  // Form state for deal + user fields
   const [formState, setFormState] = useState({
     id: cardData.id ?? null,
     dealValue: cardData.value ?? "",
     dealTitle: cardData.title ?? "",
+    dealDescription: cardData.description ?? "",
     dealImage: cardData.image ?? null,
     userPayPalEmail: cardData.userPayPalEmail ?? "",
     userName: cardData.userName ?? "",
@@ -29,6 +30,9 @@ function CardForm({ onClose, onSave, cardData }) {
   const handleTitleChange = (e) =>
     setFormState((prev) => ({ ...prev, dealTitle: e.target.value }));
 
+  const handleDescriptionChange = (e) =>
+    setFormState((prev) => ({ ...prev, dealDescription: e.target.value }));
+
   const handleImageUpload = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -39,7 +43,7 @@ function CardForm({ onClose, onSave, cardData }) {
     reader.readAsDataURL(file);
   };
 
-  // User fields
+  // User field handlers
   const handleUserPayPalChange = (e) =>
     setFormState((prev) => ({ ...prev, userPayPalEmail: e.target.value }));
 
@@ -56,7 +60,7 @@ function CardForm({ onClose, onSave, cardData }) {
     reader.readAsDataURL(file);
   };
 
-  // On "Complete" => create/update deal
+  // On "Complete"
   const handleDone = async () => {
     try {
       if (!localUser.id) {
@@ -64,10 +68,12 @@ function CardForm({ onClose, onSave, cardData }) {
         return;
       }
 
+      // Build the deal payload, ensuring we pass creatorName from formState.userName
       const dealPayload = {
         creator_id: localUser.id,
         title: formState.dealTitle,
         background: formState.dealImage,
+        creatorName: formState.userName, // <-- THIS ensures name is used in share_link
         deal_value: parseFloat(formState.dealValue) || 0,
       };
 
@@ -95,7 +101,7 @@ function CardForm({ onClose, onSave, cardData }) {
         });
       }
 
-      // Pass everything back to Home, so it can upsert user + re-fetch
+      // Return the updated info (including new share_link) to parent
       onSave?.({
         ...formState,
         id: dealResult.id,
@@ -107,13 +113,14 @@ function CardForm({ onClose, onSave, cardData }) {
     }
   };
 
-  // Live preview
+  // For live preview
   const previewCardData = {
     value: formState.dealValue,
     title: formState.dealTitle,
     image: formState.dealImage,
     name: formState.userName,
     profilePhoto: formState.userProfilePhoto,
+    description: formState.dealDescription,
   };
 
   return (
@@ -174,6 +181,9 @@ function CardForm({ onClose, onSave, cardData }) {
               className="text-black"
             />
           </div>
+
+          {/* Optional: Description, if needed */}
+          {/* <input ... for formState.dealDescription ... > */}
 
           {/* User Inputs */}
           <div className="mt-4 border-t pt-2">
