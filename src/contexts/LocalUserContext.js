@@ -14,7 +14,6 @@ export const LocalUserProvider = ({ children }) => {
 
   const [localUser, setLocalUser] = useState(initialLocalUser);
 
-  // Attempt to load user from localStorage
   useEffect(() => {
     const storedId = window.localStorage.getItem("userId");
     if (storedId) {

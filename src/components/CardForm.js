@@ -1,30 +1,29 @@
+// src/components/CardForm.jsx
 import React, { useState } from "react";
 import Card from "./Card";
 import Text from "../config/Text";
 import Button from "./Button";
 import { createDeal, updateDeal } from "../services/dealsService";
 import { useActivity } from "../contexts/ActivityContext";
+import { useLocalUser } from "../contexts/LocalUserContext";
 
 function CardForm({ onClose, onSave, cardData }) {
+  const { localUser } = useLocalUser();
+  const { addActivity } = useActivity();
+
+  // Form state for deal + user fields
   const [formState, setFormState] = useState({
-    // Deal fields
     id: cardData.id ?? null,
     dealValue: cardData.value ?? "",
     dealTitle: cardData.title ?? "",
     dealDescription: cardData.description ?? "",
     dealImage: cardData.image ?? null,
-    // User fields
     userPayPalEmail: cardData.userPayPalEmail ?? "",
     userName: cardData.userName ?? "",
     userProfilePhoto: cardData.userProfilePhoto ?? "",
-    localUserId: cardData.creatorId ?? null,
   });
 
-  const { addActivity } = useActivity();
-
-  // --------------------------
   // Deal field handlers
-  // --------------------------
   const handleValueChange = (e) =>
     setFormState((prev) => ({ ...prev, dealValue: e.target.value }));
 
@@ -44,9 +43,7 @@ function CardForm({ onClose, onSave, cardData }) {
     reader.readAsDataURL(file);
   };
 
-  // --------------------------
   // User field handlers
-  // --------------------------
   const handleUserPayPalChange = (e) =>
     setFormState((prev) => ({ ...prev, userPayPalEmail: e.target.value }));
 
@@ -63,17 +60,18 @@ function CardForm({ onClose, onSave, cardData }) {
     reader.readAsDataURL(file);
   };
 
-  // --------------------------
   // On "Complete"
-  // --------------------------
   const handleDone = async () => {
     try {
-      if (!formState.localUserId) {
-        alert("No local user ID found. Cannot create or update deal.");
+      // Rely on the actual localUser from context
+      if (!localUser.id) {
+        alert("No local user ID found. Cannot create/update deal.");
         return;
       }
+
+      // Build the payload
       const dealPayload = {
-        creator_id: formState.localUserId,
+        creator_id: localUser.id,
         title: formState.dealTitle,
         background: formState.dealImage,
         deal_value: parseFloat(formState.dealValue) || 0,
@@ -82,7 +80,7 @@ function CardForm({ onClose, onSave, cardData }) {
 
       let dealResult;
       if (formState.id) {
-        // update existing
+        // update
         dealResult = await updateDeal({
           dealId: formState.id,
           title: dealPayload.title,
@@ -91,32 +89,33 @@ function CardForm({ onClose, onSave, cardData }) {
           description: dealPayload.description,
         });
         await addActivity({
-          userId: formState.localUserId,
+          userId: localUser.id,
           dealId: dealResult.id,
           action: "updated gift card",
         });
       } else {
-        // create new
+        // create
         dealResult = await createDeal(dealPayload);
         await addActivity({
-          userId: formState.localUserId,
+          userId: localUser.id,
           dealId: dealResult.id,
           action: "created gift card",
         });
       }
 
+      // inform parent => so it can re-fetch or update UI
       onSave?.({
         ...formState,
         id: dealResult.id,
         share_link: dealResult.share_link,
       });
     } catch (err) {
-      console.error("[CardForm]: Error =>", err);
+      console.error("[CardForm] => Error =>", err);
       alert("Error creating/updating deal.");
     }
   };
 
-  // For live preview
+  // For the live preview
   const previewCardData = {
     value: formState.dealValue,
     title: formState.dealTitle,
@@ -126,18 +125,13 @@ function CardForm({ onClose, onSave, cardData }) {
     description: formState.dealDescription,
   };
 
-  // --------------------------
-  // Render
-  // --------------------------
   return (
     <div className="flex flex-col w-full h-full p-4 text-sm bg-white">
-      {/** 
-       * We'll lay this out so that everything fits on typical phone screens:
-       * - The card preview up top, limited height
-       * - The form fields in the middle
-       * - The "Complete" button at the bottom 
-       */}
-      <div className="flex-shrink-0 flex items-center justify-center mb-6" style={{ maxHeight: "40%" }}>
+      {/* Card Preview */}
+      <div
+        className="flex-shrink-0 flex items-center justify-center mb-6"
+        style={{ maxHeight: "40%" }}
+      >
         <div className="w-full max-w-sm">
           <Card isInForm={true} cardData={previewCardData} />
         </div>
@@ -164,7 +158,7 @@ function CardForm({ onClose, onSave, cardData }) {
                 placeholder="0.00"
                 value={formState.dealValue}
                 onChange={handleValueChange}
-                className="border border-gray-300 rounded-md px-1 py-0.5 text-black focus:ring-1 focus:outline-none flex-1"
+                className="border border-gray-300 rounded-md px-1 py-0.5 text-black"
               />
             </div>
 
@@ -176,22 +170,22 @@ function CardForm({ onClose, onSave, cardData }) {
               placeholder="Add a title"
               value={formState.dealTitle}
               onChange={handleTitleChange}
-              className="border border-gray-300 rounded-md px-1 py-0.5 text-black focus:ring-1 focus:outline-none"
+              className="border border-gray-300 rounded-md px-1 py-0.5 text-black"
             />
 
-            <Text type="small" role="tertiary" className="text-sm pb-4">
+            <Text type="small" role="tertiary" className="text-sm">
               Image
             </Text>
             <input
               type="file"
               accept="image/*"
               onChange={handleImageUpload}
-              className="text-black focus:ring-1 focus:outline-none pb-4"
+              className="text-black"
             />
           </div>
 
           {/* User Inputs */}
-          <div className="mt-2 border-t">
+          <div className="mt-4 border-t pt-2">
             <Text type="medium" role="primary" className="text-base">
               Your Info
             </Text>
@@ -205,7 +199,7 @@ function CardForm({ onClose, onSave, cardData }) {
                 placeholder="you@example.com"
                 value={formState.userPayPalEmail}
                 onChange={handleUserPayPalChange}
-                className="border border-gray-300 rounded-md px-1 py-0.5 text-black focus:ring-1 focus:outline-none"
+                className="border border-gray-300 rounded-md px-1 py-0.5 text-black"
               />
 
               <Text type="small" role="tertiary" className="text-sm">
@@ -216,7 +210,7 @@ function CardForm({ onClose, onSave, cardData }) {
                 placeholder="Your Name"
                 value={formState.userName}
                 onChange={handleUserNameChange}
-                className="border border-gray-300 rounded-md px-1 py-0.5 text-black focus:ring-1 focus:outline-none"
+                className="border border-gray-300 rounded-md px-1 py-0.5 text-black"
               />
 
               <Text type="small" role="tertiary" className="text-sm">
@@ -226,14 +220,14 @@ function CardForm({ onClose, onSave, cardData }) {
                 type="file"
                 accept="image/*"
                 onChange={handleUserProfilePhotoChange}
-                className="text-black focus:ring-1 focus:outline-none"
+                className="text-black"
               />
             </div>
           </div>
         </div>
       </div>
 
-      {/* Buttons at the bottom */}
+      {/* Bottom Button => "Complete" */}
       <div className="flex-shrink-0 w-full max-w-sm mx-auto mt-2">
         <Button
           onClick={handleDone}

@@ -27,12 +27,12 @@ import "../index.css";
 function Home() {
   const navigate = useNavigate();
 
-  // Global contexts
+  // Contexts
   const { cardData, setCardData } = useCard();
   const { localUser, setLocalUser } = useLocalUser();
   const { addActivity, fetchDealActivities } = useActivity();
 
-  // URL path params => /share/<creatorName>/<dealId>
+  // Route params => /share/<creatorName>/<dealId>
   const { creatorName, dealId } = useParams();
 
   // Overlay states
@@ -41,12 +41,11 @@ function Home() {
   const [showProfileSheet, setShowProfileSheet] = useState(false);
   const [showPayment, setShowPayment] = useState(false);
 
-  // Decide the share URL
+  // Decide the share URL if /share/<creatorName>/<dealId>
   const baseUrl = process.env.REACT_APP_DOMAIN || window.location.origin;
-  const shareURL =
-    creatorName && dealId ? `${baseUrl}/share/${creatorName}/${dealId}` : null;
+  const shareURL = creatorName && dealId ? `${baseUrl}/share/${creatorName}/${dealId}` : null;
 
-  // 1) Load deal from Supabase (via our custom hook)
+  // 1) Load a deal from Supabase
   const {
     deal: fetchedDeal,
     loading,
@@ -54,12 +53,9 @@ function Home() {
     fetchDeal,
   } = useFetchDeal({ initialShareLink: shareURL });
 
-  // 2) After we get a fetchedDeal, store it in CardContext + fetch activities
+  // 2) Sync fetchedDeal → CardContext + fetch activities
   useEffect(() => {
-    if (fetchedDeal) {
-      // If same ID, skip
-      if (cardData.id === fetchedDeal.id) return;
-
+    if (fetchedDeal && fetchedDeal.id !== cardData.id) {
       setCardData({
         id: fetchedDeal.id,
         creatorId: fetchedDeal.creatorId,
@@ -73,8 +69,8 @@ function Home() {
       });
 
       fetchDealActivities(fetchedDeal.id);
-    } else {
-      // If no fetchedDeal, clear CardContext
+    } else if (!fetchedDeal) {
+      // Clear if no fetchedDeal
       setCardData({
         id: null,
         creatorId: null,
@@ -90,20 +86,20 @@ function Home() {
   }, [fetchedDeal, cardData.id, setCardData, fetchDealActivities]);
 
   /* ------------------------------------------------------------------
-   *  PayPal OAuth
+   * PayPal OAuth
    * ------------------------------------------------------------------ */
   const initiatePayPalAuth = () => {
     window.location.href = "/api/paypal/oauth";
   };
 
-  // On mount, see if PayPal sent user info
+  // On mount, see if we have `?paypal_email=...&name=...`
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const paypalEmail = params.get("paypal_email");
     const userName = params.get("name");
 
     if (paypalEmail) {
-      // Upsert user
+      // Upsert user to Supabase
       upsertUser({
         paypal_email: paypalEmail,
         name: userName || "New User",
@@ -121,6 +117,7 @@ function Home() {
           console.error("[Home] PayPal OAuth Upsert Error =>", err);
         })
         .finally(() => {
+          // Remove from URL
           params.delete("paypal_email");
           params.delete("name");
           navigate({ search: params.toString() }, { replace: true });
@@ -128,9 +125,7 @@ function Home() {
     }
   }, [setLocalUser, navigate]);
 
-  /* ------------------------------------------------------------------
-   *  Helper => withPayPalAuthCheck
-   * ------------------------------------------------------------------ */
+  // Helper => if user is missing, do PayPal OAuth
   const withPayPalAuthCheck = (actionFn) => {
     if (!localUser.id) {
       initiatePayPalAuth();
@@ -140,30 +135,30 @@ function Home() {
   };
 
   /* ------------------------------------------------------------------
-   *  Tapping the card => create/edit or "grab"
+   * Tapping the card => create/edit or "grab"
    * ------------------------------------------------------------------ */
   const handleCardTap = () => {
     withPayPalAuthCheck(() => {
       if (!cardData.id) {
-        // No deal => create new
-        setShowCardForm(true);
-        return;
-      }
-      const isCreator = cardData.creatorId === localUser.id;
-      if (isCreator) {
+        // No deal => new
         setShowCardForm(true);
       } else {
-        // Grab => if value>0 => Payment, else free
-        if (parseFloat(cardData.value) > 0) {
-          setShowPayment(true);
+        // If you're the creator => edit. Otherwise => Payment or free
+        const isCreator = cardData.creatorId === localUser.id;
+        if (isCreator) {
+          setShowCardForm(true);
         } else {
-          setShowSaveSheet(true);
+          if (parseFloat(cardData.value) > 0) {
+            setShowPayment(true);
+          } else {
+            setShowSaveSheet(true);
+          }
         }
       }
     });
   };
 
-  // The "+" => open card form
+  // The "+" => new deal
   const handleOpenCardForm = () => {
     withPayPalAuthCheck(() => {
       setShowCardForm(true);
@@ -173,10 +168,7 @@ function Home() {
   // "Grab" => Payment or free
   const handleSave = () => {
     withPayPalAuthCheck(() => {
-      if (
-        parseFloat(cardData.value) > 0 &&
-        cardData.creatorId !== localUser.id
-      ) {
+      if (parseFloat(cardData.value) > 0 && cardData.creatorId !== localUser.id) {
         setShowPayment(true);
       } else {
         setShowSaveSheet(true);
@@ -184,14 +176,14 @@ function Home() {
     });
   };
 
-  // Called after user closes the SaveSheet
+  // Called after SaveSheet
   const finalizeSave = async () => {
     alert("Gift card saved!");
   };
 
-  // After user saves/updates the card in CardForm
+  // After user saves/updates in CardForm
   const handleSaveCard = async (formData) => {
-    // 1) Upsert user data from the form
+    // 1) Upsert user data from form (they might have updated email/name)
     try {
       const updatedUser = await upsertUser({
         paypal_email: formData.userPayPalEmail,
@@ -199,6 +191,7 @@ function Home() {
         profile_image_url: formData.userProfilePhoto,
       });
 
+      // Then store that user in localUser
       setLocalUser({
         id: updatedUser.id,
         paypalEmail: updatedUser.paypal_email,
@@ -214,7 +207,7 @@ function Home() {
     setCardData((prev) => ({
       ...prev,
       id: formData.id,
-      creatorId: localUser.id,
+      creatorId: localUser.id, // trust the localUser
       image: formData.dealImage,
       value: formData.dealValue,
       title: formData.dealTitle,
@@ -224,14 +217,14 @@ function Home() {
       share_link: formData.share_link || prev.share_link,
     }));
 
-    // 3) Re-fetch from DB, then close the overlay
+    // 3) Re-fetch from DB => close overlay
     setShowCardForm(false);
     if (formData.id) {
       await fetchDeal({ dealId: formData.id });
     }
   };
 
-  // Tapping user’s profile => show ProfileSheet
+  // Tapping profile => ProfileSheet
   const handleProfileClick = () => {
     withPayPalAuthCheck(() => {
       setShowProfileSheet(true);
@@ -239,9 +232,9 @@ function Home() {
   };
 
   /* ------------------------------------------------------------------
-   *  Render
+   * Render
    * ------------------------------------------------------------------ */
-  // Loading state
+  // Loading screen
   if (loading) {
     return (
       <div className="min-h-screen flex flex-col bg-black">
@@ -250,9 +243,9 @@ function Home() {
     );
   }
 
-  // If we tried to load a share link but got no deal => "Deal not found"
-  const triedToLoadShareLink = creatorName && dealId;
-  if (triedToLoadShareLink && (!fetchedDeal || error)) {
+  // If share link but no deal => "Deal not found"
+  const triedToLoadShare = creatorName && dealId;
+  if (triedToLoadShare && (!fetchedDeal || error)) {
     return (
       <div className="min-h-screen flex flex-col bg-black">
         <div className="text-center mt-8 text-white">Deal not found.</div>
@@ -262,7 +255,7 @@ function Home() {
 
   return (
     <MainContainer className="relative w-full h-full flex flex-col items-center bg-white text-black">
-      {/* Main content area */}
+      {/* Content */}
       <div className="flex-1 flex flex-col px-4 py-4 items-center w-full max-w-[768px] overflow-hidden">
         <Card onCardTap={handleCardTap} onProfileClick={handleProfileClick} />
 
@@ -272,10 +265,9 @@ function Home() {
         </div>
       </div>
 
-      {/* Footer */}
       <Footer />
 
-      {/* Floating + Button */}
+      {/* Floating + Button => open CardForm */}
       <AddButton onOpenCardForm={handleOpenCardForm} />
 
       {/* Overlays */}
@@ -286,7 +278,6 @@ function Home() {
             onSave={handleSaveCard}
             cardData={{
               ...cardData,
-              // Pre-populate user fields from localUser
               userPayPalEmail: localUser.paypalEmail,
               userName: localUser.name,
               userProfilePhoto: localUser.profilePhoto,
@@ -303,7 +294,6 @@ function Home() {
           }}
           dealData={{
             ...cardData,
-            // Payment might look for creatorPayPalEmail. If it's not set:
             creatorPayPalEmail: cardData?.creatorPayPalEmail || localUser.paypalEmail,
           }}
         />
