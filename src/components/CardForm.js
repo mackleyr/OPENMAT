@@ -11,7 +11,7 @@ function CardForm({ onClose, onSave, cardData }) {
   const { localUser } = useLocalUser();
   const { addActivity } = useActivity();
 
-  // Form state for deal + user fields
+  // Form fields for both deal + user data
   const [formState, setFormState] = useState({
     id: cardData.id ?? null,
     dealValue: cardData.value ?? "",
@@ -43,7 +43,7 @@ function CardForm({ onClose, onSave, cardData }) {
     reader.readAsDataURL(file);
   };
 
-  // User field handlers
+  // User fields
   const handleUserPayPalChange = (e) =>
     setFormState((prev) => ({ ...prev, userPayPalEmail: e.target.value }));
 
@@ -60,16 +60,14 @@ function CardForm({ onClose, onSave, cardData }) {
     reader.readAsDataURL(file);
   };
 
-  // On "Complete"
+  // On "Complete" => create/update deal
   const handleDone = async () => {
     try {
-      // Rely on the actual localUser from context
       if (!localUser.id) {
         alert("No local user ID found. Cannot create/update deal.");
         return;
       }
 
-      // Build the payload
       const dealPayload = {
         creator_id: localUser.id,
         title: formState.dealTitle,
@@ -80,7 +78,7 @@ function CardForm({ onClose, onSave, cardData }) {
 
       let dealResult;
       if (formState.id) {
-        // update
+        // update existing
         dealResult = await updateDeal({
           dealId: formState.id,
           title: dealPayload.title,
@@ -94,7 +92,7 @@ function CardForm({ onClose, onSave, cardData }) {
           action: "updated gift card",
         });
       } else {
-        // create
+        // create new
         dealResult = await createDeal(dealPayload);
         await addActivity({
           userId: localUser.id,
@@ -103,7 +101,7 @@ function CardForm({ onClose, onSave, cardData }) {
         });
       }
 
-      // inform parent => so it can re-fetch or update UI
+      // Pass everything back to Home, so it can upsert user + re-fetch
       onSave?.({
         ...formState,
         id: dealResult.id,
@@ -115,7 +113,7 @@ function CardForm({ onClose, onSave, cardData }) {
     }
   };
 
-  // For the live preview
+  // Live preview
   const previewCardData = {
     value: formState.dealValue,
     title: formState.dealTitle,
@@ -133,7 +131,7 @@ function CardForm({ onClose, onSave, cardData }) {
         style={{ maxHeight: "40%" }}
       >
         <div className="w-full max-w-sm">
-          <Card isInForm={true} cardData={previewCardData} />
+          <Card isInForm cardData={previewCardData} />
         </div>
       </div>
 
