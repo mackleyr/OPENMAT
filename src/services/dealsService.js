@@ -45,7 +45,7 @@ export const createDeal = async ({
   const nameLower = (creatorName || "").trim().toLowerCase();
   const nameWithPlus = nameLower.replace(/\s+/g, "+");
   const encodedName = encodeURIComponent(nameLower);
-  const share_link = `${baseUrl}/share/${encodedName}/${insertedDeal.id}`;
+  const share_link = `${baseUrl}/share/${nameWithPlus}/${insertedDeal.id}`;
 
   // 3) Update row with share_link
   const { data: updatedDeal, error: updateError } = await supabase
