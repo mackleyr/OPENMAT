@@ -10,6 +10,7 @@ export const createDeal = async ({
   background,
   creatorName,
   deal_value,
+  description = "",
 }) => {
   console.log("[createDeal] => incoming payload:", {
     creator_id,
@@ -17,12 +18,21 @@ export const createDeal = async ({
     background,
     creatorName,
     deal_value,
+    description,
   });
 
   // 1) Insert row
   const { data: insertedDeal, error: insertError } = await supabase
     .from("deals")
-    .insert([{ creator_id, title, background, deal_value }])
+    .insert([
+      {
+        creator_id,
+        title,
+        background,
+        deal_value,
+        description,
+      },
+    ])
     .select("*")
     .single();
 
@@ -32,7 +42,8 @@ export const createDeal = async ({
   }
 
   // 2) Build share_link
-  const baseUrl = process.env.REACT_APP_DOMAIN || "https://and.deals";
+  // Make sure REACT_APP_DOMAIN is set to "https://www.and.deals"
+  const baseUrl = process.env.REACT_APP_DOMAIN || "https://www.and.deals";
   const nameLower = (creatorName || "").trim().toLowerCase();
   const encodedName = encodeURIComponent(nameLower);
   const share_link = `${baseUrl}/share/${encodedName}/${insertedDeal.id}`;
@@ -46,18 +57,19 @@ export const createDeal = async ({
     .single();
 
   if (updateError) throw updateError;
+
   return updatedDeal;
 };
 
 /**
  * updateDeal => modifies an existing deal
  */
-export const updateDeal = async ({ dealId, title, background, deal_value }) => {
-  console.log("[updateDeal] =>", { dealId, title, background, deal_value });
+export const updateDeal = async ({ dealId, title, background, deal_value, description }) => {
+  console.log("[updateDeal] =>", { dealId, title, background, deal_value, description });
 
   const { data: updatedDeal, error } = await supabase
     .from("deals")
-    .update({ title, background, deal_value })
+    .update({ title, background, deal_value, description })
     .eq("id", dealId)
     .select("*")
     .single();
