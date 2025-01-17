@@ -43,6 +43,7 @@ export const createDeal = async ({
   // Make sure REACT_APP_DOMAIN is set to "https://www.and.deals"
   const baseUrl = process.env.REACT_APP_DOMAIN || "https://www.and.deals";
   const nameLower = (creatorName || "").trim().toLowerCase();
+  const nameWithPlus = nameLower.replace(/\s+/g, "+");
   const encodedName = encodeURIComponent(nameLower);
   const share_link = `${baseUrl}/share/${encodedName}/${insertedDeal.id}`;
 
