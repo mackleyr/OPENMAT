@@ -13,7 +13,6 @@ export const CardProvider = ({ children }) => {
     value: "",
     image: null,
     share_link: "",
-    description: "",
   };
 
   const [cardData, rawSetCardData] = useState(initialCardData);

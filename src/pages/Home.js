@@ -65,7 +65,6 @@ function Home() {
         value: fetchedDeal.value,
         image: fetchedDeal.image,
         share_link: fetchedDeal.share_link,
-        description: fetchedDeal.description,
       });
       fetchDealActivities(fetchedDeal.id);
     } else if (!fetchedDeal) {
@@ -79,7 +78,6 @@ function Home() {
         value: "",
         image: null,
         share_link: "",
-        description: "",
       });
     }
   }, [fetchedDeal, cardData.id, setCardData, fetchDealActivities]);
@@ -207,7 +205,6 @@ function Home() {
       image: formData.dealImage,
       value: formData.dealValue,
       title: formData.dealTitle,
-      description: formData.dealDescription,
       name: formData.userName,
       profilePhoto: formData.userProfilePhoto,
       share_link: formData.share_link || prev.share_link,

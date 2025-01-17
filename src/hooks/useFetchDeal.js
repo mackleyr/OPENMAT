@@ -4,13 +4,12 @@ import { supabase } from "../supabaseClient";
 
 function normalizeDeal(dealRow) {
   if (!dealRow) return null;
-  const { id, title, background, deal_value, share_link, description, users } = dealRow;
+  const { id, title, background, deal_value, share_link, users } = dealRow;
   return {
     id,
     title,
     image: background,
     value: deal_value,
-    description,
     share_link,
     creatorId: users?.id || null,
     creatorName: users?.name || "",

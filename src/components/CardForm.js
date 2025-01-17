@@ -16,7 +16,6 @@ function CardForm({ onClose, onSave, cardData }) {
     id: cardData.id ?? null,
     dealValue: cardData.value ?? "",
     dealTitle: cardData.title ?? "",
-    dealDescription: cardData.description ?? "",
     dealImage: cardData.image ?? null,
     userPayPalEmail: cardData.userPayPalEmail ?? "",
     userName: cardData.userName ?? "",
@@ -29,9 +28,6 @@ function CardForm({ onClose, onSave, cardData }) {
 
   const handleTitleChange = (e) =>
     setFormState((prev) => ({ ...prev, dealTitle: e.target.value }));
-
-  const handleDescriptionChange = (e) =>
-    setFormState((prev) => ({ ...prev, dealDescription: e.target.value }));
 
   const handleImageUpload = (e) => {
     const file = e.target.files?.[0];
@@ -73,7 +69,6 @@ function CardForm({ onClose, onSave, cardData }) {
         title: formState.dealTitle,
         background: formState.dealImage,
         deal_value: parseFloat(formState.dealValue) || 0,
-        description: formState.dealDescription,
       };
 
       let dealResult;
@@ -84,7 +79,6 @@ function CardForm({ onClose, onSave, cardData }) {
           title: dealPayload.title,
           background: dealPayload.background,
           deal_value: dealPayload.deal_value,
-          description: dealPayload.description,
         });
         await addActivity({
           userId: localUser.id,
@@ -120,7 +114,6 @@ function CardForm({ onClose, onSave, cardData }) {
     image: formState.dealImage,
     name: formState.userName,
     profilePhoto: formState.userProfilePhoto,
-    description: formState.dealDescription,
   };
 
   return (

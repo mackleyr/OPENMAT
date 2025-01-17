@@ -10,7 +10,6 @@ export const createDeal = async ({
   background,
   creatorName,
   deal_value,
-  description = "",
 }) => {
   console.log("[createDeal] => incoming payload:", {
     creator_id,
@@ -18,7 +17,6 @@ export const createDeal = async ({
     background,
     creatorName,
     deal_value,
-    description,
   });
 
   // 1) Insert row
@@ -30,7 +28,7 @@ export const createDeal = async ({
         title,
         background,
         deal_value,
-        description,
+
       },
     ])
     .select("*")
@@ -64,12 +62,12 @@ export const createDeal = async ({
 /**
  * updateDeal => modifies an existing deal
  */
-export const updateDeal = async ({ dealId, title, background, deal_value, description }) => {
-  console.log("[updateDeal] =>", { dealId, title, background, deal_value, description });
+export const updateDeal = async ({ dealId, title, background, deal_value }) => {
+  console.log("[updateDeal] =>", { dealId, title, background, deal_value });
 
   const { data: updatedDeal, error } = await supabase
     .from("deals")
-    .update({ title, background, deal_value, description })
+    .update({ title, background, deal_value })
     .eq("id", dealId)
     .select("*")
     .single();
