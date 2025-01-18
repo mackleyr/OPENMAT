@@ -9,7 +9,7 @@ export default async function handler(req, res) {
   try {
     const { orderId } = req.body;
     const request = new paypal.orders.OrdersCaptureRequest(orderId);
-    request.requestBody({});
+    request.requestBody({}); // no extra data
 
     const capture = await paypalClient().execute(request);
     return res.status(200).json(capture.result);
