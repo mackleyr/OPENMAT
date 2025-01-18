@@ -1,5 +1,6 @@
 // api/paypal/create-order.js
-import { paypalClient } from "../utils/paypalEnvironment";
+import paypal from "@paypal/checkout-server-sdk";
+import { paypalClient } from "../../src/utils/paypalEnvironment.js";
 
 export default async function handler(req, res) {
   if (req.method !== "POST") {
@@ -8,14 +9,11 @@ export default async function handler(req, res) {
 
   try {
     const { amount, payeeEmail, partnerFee, partnerFeeEmail } = req.body;
-    // partnerFee => "5.00"
-    // partnerFeeEmail => your platform’s PayPal email
 
+    // Access the "paypal" we imported to create the OrdersCreateRequest:
     const request = new paypal.orders.OrdersCreateRequest();
     request.prefer("return=representation");
 
-    // We add PLATFORM_FEES if we want a partner cut. 
-    // If not, omit payment_instruction entirely.
     const purchaseUnit = {
       amount: {
         currency_code: "USD",
@@ -24,7 +22,6 @@ export default async function handler(req, res) {
       payee: payeeEmail ? { email_address: payeeEmail } : undefined,
     };
 
-    // If there's a partnerFee, add to payment_instruction
     if (partnerFee && parseFloat(partnerFee) > 0) {
       purchaseUnit.payment_instruction = {
         platform_fees: [
@@ -33,8 +30,6 @@ export default async function handler(req, res) {
               currency_code: "USD",
               value: partnerFee.toString(),
             },
-            // If omitted, fee goes to the API caller's account
-            // If we want it to go to a different partner account:
             payee: partnerFeeEmail
               ? { email_address: partnerFeeEmail }
               : undefined,
@@ -48,6 +43,7 @@ export default async function handler(req, res) {
       purchase_units: [purchaseUnit],
     });
 
+    // Use our shared paypalClient from paypalEnvironment.js
     const order = await paypalClient().execute(request);
     return res.status(200).json({ id: order.result.id });
   } catch (error) {

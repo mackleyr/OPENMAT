@@ -1,5 +1,6 @@
 // api/paypal/capture-order.js
-import { paypalClient } from "../utils/paypalEnvironment";
+import paypal from "@paypal/checkout-server-sdk";
+import { paypalClient } from "../../src/utils/paypalEnvironment.js";
 
 export default async function handler(req, res) {
   if (req.method !== "POST") {
@@ -9,7 +10,7 @@ export default async function handler(req, res) {
   try {
     const { orderId } = req.body;
     const request = new paypal.orders.OrdersCaptureRequest(orderId);
-    request.requestBody({}); // no extra data
+    request.requestBody({}); // No extra data needed
 
     const capture = await paypalClient().execute(request);
     return res.status(200).json(capture.result);
