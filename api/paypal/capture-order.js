@@ -1,15 +1,5 @@
 // api/paypal/capture-order.js
-import paypal from "@paypal/checkout-server-sdk";
-
-const clientId = process.env.PAYPAL_CLIENT_ID;
-const clientSecret = process.env.PAYPAL_CLIENT_SECRET;
-
-function environment() {
-  return new paypal.core.LiveEnvironment(clientId, clientSecret);
-}
-function client() {
-  return new paypal.core.PayPalHttpClient(environment());
-}
+import { paypalClient } from "../../utils/paypalEnvironment";
 
 export default async function handler(req, res) {
   if (req.method !== "POST") {
@@ -19,9 +9,9 @@ export default async function handler(req, res) {
   try {
     const { orderId } = req.body;
     const request = new paypal.orders.OrdersCaptureRequest(orderId);
-    request.requestBody({}); // no extra data
+    request.requestBody({});
 
-    const capture = await client().execute(request);
+    const capture = await paypalClient().execute(request);
     return res.status(200).json(capture.result);
   } catch (error) {
     console.error("capture-order error:", error);

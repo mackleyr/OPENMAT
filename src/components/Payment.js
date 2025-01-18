@@ -54,10 +54,16 @@ export default function Payment({ onClose, dealData }) {
     }
   };
 
+  // Same toggle on the front-end
+  const isSandbox = process.env.REACT_APP_PAYPAL_ENV === "sandbox";
+  const clientId = isSandbox
+    ? process.env.REACT_APP_PAYPAL_SANDBOX_CLIENT_ID
+    : process.env.REACT_APP_PAYPAL_LIVE_CLIENT_ID;
+
   return (
     <PayPalScriptProvider
       options={{
-        "client-id": process.env.REACT_APP_PAYPAL_CLIENT_ID || "TEST",
+        "client-id": clientId || "TEST",
         currency: "USD",
       }}
     >
@@ -97,11 +103,11 @@ export default function Payment({ onClose, dealData }) {
               await handleApprove(data.orderID);
             }}
             onCancel={() => {
-              console.log("User canceled PayPal payment");
+              console.log("[Payment] => User canceled PayPal payment");
               onClose?.();
             }}
             onError={(err) => {
-              console.error("PayPalButtons onError =>", err);
+              console.error("[Payment] => PayPalButtons onError =>", err);
               alert("PayPal checkout error.");
             }}
             style={{ layout: "vertical", color: "blue", shape: "rect", label: "paypal" }}

@@ -8,12 +8,17 @@ import { CardProvider } from "./contexts/CardContext";
 import { ActivityProvider } from "./contexts/ActivityContext";
 import App from "./App";
 
+const isSandbox = process.env.REACT_APP_PAYPAL_ENV === "sandbox";
+const clientId = isSandbox
+  ? process.env.REACT_APP_PAYPAL_SANDBOX_CLIENT_ID
+  : process.env.REACT_APP_PAYPAL_LIVE_CLIENT_ID;
+
 const root = ReactDOM.createRoot(document.getElementById("root"));
 root.render(
   <React.StrictMode>
     <PayPalScriptProvider
       options={{
-        "client-id": process.env.REACT_APP_PAYPAL_CLIENT_ID || "sb",
+        "client-id": clientId || "sb",
         currency: "USD",
       }}
     >
