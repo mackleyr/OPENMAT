@@ -1,5 +1,5 @@
 // api/paypal/capture-order.js
-import { paypalClient } from "../../utils/paypalEnvironment";
+import { paypalClient } from "../utils/paypalEnvironment";
 
 export default async function handler(req, res) {
   if (req.method !== "POST") {
