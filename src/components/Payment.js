@@ -4,7 +4,7 @@ import { PayPalScriptProvider, PayPalButtons } from "@paypal/react-paypal-js";
 import { useLocalUser } from "../contexts/LocalUserContext";
 import { useActivity } from "../contexts/ActivityContext";
 
-export default function Payment({ onClose, dealData }) {
+export default function Payment({ onClose, onPaymentSuccess, dealData }) {
   const { localUser } = useLocalUser();
   const { addActivity } = useActivity();
   const [isCapturing, setIsCapturing] = useState(false);
@@ -37,15 +37,21 @@ export default function Payment({ onClose, dealData }) {
 
       console.log("[Payment] => PayPal capture success =>", captureData);
 
-      // 2) Log “grabbed gift card”
+      // 2) Log “grabbed gift card” in Activity
       await addActivity({
         userId: localUser.id,
         dealId: dealData.id,
         action: "grabbed gift card",
       });
 
-      alert("Payment successful! You grabbed the gift card.");
-      onClose?.();
+      // 3) Fire parent's success callback
+      if (onPaymentSuccess) {
+        onPaymentSuccess();
+      } else {
+        // fallback
+        alert("Payment successful! You grabbed the gift card.");
+        onClose?.();
+      }
     } catch (err) {
       console.error("[Payment] => handleApprove => error =>", err);
       alert("Error capturing payment.");
@@ -54,7 +60,7 @@ export default function Payment({ onClose, dealData }) {
     }
   };
 
-  // Same toggle on the front-end
+  // Toggle sandbox vs. live for the PayPal buttons
   const isSandbox = process.env.REACT_APP_PAYPAL_ENV === "sandbox";
   const clientId = isSandbox
     ? process.env.REACT_APP_PAYPAL_SANDBOX_CLIENT_ID
@@ -83,7 +89,7 @@ export default function Payment({ onClose, dealData }) {
           <PayPalButtons
             fundingSource={undefined}
             createOrder={async () => {
-              // 1) Call our server to create an order
+              // 1) Call your server to create an order
               const createRes = await fetch("/api/paypal/create-order", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -96,10 +102,10 @@ export default function Payment({ onClose, dealData }) {
               if (!createRes.ok) {
                 throw new Error(createData.error || "Create order failed");
               }
-              return createData.id; // The order ID
+              return createData.id; // The new PayPal order ID
             }}
             onApprove={async (data) => {
-              // PayPal passes us data.orderID
+              // PayPal passes data.orderID
               await handleApprove(data.orderID);
             }}
             onCancel={() => {

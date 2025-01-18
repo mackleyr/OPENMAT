@@ -37,9 +37,12 @@ function Home() {
 
   // Overlays
   const [showCardForm, setShowCardForm] = useState(false);
-  const [showSaveSheet, setShowSaveSheet] = useState(false);
   const [showProfileSheet, setShowProfileSheet] = useState(false);
   const [showPayment, setShowPayment] = useState(false);
+  const [showSaveSheet, setShowSaveSheet] = useState(false);
+
+  // **NEW**: track if this user has paid for the gift card
+  const [userHasPaid, setUserHasPaid] = useState(false);
 
   // Build share URL if we have creatorName + dealId
   const baseUrl = process.env.REACT_APP_DOMAIN || window.location.origin;
@@ -53,7 +56,7 @@ function Home() {
     fetchDeal,
   } = useFetchDeal({ initialShareLink: shareURL });
 
-  // 2) Once we have fetchedDeal, store it in CardContext + fetch activities
+  // 2) Once we have fetchedDeal, store it + fetch activities
   useEffect(() => {
     if (fetchedDeal && fetchedDeal.id !== cardData.id) {
       setCardData({
@@ -131,20 +134,24 @@ function Home() {
   };
 
   /* ------------------------------------------------------------------
-   * Tapping the card => create/edit or grab
+   * Tapping the card => create/edit or attempt to "grab"
    * ------------------------------------------------------------------ */
   const handleCardTap = () => {
     withPayPalAuthCheck(() => {
       if (!cardData.id) {
+        // no deal => user is creating
         setShowCardForm(true);
       } else {
         const isCreator = cardData.creatorId === localUser.id;
         if (isCreator) {
+          // user is the creator => edit the card
           setShowCardForm(true);
         } else {
-          if (parseFloat(cardData.value) > 0) {
+          // user is not creator => must pay first (if not yet paid)
+          if (!userHasPaid) {
             setShowPayment(true);
           } else {
+            // user has paid => show SaveSheet
             setShowSaveSheet(true);
           }
         }
@@ -159,10 +166,10 @@ function Home() {
     });
   };
 
-  // "Grab" => Payment or free
+  // The "Grab" button => same logic as tapping the card
   const handleSave = () => {
     withPayPalAuthCheck(() => {
-      if (parseFloat(cardData.value) > 0 && cardData.creatorId !== localUser.id) {
+      if (!userHasPaid && cardData.creatorId !== localUser.id) {
         setShowPayment(true);
       } else {
         setShowSaveSheet(true);
@@ -276,7 +283,12 @@ function Home() {
 
       {showPayment && (
         <Payment
-          onClose={() => {
+          // We just close Payment if user cancels:
+          onClose={() => setShowPayment(false)}
+
+          // If Payment is successful => set userHasPaid & open SaveSheet
+          onPaymentSuccess={() => {
+            setUserHasPaid(true);
             setShowPayment(false);
             setShowSaveSheet(true);
           }}
