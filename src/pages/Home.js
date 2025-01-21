@@ -45,15 +45,12 @@ function Home() {
   // Track if user has paid
   const [userHasPaid, setUserHasPaid] = useState(false);
 
-  // Track if we returned from OAuth with an "action"
-  const [oauthAction, setOauthAction] = useState(null);
-
   // Build share URL if we have creatorName + dealId
   const baseUrl = process.env.REACT_APP_DOMAIN || window.location.origin;
   const shareURL =
     creatorName && dealId ? `${baseUrl}/share/${creatorName}/${dealId}` : null;
 
-  // 1) useFetchDeal to load the deal
+  // useFetchDeal to load the deal
   const {
     deal: fetchedDeal,
     loading,
@@ -61,7 +58,7 @@ function Home() {
     fetchDeal,
   } = useFetchDeal({ initialShareLink: shareURL });
 
-  // 2) Once we have fetchedDeal, store it + fetch activities
+  // Once we have fetchedDeal, store it + fetch activities
   useEffect(() => {
     if (fetchedDeal && fetchedDeal.id !== cardData.id) {
       setCardData({
@@ -91,12 +88,12 @@ function Home() {
   }, [fetchedDeal, cardData.id, setCardData, fetchDealActivities]);
 
   /* ------------------------------------------------------------------
-   * PayPal OAuth
+   * PayPal OAuth for Creator / Editor
    * ------------------------------------------------------------------ */
   const initiatePayPalAuth = (action = "login") => {
     // Current route, e.g. "/share/parker+revers/abcd1234"
     const currentPath = location.pathname + location.search;
-    // We'll pass that as redirect_uri plus 'action'
+    // We'll pass that as redirect_uri + 'action'
     const redirectUri = encodeURIComponent(currentPath);
     window.location.href = `/api/paypal/oauth?redirect_uri=${redirectUri}&action=${action}`;
   };
@@ -114,10 +111,9 @@ function Home() {
     const params = new URLSearchParams(window.location.search);
     const paypalEmail = params.get("paypal_email");
     const userName = params.get("name");
-    const returnedAction = params.get("action");
 
     if (paypalEmail) {
-      // Upsert user
+      // Upsert user => for creators
       upsertUser({
         paypal_email: paypalEmail,
         name: userName || "New User",
@@ -130,8 +126,6 @@ function Home() {
             name: user.name || "",
             profilePhoto: user.profile_image_url || "",
           });
-          // Save the action so we can trigger Payment or CardForm after login
-          setOauthAction(returnedAction || null);
         })
         .catch((err) => {
           console.error("[Home] => PayPal OAuth Upsert Error =>", err);
@@ -140,90 +134,68 @@ function Home() {
           // Remove those params from the URL
           params.delete("paypal_email");
           params.delete("name");
-          params.delete("action");
+          params.delete("action"); // or leave it if you want an action step
           navigate({ search: params.toString() }, { replace: true });
         });
-    } else if (returnedAction) {
-      // If there's an action param but no paypal_email => user might already be logged in
-      setOauthAction(returnedAction);
-      params.delete("action");
-      navigate({ search: params.toString() }, { replace: true });
     }
   }, [setLocalUser, navigate]);
 
-  // Once we have localUser + oauthAction => decide what to do
-  useEffect(() => {
-    if (localUser.id && oauthAction) {
-      if (oauthAction === "pay") {
-        // If there's a real deal and user is not the creator => open Payment
-        if (cardData.id && cardData.creatorId !== localUser.id) {
-          setShowPayment(true);
-        } else {
-          // Otherwise, open Card Form
-          setShowCardForm(true);
-        }
-      } else if (oauthAction === "create") {
-        setShowCardForm(true);
-      }
-      setOauthAction(null); // so we don't re-run
-    }
-  }, [localUser, oauthAction, cardData]);
-
   /* ------------------------------------------------------------------
-   * Tapping the card => create/edit or attempt to "grab"
+   * Tapping the card => create/edit or pay
    * ------------------------------------------------------------------ */
   const handleCardTap = () => {
     if (!cardData.id) {
-      // No deal => user is creating
+      // No deal => user is creating => require app-level sign-in
       withPayPalAuthCheck(() => {
         setShowCardForm(true);
       }, "create");
     } else {
-      // We have a deal => either edit or pay
       const isCreator = cardData.creatorId === localUser.id;
       if (isCreator) {
-        withPayPalAuthCheck(() => {
-          setShowCardForm(true);
-        }, "create");
+        // If I'm the creator => editing => require sign-in
+        withPayPalAuthCheck(() => setShowCardForm(true), "create");
       } else {
-        withPayPalAuthCheck(() => {
-          if (!userHasPaid) {
-            setShowPayment(true);
-          } else {
-            setShowSaveSheet(true);
-          }
-        }, "pay");
+        // If I'm not the creator => pay directly (no OAuth needed)
+        if (!userHasPaid) {
+          setShowPayment(true);
+        } else {
+          setShowSaveSheet(true);
+        }
       }
     }
   };
 
   // "+" => create new
   const handleOpenCardForm = () => {
+    // This always requires sign-in
     withPayPalAuthCheck(() => {
       setShowCardForm(true);
     }, "create");
   };
 
-  // "Grab" => pay (or show SaveSheet if already paid)
+  // "Grab" => non-creator => pay directly
   const handleSave = () => {
-    withPayPalAuthCheck(() => {
-      if (!userHasPaid && cardData.creatorId !== localUser.id) {
-        setShowPayment(true);
-      } else {
-        setShowSaveSheet(true);
-      }
-    }, "pay");
+    if (cardData.creatorId === localUser.id) {
+      // Creator doesn't "grab" their own card
+      alert("You already own this card.");
+      return;
+    }
+    if (!userHasPaid) {
+      setShowPayment(true);
+    } else {
+      setShowSaveSheet(true);
+    }
   };
 
-  // finalizeSave after SaveSheet
+  // Called after user closes the SaveSheet
   const finalizeSave = async () => {
     alert("Gift card saved!");
   };
 
-  // After user saves or updates in CardForm
+  // After user saves/updates the deal in CardForm
   const handleSaveCard = async (formData) => {
     try {
-      // Upsert user if new name/photo
+      // Optionally upsert user if new name/photo
       const updatedUser = await upsertUser({
         paypal_email: formData.userPayPalEmail,
         name: formData.userName,
@@ -255,12 +227,13 @@ function Home() {
 
     setShowCardForm(false);
 
+    // Re-fetch
     if (formData.id) {
       await fetchDeal({ dealId: formData.id });
     }
   };
 
-  // Tapping user’s profile => ProfileSheet
+  // Tapping user’s profile => ProfileSheet => might want sign-in
   const handleProfileClick = () => {
     withPayPalAuthCheck(() => {
       setShowProfileSheet(true);
