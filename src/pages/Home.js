@@ -33,7 +33,7 @@ function Home() {
   const { localUser, setLocalUser } = useLocalUser();
   const { fetchDealActivities } = useActivity();
 
-  // /share/:creatorName/:dealId from the route
+  // /share/:creatorName/:dealId
   const { creatorName, dealId } = useParams();
 
   // Overlays
@@ -47,8 +47,7 @@ function Home() {
 
   // Build share URL if we have creatorName + dealId
   const baseUrl = process.env.REACT_APP_DOMAIN || window.location.origin;
-  const shareURL =
-    creatorName && dealId ? `${baseUrl}/share/${creatorName}/${dealId}` : null;
+  const shareURL = creatorName && dealId ? `${baseUrl}/share/${creatorName}/${dealId}` : null;
 
   // useFetchDeal to load the deal
   const {
@@ -64,6 +63,7 @@ function Home() {
       setCardData({
         id: fetchedDeal.id,
         creatorId: fetchedDeal.creatorId,
+        creatorPayPalEmail: fetchedDeal.creatorPayPalEmail, // IMPORTANT
         name: fetchedDeal.creatorName,
         profilePhoto: fetchedDeal.creatorPhoto,
         title: fetchedDeal.title,
@@ -77,6 +77,7 @@ function Home() {
       setCardData({
         id: null,
         creatorId: null,
+        creatorPayPalEmail: "",
         name: "",
         profilePhoto: "",
         title: "",
@@ -88,12 +89,11 @@ function Home() {
   }, [fetchedDeal, cardData.id, setCardData, fetchDealActivities]);
 
   /* ------------------------------------------------------------------
-   * PayPal OAuth for Creator / Editor
+   * PayPal OAuth for the creator’s sign-in
    * ------------------------------------------------------------------ */
   const initiatePayPalAuth = (action = "login") => {
-    // Current route, e.g. "/share/parker+revers/abcd1234"
+    // e.g. "/share/parker+revers/abcd1234"
     const currentPath = location.pathname + location.search;
-    // We'll pass that as redirect_uri + 'action'
     const redirectUri = encodeURIComponent(currentPath);
     window.location.href = `/api/paypal/oauth?redirect_uri=${redirectUri}&action=${action}`;
   };
@@ -106,7 +106,7 @@ function Home() {
     }
   };
 
-  // On mount => parse ?paypal_email=..., ?name=..., & ?action=...
+  // On mount => parse ?paypal_email=..., ?name=...
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const paypalEmail = params.get("paypal_email");
@@ -131,10 +131,9 @@ function Home() {
           console.error("[Home] => PayPal OAuth Upsert Error =>", err);
         })
         .finally(() => {
-          // Remove those params from the URL
           params.delete("paypal_email");
           params.delete("name");
-          params.delete("action"); // or leave it if you want an action step
+          params.delete("action");
           navigate({ search: params.toString() }, { replace: true });
         });
     }
@@ -144,18 +143,17 @@ function Home() {
    * Tapping the card => create/edit or pay
    * ------------------------------------------------------------------ */
   const handleCardTap = () => {
+    // 1) If no card => user is creating => require app-level sign-in
     if (!cardData.id) {
-      // No deal => user is creating => require app-level sign-in
-      withPayPalAuthCheck(() => {
-        setShowCardForm(true);
-      }, "create");
+      withPayPalAuthCheck(() => setShowCardForm(true), "create");
     } else {
+      // 2) If we have a card => either edit or pay
       const isCreator = cardData.creatorId === localUser.id;
       if (isCreator) {
         // If I'm the creator => editing => require sign-in
         withPayPalAuthCheck(() => setShowCardForm(true), "create");
       } else {
-        // If I'm not the creator => pay directly (no OAuth needed)
+        // If I'm not the creator => go straight to payment
         if (!userHasPaid) {
           setShowPayment(true);
         } else {
@@ -165,15 +163,14 @@ function Home() {
     }
   };
 
-  // "+" => create new
+  // "+" => create new (always require sign-in)
   const handleOpenCardForm = () => {
-    // This always requires sign-in
     withPayPalAuthCheck(() => {
       setShowCardForm(true);
     }, "create");
   };
 
-  // "Grab" => non-creator => pay directly
+  // "Grab" => pay if not the creator
   const handleSave = () => {
     if (cardData.creatorId === localUser.id) {
       // Creator doesn't "grab" their own card
@@ -195,7 +192,7 @@ function Home() {
   // After user saves/updates the deal in CardForm
   const handleSaveCard = async (formData) => {
     try {
-      // Optionally upsert user if new name/photo
+      // Optionally upsert user changes
       const updatedUser = await upsertUser({
         paypal_email: formData.userPayPalEmail,
         name: formData.userName,
@@ -217,6 +214,7 @@ function Home() {
       ...prev,
       id: formData.id,
       creatorId: localUser.id,
+      creatorPayPalEmail: prev.creatorPayPalEmail || "", // preserve
       image: formData.dealImage,
       value: formData.dealValue,
       title: formData.dealTitle,
@@ -226,8 +224,6 @@ function Home() {
     }));
 
     setShowCardForm(false);
-
-    // Re-fetch
     if (formData.id) {
       await fetchDeal({ dealId: formData.id });
     }
@@ -235,14 +231,10 @@ function Home() {
 
   // Tapping user’s profile => ProfileSheet => might want sign-in
   const handleProfileClick = () => {
-    withPayPalAuthCheck(() => {
-      setShowProfileSheet(true);
-    }, "login");
+    withPayPalAuthCheck(() => setShowProfileSheet(true), "login");
   };
 
-  /* ------------------------------------------------------------------
-   * Render
-   * ------------------------------------------------------------------ */
+  // Render
   if (loading) {
     return (
       <div className="min-h-screen flex flex-col bg-black">
@@ -251,6 +243,7 @@ function Home() {
     );
   }
 
+  // If share link but no deal => "Deal not found"
   const triedShareLink = creatorName && dealId;
   if (triedShareLink && (!fetchedDeal || error)) {
     return (
@@ -269,6 +262,7 @@ function Home() {
           <ActivityLog dealId={cardData.id} />
         </div>
       </div>
+
       <Footer />
 
       {/* + Button => create deal */}
@@ -300,8 +294,7 @@ function Home() {
           }}
           dealData={{
             ...cardData,
-            creatorPayPalEmail:
-              cardData?.creatorPayPalEmail || localUser.paypalEmail,
+            creatorPayPalEmail: cardData?.creatorPayPalEmail, // ensure we pass it
           }}
         />
       )}

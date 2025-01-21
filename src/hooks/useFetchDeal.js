@@ -11,6 +11,7 @@ function normalizeDeal(dealRow) {
     image: background,
     value: deal_value,
     share_link,
+    // All these from the "users" relationship:
     creatorId: users?.id || null,
     creatorName: users?.name || "",
     creatorPhoto: users?.profile_image_url || null,

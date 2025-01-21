@@ -3,7 +3,7 @@ import React, { useState } from "react";
 import { PayPalScriptProvider, PayPalButtons } from "@paypal/react-paypal-js";
 import { useLocalUser } from "../contexts/LocalUserContext";
 import { useActivity } from "../contexts/ActivityContext";
-import { upsertUser } from "../services/usersService"; // <- Make sure it's imported
+import { upsertUser } from "../services/usersService";
 
 export default function Payment({ onClose, onPaymentSuccess, dealData }) {
   const { localUser, setLocalUser } = useLocalUser();
@@ -24,17 +24,9 @@ export default function Payment({ onClose, onPaymentSuccess, dealData }) {
   const amount = dealData.value.toString();
   const payeeEmail = dealData.creatorPayPalEmail;
 
-  /**
-   * handleApprove => Called by PayPal on successful order approval.
-   * 1) Capture the order on your server.
-   * 2) Parse buyer (payer) info, upsert user in your DB.
-   * 3) Add Activity with that user’s ID.
-   * 4) Fire onPaymentSuccess callback => "Grabbed" flow continues.
-   */
   const handleApprove = async (orderID) => {
     try {
       setIsCapturing(true);
-
       // 1) POST to /api/paypal/capture-order
       const captureRes = await fetch("/api/paypal/capture-order", {
         method: "POST",
@@ -44,49 +36,46 @@ export default function Payment({ onClose, onPaymentSuccess, dealData }) {
       const captureData = await captureRes.json();
       if (!captureRes.ok) throw new Error(captureData.error || "Capture failed");
 
-      console.log("[Payment] => PayPal capture success =>", captureData);
+      console.log("[Payment] => capture success =>", captureData);
 
-      // Extract buyer (payer) info
+      // parse buyer info
       const payer = captureData?.payer || {};
-      const payerEmail = payer.email_address;
+      const payerEmail = payer.email_address || "";
       const firstName = payer?.name?.given_name || "";
       const lastName = payer?.name?.surname || "";
-      const displayName = (firstName + " " + lastName).trim() || payerEmail || "PayPal User";
+      const displayName = `${firstName} ${lastName}`.trim() || payerEmail || "PayPal User";
 
-      // 2) Upsert the buyer as a user in your DB (store payer’s email + name)
-      let newUserId = localUser.id ?? null; // fallback if we have a logged in user
+      // 2) upsert the buyer in DB
+      let buyerId = localUser.id;
       if (payerEmail) {
         try {
-          const upsertedUser = await upsertUser({
+          const upserted = await upsertUser({
             paypal_email: payerEmail,
             name: displayName,
           });
-          newUserId = upsertedUser.id;
-
-          // Optionally set them as the localUser for this session
+          buyerId = upserted.id;
+          // set them as localUser
           setLocalUser({
-            id: upsertedUser.id,
-            paypalEmail: upsertedUser.paypal_email,
-            name: upsertedUser.name,
-            profilePhoto: upsertedUser.profile_image_url || "",
+            id: upserted.id,
+            paypalEmail: upserted.paypal_email,
+            name: upserted.name,
+            profilePhoto: upserted.profile_image_url || "",
           });
         } catch (err) {
-          console.error("[Payment] => Upsert buyer user error =>", err);
+          console.error("[Payment] => upsert buyer error =>", err);
         }
       }
 
-      // 3) Log “grabbed gift card” in Activity with that user ID
+      // 3) log an Activity => “grabbed gift card”
       await addActivity({
-        userId: newUserId,
+        userId: buyerId,
         dealId: dealData.id,
         action: "grabbed gift card",
       });
 
-      // 4) Fire parent's success callback
-      if (onPaymentSuccess) {
-        onPaymentSuccess();
-      } else {
-        // fallback
+      // 4) onPaymentSuccess => parent logic (e.g. close Payment, show SaveSheet)
+      if (onPaymentSuccess) onPaymentSuccess();
+      else {
         alert("Payment successful! You grabbed the gift card.");
         onClose?.();
       }
@@ -98,7 +87,7 @@ export default function Payment({ onClose, onPaymentSuccess, dealData }) {
     }
   };
 
-  // Toggle sandbox vs. live for the PayPal buttons
+  // Toggle sandbox vs. live
   const isSandbox = process.env.REACT_APP_PAYPAL_ENV === "sandbox";
   const clientId = isSandbox
     ? process.env.REACT_APP_PAYPAL_SANDBOX_CLIENT_ID
@@ -127,7 +116,7 @@ export default function Payment({ onClose, onPaymentSuccess, dealData }) {
           <PayPalButtons
             fundingSource={undefined}
             createOrder={async () => {
-              // 1) Call your server to create an order
+              // 1) call server to create order
               const createRes = await fetch("/api/paypal/create-order", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -143,7 +132,6 @@ export default function Payment({ onClose, onPaymentSuccess, dealData }) {
               return createData.id; // The new PayPal order ID
             }}
             onApprove={async (data) => {
-              // PayPal passes data.orderID
               await handleApprove(data.orderID);
             }}
             onCancel={() => {
