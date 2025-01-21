@@ -1,8 +1,8 @@
 /**
  * api/paypal/oauth.js
  *
- * 1) If no 'code', redirect user to PayPal sign-in.
- * 2) If 'code', exchange for token, check for id_token => decode or call userinfo, then redirect back to React.
+ * 1) If no 'code', redirect user to PayPal sign-in, including a "state" that preserves redirect_uri + action.
+ * 2) If 'code', exchange for token, decode user info, then redirect back to React with the user’s email + name + action.
  */
 import express from "express";
 import querystring from "querystring";
@@ -31,36 +31,42 @@ const app = express();
 
 app.get(["/", "/api/paypal/oauth"], async (req, res) => {
   console.log("[oauth.js] => Default export invoked => calling app(req, res)");
-  console.log("[oauth.js] => Express sees path =>", req.path);
 
   try {
-    const { code } = req.query;
+    const { code, redirect_uri, action, state } = req.query;
     console.log("[oauth.js] => Query params =>", req.query);
 
-    const redirectURI = `${APP_URL}/api/paypal/oauth`;
+    // We'll define the callback URL for the actual token exchange:
+    // This is the route on *this* server (the same route):
+    const callbackUrl = `${APP_URL}/api/paypal/oauth`;
 
     // 1) If no code => send user to PayPal sign-in
     if (!code) {
-      console.log("[oauth.js] => No 'code' found, redirecting to PayPal sign-in");
-      const scopeParam = encodeURIComponent("openid profile email"); // => "openid%20profile%20email"
+      console.log("[oauth.js] => No 'code', redirecting to PayPal sign-in");
 
-      // Use the correct domain for sign in
-      const paypalAuthUrl = isSandbox
-        ? `https://www.sandbox.paypal.com/signin/authorize?response_type=code
-          &client_id=${clientId}
-          &scope=${scopeParam}
-          &redirect_uri=${encodeURIComponent(redirectURI)}`
-        : `https://www.paypal.com/signin/authorize?response_type=code
-          &client_id=${clientId}
-          &scope=${scopeParam}
-          &redirect_uri=${encodeURIComponent(redirectURI)}`;
+      // We'll store redirect_uri & action in the "state" param
+      const stateObj = {
+        redirect_uri: redirect_uri || "/",
+        action: action || "",
+      };
 
-      const finalAuthUrl = paypalAuthUrl.replace(/\s+/g, "");
+      const scopeParam = encodeURIComponent("openid profile email");
+      const baseSignInUrl = isSandbox
+        ? "https://www.sandbox.paypal.com/signin/authorize"
+        : "https://www.paypal.com/signin/authorize";
+
+      const finalAuthUrl = `${baseSignInUrl}?response_type=code&client_id=${clientId}
+        &scope=${scopeParam}
+        &redirect_uri=${encodeURIComponent(callbackUrl)}
+        &state=${encodeURIComponent(JSON.stringify(stateObj))}
+      `.replace(/\s+/g, "");
+
       console.log("[oauth.js] => PayPal Auth URL =>", finalAuthUrl);
       return res.redirect(finalAuthUrl);
     }
 
     console.log("[oauth.js] => 'code' found, exchanging for token...");
+    // 2) Exchange code for token
     const tokenResponse = await fetch(`${oauthBaseUrl}/v1/oauth2/token`, {
       method: "POST",
       headers: {
@@ -71,7 +77,7 @@ app.get(["/", "/api/paypal/oauth"], async (req, res) => {
       body: querystring.stringify({
         grant_type: "authorization_code",
         code,
-        redirect_uri: redirectURI,
+        redirect_uri: callbackUrl,
       }),
     });
 
@@ -88,46 +94,43 @@ app.get(["/", "/api/paypal/oauth"], async (req, res) => {
     console.log("[oauth.js] => tokenJson =>", tokenJson);
 
     const accessToken = tokenJson.access_token;
-    console.log("[oauth.js] => Access token received =>", !!accessToken);
+    if (!accessToken) {
+      console.error("[oauth.js] => No access token returned.");
+      return res.status(400).json({ error: "No access token in response." });
+    }
 
-    // 2.5) Check if there's an id_token. If yes, decode it for user info.
+    // 3) Attempt to decode user info from id_token or userinfo endpoint
     let userinfo = null;
     if (tokenJson.id_token) {
-      console.log("[oauth.js] => Found id_token => decoding...");
       try {
         userinfo = jwtDecode(tokenJson.id_token);
         console.log("[oauth.js] => Decoded id_token =>", userinfo);
       } catch (decodeErr) {
         console.error("[oauth.js] => Error decoding id_token =>", decodeErr);
-        // fallback => try userinfo endpoint if decode fails
       }
     }
 
-    // 3) If no userinfo from id_token, or decode failed => call userinfo
     if (!userinfo) {
-      console.log("[oauth.js] => No or invalid id_token, calling userinfo...");
+      console.log("[oauth.js] => Calling /userinfo to retrieve profile...");
       const userInfoResp = await fetch(
         `${oauthBaseUrl}/v1/identity/openidconnect/userinfo?schema=openid`,
         {
           headers: {
             Authorization: `Bearer ${accessToken}`,
-            Accept: "application/json", // Ensure JSON
+            Accept: "application/json",
           },
         }
       );
 
       const rawText = await userInfoResp.text();
-      console.log("[oauth.js] => Raw userinfo body =>", rawText);
-
       if (!userInfoResp.ok) {
-        console.error("[oauth.js] => userinfo status =>", userInfoResp.status);
+        console.error("[oauth.js] => userinfo error =>", userInfoResp.status);
         let errData;
         try {
           errData = JSON.parse(rawText);
         } catch {
           errData = { error: "non-json response", body: rawText };
         }
-
         return res.status(400).json({
           error: "User info request failed",
           details: errData,
@@ -143,22 +146,38 @@ app.get(["/", "/api/paypal/oauth"], async (req, res) => {
       console.log("[oauth.js] => PayPal userinfo =>", userinfo);
     }
 
-    // 4) Fallbacks for user name & email
-    const paypalEmail = userinfo.email || ""; 
+    // 4) Extract PayPal email & userName fallback
+    const paypalEmail = userinfo.email || "";
     const userName =
-      userinfo.name ||
-      userinfo.given_name ||
-      paypalEmail ||
-      "New User";
+      userinfo.name || userinfo.given_name || paypalEmail || "New User";
 
-    // 5) Redirect back to your app with user's info in query params
-    console.log(
-      `[oauth.js] => Done! Redirecting back to ${APP_URL} with query params: paypal_email=${paypalEmail}, name=${userName}`
-    );
+    // 5) Figure out where to redirect
+    //    If we had a state param, parse it:
+    let finalPath = "/";
+    let finalAction = "";
+    if (state) {
+      try {
+        const parsedState = JSON.parse(state);
+        finalPath = parsedState.redirect_uri || "/";
+        finalAction = parsedState.action || "";
+      } catch (err) {
+        console.log("[oauth.js] => Could not parse state =>", err);
+      }
+    } else if (redirect_uri) {
+      // fallback
+      finalPath = redirect_uri;
+      finalAction = action || "";
+    }
 
-    const finalUrl = `${APP_URL}?paypal_email=${encodeURIComponent(paypalEmail)}&name=${encodeURIComponent(userName)}`;
+    // 6) Construct final URL => e.g. https://www.and.deals/share/creator/123?paypal_email=...&name=...&action=...
+    const finalUrl = `${APP_URL}${finalPath}?paypal_email=${encodeURIComponent(
+      paypalEmail
+    )}&name=${encodeURIComponent(userName)}${
+      finalAction ? `&action=${encodeURIComponent(finalAction)}` : ""
+    }`;
+
+    console.log("[oauth.js] => Redirecting back =>", finalUrl);
     return res.redirect(finalUrl);
-
   } catch (err) {
     console.error("[oauth.js] => PayPal OAuth error:", err);
     return res.status(500).json({ error: err.message });
