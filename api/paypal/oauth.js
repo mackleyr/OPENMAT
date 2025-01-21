@@ -1,8 +1,8 @@
 /**
  * api/paypal/oauth.js
  *
- * 1) If no 'code', redirect user to PayPal sign-in, including a "state" that preserves redirect_uri + action.
- * 2) If 'code', exchange for token, decode user info, then redirect back to React with the user’s email + name + action.
+ * IMPORTANT CHANGE:
+ *   - We only define `app.get("/api/paypal/oauth", ...)`, removing the old array ["/", "/api/paypal/oauth"].
  */
 import express from "express";
 import querystring from "querystring";
@@ -26,25 +26,24 @@ const oauthBaseUrl = isSandbox
   ? "https://api.sandbox.paypal.com"
   : "https://api.paypal.com";
 
-// Create Express app
 const app = express();
 
-app.get(["/", "/api/paypal/oauth"], async (req, res) => {
-  console.log("[oauth.js] => Default export invoked => calling app(req, res)");
-
+/**
+ * Only handle GET /api/paypal/oauth
+ * No longer handle "/"
+ */
+app.get("/api/paypal/oauth", async (req, res) => {
   try {
     const { code, redirect_uri, action, state } = req.query;
     console.log("[oauth.js] => Query params =>", req.query);
 
-    // We'll define the callback URL for the actual token exchange:
-    // This is the route on *this* server (the same route):
+    // The callback on *this server* for exchanging code => token:
     const callbackUrl = `${APP_URL}/api/paypal/oauth`;
 
     // 1) If no code => send user to PayPal sign-in
     if (!code) {
       console.log("[oauth.js] => No 'code', redirecting to PayPal sign-in");
 
-      // We'll store redirect_uri & action in the "state" param
       const stateObj = {
         redirect_uri: redirect_uri || "/",
         action: action || "",
@@ -65,8 +64,9 @@ app.get(["/", "/api/paypal/oauth"], async (req, res) => {
       return res.redirect(finalAuthUrl);
     }
 
+    // 2) If we do have a code => exchange it for tokens
     console.log("[oauth.js] => 'code' found, exchanging for token...");
-    // 2) Exchange code for token
+
     const tokenResponse = await fetch(`${oauthBaseUrl}/v1/oauth2/token`, {
       method: "POST",
       headers: {
@@ -99,7 +99,7 @@ app.get(["/", "/api/paypal/oauth"], async (req, res) => {
       return res.status(400).json({ error: "No access token in response." });
     }
 
-    // 3) Attempt to decode user info from id_token or userinfo endpoint
+    // 3) Attempt to decode user info from id_token or userinfo
     let userinfo = null;
     if (tokenJson.id_token) {
       try {
@@ -146,13 +146,12 @@ app.get(["/", "/api/paypal/oauth"], async (req, res) => {
       console.log("[oauth.js] => PayPal userinfo =>", userinfo);
     }
 
-    // 4) Extract PayPal email & userName fallback
+    // 4) Extract user email & fallback name
     const paypalEmail = userinfo.email || "";
     const userName =
       userinfo.name || userinfo.given_name || paypalEmail || "New User";
 
-    // 5) Figure out where to redirect
-    //    If we had a state param, parse it:
+    // 5) If we had a state param, parse it => figure out final route & action
     let finalPath = "/";
     let finalAction = "";
     if (state) {
@@ -164,12 +163,12 @@ app.get(["/", "/api/paypal/oauth"], async (req, res) => {
         console.log("[oauth.js] => Could not parse state =>", err);
       }
     } else if (redirect_uri) {
-      // fallback
       finalPath = redirect_uri;
       finalAction = action || "";
     }
 
-    // 6) Construct final URL => e.g. https://www.and.deals/share/creator/123?paypal_email=...&name=...&action=...
+    // 6) Redirect back to the front-end route with user info
+    // e.g. /share/creator/123?paypal_email=...&action=pay
     const finalUrl = `${APP_URL}${finalPath}?paypal_email=${encodeURIComponent(
       paypalEmail
     )}&name=${encodeURIComponent(userName)}${
@@ -184,9 +183,9 @@ app.get(["/", "/api/paypal/oauth"], async (req, res) => {
   }
 });
 
-// CATCH-ALL
+// CATCH-ALL (optional)
 app.use((req, res) => {
-  console.log("[oauth.js] => Express catch-all => path =>", req.path);
+  console.log("[oauth.js] => Catch-all => path =>", req.path);
   return res.status(404).json({
     error: "No matching route in /api/paypal/oauth.js",
     path: req.path,
