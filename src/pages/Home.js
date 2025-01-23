@@ -63,7 +63,7 @@ function Home() {
       setCardData({
         id: fetchedDeal.id,
         creatorId: fetchedDeal.creatorId,
-        creatorPayPalEmail: fetchedDeal.creatorPayPalEmail, // IMPORTANT
+        creatorPayPalEmail: fetchedDeal.creatorPayPalEmail,
         name: fetchedDeal.creatorName,
         profilePhoto: fetchedDeal.creatorPhoto,
         title: fetchedDeal.title,
@@ -88,11 +88,8 @@ function Home() {
     }
   }, [fetchedDeal, cardData.id, setCardData, fetchDealActivities]);
 
-  /* ------------------------------------------------------------------
-   * PayPal OAuth for the creator’s sign-in
-   * ------------------------------------------------------------------ */
+  // PayPal OAuth for the creator’s sign-in
   const initiatePayPalAuth = (action = "login") => {
-    // e.g. "/share/parker+revers/abcd1234"
     const currentPath = location.pathname + location.search;
     const redirectUri = encodeURIComponent(currentPath);
     window.location.href = `/api/paypal/oauth?redirect_uri=${redirectUri}&action=${action}`;
@@ -113,7 +110,6 @@ function Home() {
     const userName = params.get("name");
 
     if (paypalEmail) {
-      // Upsert user => for creators
       upsertUser({
         paypal_email: paypalEmail,
         name: userName || "New User",
@@ -139,21 +135,15 @@ function Home() {
     }
   }, [setLocalUser, navigate]);
 
-  /* ------------------------------------------------------------------
-   * Tapping the card => create/edit or pay
-   * ------------------------------------------------------------------ */
+  // Tapping the card => create/edit or pay
   const handleCardTap = () => {
-    // 1) If no card => user is creating => require app-level sign-in
     if (!cardData.id) {
       withPayPalAuthCheck(() => setShowCardForm(true), "create");
     } else {
-      // 2) If we have a card => either edit or pay
       const isCreator = cardData.creatorId === localUser.id;
       if (isCreator) {
-        // If I'm the creator => editing => require sign-in
         withPayPalAuthCheck(() => setShowCardForm(true), "create");
       } else {
-        // If I'm not the creator => go straight to payment
         if (!userHasPaid) {
           setShowPayment(true);
         } else {
@@ -173,7 +163,6 @@ function Home() {
   // "Grab" => pay if not the creator
   const handleSave = () => {
     if (cardData.creatorId === localUser.id) {
-      // Creator doesn't "grab" their own card
       alert("You already own this card.");
       return;
     }
@@ -184,7 +173,7 @@ function Home() {
     }
   };
 
-  // Called after user closes the SaveSheet
+  // After user closes the SaveSheet
   const finalizeSave = async () => {
     alert("Gift card saved!");
   };
@@ -192,7 +181,6 @@ function Home() {
   // After user saves/updates the deal in CardForm
   const handleSaveCard = async (formData) => {
     try {
-      // Optionally upsert user changes
       const updatedUser = await upsertUser({
         paypal_email: formData.userPayPalEmail,
         name: formData.userName,
@@ -209,12 +197,11 @@ function Home() {
       alert("Error updating user data.");
     }
 
-    // Update cardData
     setCardData((prev) => ({
       ...prev,
       id: formData.id,
       creatorId: localUser.id,
-      creatorPayPalEmail: prev.creatorPayPalEmail || "", // preserve
+      creatorPayPalEmail: prev.creatorPayPalEmail || "",
       image: formData.dealImage,
       value: formData.dealValue,
       title: formData.dealTitle,
@@ -229,12 +216,11 @@ function Home() {
     }
   };
 
-  // Tapping user’s profile => ProfileSheet => might want sign-in
+  // Tapping user’s profile => ProfileSheet
   const handleProfileClick = () => {
     withPayPalAuthCheck(() => setShowProfileSheet(true), "login");
   };
 
-  // Render
   if (loading) {
     return (
       <div className="min-h-screen flex flex-col bg-black">
@@ -243,7 +229,6 @@ function Home() {
     );
   }
 
-  // If share link but no deal => "Deal not found"
   const triedShareLink = creatorName && dealId;
   if (triedShareLink && (!fetchedDeal || error)) {
     return (
@@ -265,10 +250,8 @@ function Home() {
 
       <Footer />
 
-      {/* + Button => create deal */}
       <AddButton onOpenCardForm={handleOpenCardForm} />
 
-      {/* Overlays */}
       {showCardForm && (
         <div className="absolute inset-0 z-50 bg-white">
           <CardForm
@@ -294,7 +277,7 @@ function Home() {
           }}
           dealData={{
             ...cardData,
-            creatorPayPalEmail: cardData?.creatorPayPalEmail, // ensure we pass it
+            creatorPayPalEmail: cardData?.creatorPayPalEmail,
           }}
         />
       )}
@@ -307,6 +290,7 @@ function Home() {
               finalizeSave();
             }}
             userData={localUser}
+            dealData={cardData}
           />
         </div>
       )}
