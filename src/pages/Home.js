@@ -157,20 +157,14 @@ function Home() {
 
   // "+" => create new (always require sign-in)
   const handleOpenCardForm = () => {
-    // You might check if there's already a deal. But if your intent
-    // is "always create a brand-new card," we can simply open a blank form.
-    // The main difference: if user is not the card’s creator or is not logged in,
-    // we do OAuth first, then open a blank form.
-  
+    // Card tap → edit if owner, or pay if not.
     if (localUser.id === cardData.creatorId && cardData.id) {
-      // The user is the same creator who already has a card
-      // => If you *still* want a brand-new card, you'd reset cardData or pass blank data
       setShowCardForm(true);
     } else {
       // No localUser or different user => do OAuth, then open blank form
       withPayPalAuthCheck(() => {
-        // Once OAuth is done, we open a completely blank card
-        // For a brand-new card, pass empty data or reset the form’s default state
+        // Once OAuth is done, open blank card
+        // For a new card, pass empty data or reset the form’s default state.
         setCardData({
           id: null,
           creatorId: localUser.id,
