@@ -47,7 +47,8 @@ function Home() {
 
   // Build share URL if we have creatorName + dealId
   const baseUrl = process.env.REACT_APP_DOMAIN || window.location.origin;
-  const shareURL = creatorName && dealId ? `${baseUrl}/share/${creatorName}/${dealId}` : null;
+  const shareURL =
+    creatorName && dealId ? `${baseUrl}/share/${creatorName}/${dealId}` : null;
 
   // useFetchDeal to load the deal
   const {
@@ -88,7 +89,9 @@ function Home() {
     }
   }, [fetchedDeal, cardData.id, setCardData, fetchDealActivities]);
 
-  // PayPal OAuth for the creator’s sign-in
+  /* ------------------------------------------------------------------
+   * PayPal OAuth for the creator’s sign-in
+   * ------------------------------------------------------------------ */
   const initiatePayPalAuth = (action = "login") => {
     const currentPath = location.pathname + location.search;
     const redirectUri = encodeURIComponent(currentPath);
@@ -135,29 +138,53 @@ function Home() {
     }
   }, [setLocalUser, navigate]);
 
-  // Tapping the card => create/edit or pay
+  /* ------------------------------------------------------------------
+   * Tapping the card => create/edit or pay
+   * ------------------------------------------------------------------ */
   const handleCardTap = () => {
-    if (!cardData.id) {
-      withPayPalAuthCheck(() => setShowCardForm(true), "create");
-    } else {
-      const isCreator = cardData.creatorId === localUser.id;
-      if (isCreator) {
-        withPayPalAuthCheck(() => setShowCardForm(true), "create");
+    // If no localUser yet => withPayPalAuthCheck OAuth first,
+    // then call the callback
+    withPayPalAuthCheck(() => {
+      if (localUser.id === cardData.creatorId) {
+        // Creator => edit existing
+        setShowCardForm(true);
       } else {
-        if (!userHasPaid) {
-          setShowPayment(true);
-        } else {
-          setShowSaveSheet(true);
-        }
+        // Non-creator => pay
+        setShowPayment(true);
       }
-    }
+    });
   };
 
   // "+" => create new (always require sign-in)
   const handleOpenCardForm = () => {
-    withPayPalAuthCheck(() => {
+    // You might check if there's already a deal. But if your intent
+    // is "always create a brand-new card," we can simply open a blank form.
+    // The main difference: if user is not the card’s creator or is not logged in,
+    // we do OAuth first, then open a blank form.
+  
+    if (localUser.id === cardData.creatorId && cardData.id) {
+      // The user is the same creator who already has a card
+      // => If you *still* want a brand-new card, you'd reset cardData or pass blank data
       setShowCardForm(true);
-    }, "create");
+    } else {
+      // No localUser or different user => do OAuth, then open blank form
+      withPayPalAuthCheck(() => {
+        // Once OAuth is done, we open a completely blank card
+        // For a brand-new card, pass empty data or reset the form’s default state
+        setCardData({
+          id: null,
+          creatorId: localUser.id,
+          creatorPayPalEmail: localUser.paypalEmail || "",
+          name: localUser.name || "",
+          profilePhoto: localUser.profilePhoto || "",
+          title: "",
+          value: "",
+          image: null,
+          share_link: "",
+        });
+        setShowCardForm(true);
+      }, "create");
+    }
   };
 
   // "Grab" => pay if not the creator
@@ -178,8 +205,16 @@ function Home() {
     alert("Gift card saved!");
   };
 
-  // After user saves/updates the deal in CardForm
+  /* ------------------------------------------------------------------
+   * After user saves/updates the deal in CardForm
+   * ------------------------------------------------------------------ */
   const handleSaveCard = async (formData) => {
+    // Last line of defense: if user not creator, block
+    if (cardData.id && localUser.id !== cardData.creatorId) {
+      alert("You are not the creator of this card! Cannot update.");
+      return;
+    }
+
     try {
       const updatedUser = await upsertUser({
         paypal_email: formData.userPayPalEmail,
@@ -221,6 +256,9 @@ function Home() {
     withPayPalAuthCheck(() => setShowProfileSheet(true), "login");
   };
 
+  /* ------------------------------------------------------------------
+   * Render
+   * ------------------------------------------------------------------ */
   if (loading) {
     return (
       <div className="min-h-screen flex flex-col bg-black">
