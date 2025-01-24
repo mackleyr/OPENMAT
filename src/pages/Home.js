@@ -130,6 +130,7 @@ function Home() {
           console.error("[Home] => PayPal OAuth Upsert Error =>", err);
         })
         .finally(() => {
+          // Clean up query params
           params.delete("paypal_email");
           params.delete("name");
           params.delete("action");
@@ -139,49 +140,60 @@ function Home() {
   }, [setLocalUser, navigate]);
 
   /* ------------------------------------------------------------------
-   * Tapping the card => create/edit or pay
+   * Tapping the card => either edit (creator) or pay (non-creator)
    * ------------------------------------------------------------------ */
   const handleCardTap = () => {
-    // If no localUser yet => withPayPalAuthCheck OAuth first,
-    // then call the callback
-    withPayPalAuthCheck(() => {
-      if (localUser.id === cardData.creatorId) {
-        // Creator => edit existing
-        setShowCardForm(true);
-      } else {
-        // Non-creator => pay
-        setShowPayment(true);
-      }
-    });
-  };
-
-  // "+" => create new (always require sign-in)
-  const handleOpenCardForm = () => {
-    // Card tap → edit if owner, or pay if not.
-    if (localUser.id === cardData.creatorId && cardData.id) {
-      setShowCardForm(true);
+    if (!cardData.id) {
+      // If there's no card yet, create a new one => user must be logged in
+      withPayPalAuthCheck(() => setShowCardForm(true), "create");
     } else {
-      // No localUser or different user => do OAuth, then open blank form
-      withPayPalAuthCheck(() => {
-        // Once OAuth is done, open blank card
-        // For a new card, pass empty data or reset the form’s default state.
-        setCardData({
-          id: null,
-          creatorId: localUser.id,
-          creatorPayPalEmail: localUser.paypalEmail || "",
-          name: localUser.name || "",
-          profilePhoto: localUser.profilePhoto || "",
-          title: "",
-          value: "",
-          image: null,
-          share_link: "",
-        });
-        setShowCardForm(true);
-      }, "create");
+      // We have an existing card => either edit or pay
+      const isCreator = cardData.creatorId === localUser.id;
+      if (isCreator) {
+        withPayPalAuthCheck(() => {
+          // Double-check after login
+          if (cardData.creatorId !== localUser.id) {
+            return alert("Sorry, you are not the creator of this card!");
+          }
+          setShowCardForm(true);
+        }, "create");
+      } else {
+        // If I'm not the creator => pay
+        if (!userHasPaid) {
+          setShowPayment(true);
+        } else {
+          setShowSaveSheet(true);
+        }
+      }
     }
   };
 
-  // "Grab" => pay if not the creator
+  /* ------------------------------------------------------------------
+   * The "+" => always creating a brand-new card
+   * ------------------------------------------------------------------ */
+  const handleOpenCardForm = () => {
+    // First ensure user is logged in. If not, do OAuth
+    withPayPalAuthCheck(() => {
+      // Now we truly want a blank new card
+      setCardData({
+        id: null,
+        creatorId: localUser.id,
+        creatorPayPalEmail: localUser.paypalEmail || "",
+        name: localUser.name || "",
+        profilePhoto: localUser.profilePhoto || "",
+        title: "",
+        value: "",
+        image: null,
+        share_link: "",
+      });
+
+      setShowCardForm(true);
+    }, "create");
+  };
+
+  /* ------------------------------------------------------------------
+   * "Grab" => pay if not the creator
+   * ------------------------------------------------------------------ */
   const handleSave = () => {
     if (cardData.creatorId === localUser.id) {
       alert("You already own this card.");
@@ -194,7 +206,9 @@ function Home() {
     }
   };
 
-  // After user closes the SaveSheet
+  /* ------------------------------------------------------------------
+   * After user closes SaveSheet
+   * ------------------------------------------------------------------ */
   const finalizeSave = async () => {
     alert("Gift card saved!");
   };
@@ -203,13 +217,14 @@ function Home() {
    * After user saves/updates the deal in CardForm
    * ------------------------------------------------------------------ */
   const handleSaveCard = async (formData) => {
-    // Last line of defense: if user not creator, block
+    // If there's an existing card & user not the creator => block
     if (cardData.id && localUser.id !== cardData.creatorId) {
       alert("You are not the creator of this card! Cannot update.");
       return;
     }
 
     try {
+      // Optionally upsert user changes
       const updatedUser = await upsertUser({
         paypal_email: formData.userPayPalEmail,
         name: formData.userName,
@@ -226,9 +241,10 @@ function Home() {
       alert("Error updating user data.");
     }
 
+    // Now save card data in state
     setCardData((prev) => ({
       ...prev,
-      id: formData.id,
+      id: formData.id, // or new ID if the supabase upsert returns it
       creatorId: localUser.id,
       creatorPayPalEmail: prev.creatorPayPalEmail || "",
       image: formData.dealImage,
@@ -241,11 +257,14 @@ function Home() {
 
     setShowCardForm(false);
     if (formData.id) {
+      // Re-fetch to ensure we have the newest data from Supabase
       await fetchDeal({ dealId: formData.id });
     }
   };
 
-  // Tapping user’s profile => ProfileSheet
+  /* ------------------------------------------------------------------
+   * Tapping user’s profile => ProfileSheet
+   * ------------------------------------------------------------------ */
   const handleProfileClick = () => {
     withPayPalAuthCheck(() => setShowProfileSheet(true), "login");
   };
