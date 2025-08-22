@@ -2,37 +2,32 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { supabase } from "../supabaseClient";
 
-const LocalUserContext = createContext();
+const LocalUserContext = createContext(null);
 
 export const LocalUserProvider = ({ children }) => {
-  const initialLocalUser = {
+  const [localUser, setLocalUser] = useState({
     id: null,
-    paypalEmail: "",
     name: "",
-    profilePhoto: "",
-  };
-
-  const [localUser, setLocalUser] = useState(initialLocalUser);
+    image_url: "",
+  });
 
   useEffect(() => {
     const storedId = window.localStorage.getItem("userId");
-    if (storedId) {
-      supabase
-        .from("users")
-        .select("*")
-        .eq("id", storedId)
-        .single()
-        .then(({ data: user, error }) => {
-          if (!error && user) {
-            setLocalUser({
-              id: user.id,
-              paypalEmail: user.paypal_email,
-              name: user.name || "",
-              profilePhoto: user.profile_image_url || "",
-            });
-          }
-        });
-    }
+    if (!storedId) return;
+    supabase
+      .from("profiles")
+      .select("id,name,image_url")
+      .eq("id", storedId)
+      .single()
+      .then(({ data, error }) => {
+        if (!error && data) {
+          setLocalUser({
+            id: data.id,
+            name: data.name || "",
+            image_url: data.image_url || "",
+          });
+        }
+      });
   }, []);
 
   return (

@@ -1,22 +1,32 @@
+// src/components/PaymentRequestButton.js
 import React, { useEffect, useRef, useState } from "react";
 import { loadStripe } from "@stripe/stripe-js";
 
 const PUBLISHABLE_KEY =
-  process.env.REACT_APP_STRIPE_PUBLISHABLE_KEY || "";
+  process.env.REACT_APP_STRIPE_PUBLISHABLE_KEY ||
+  (typeof import.meta !== "undefined" &&
+    import.meta.env &&
+    import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY) ||
+  "";
 
 const API =
-  process.env.REACT_APP_API_BASE || "http://localhost:3001";
+  process.env.REACT_APP_API_BASE ||
+  (typeof import.meta !== "undefined" &&
+    import.meta.env &&
+    import.meta.env.VITE_API_BASE) ||
+  "http://localhost:3001";
 
 export default function PaymentRequestButton({
   amountCents,
   dealId = "default",
   donorName,
-  donorImageUrl,
-  ensureOnboarded,
-  onSuccess,
+  donorImageUrl, // unused but reserved
+  ensureOnboarded, // () => Promise<boolean>
+  onSuccess, // ({ payment_intent_id })
 }) {
   const mountRef = useRef(null);
   const [walletReady, setWalletReady] = useState(false);
+  const submittingRef = useRef(false);
 
   useEffect(() => {
     let stripe, elements, pr, prButton;
@@ -28,6 +38,7 @@ export default function PaymentRequestButton({
           setWalletReady(false);
           return;
         }
+
         stripe = await loadStripe(PUBLISHABLE_KEY);
         if (!stripe) {
           setWalletReady(false);
@@ -47,31 +58,34 @@ export default function PaymentRequestButton({
           setWalletReady(false);
           return;
         }
-
         setWalletReady(true);
+
         elements = stripe.elements();
         prButton = elements.create("paymentRequestButton", {
           paymentRequest: pr,
-          style: { paymentRequestButton: { type: "donate", theme: "dark", height: "44px" } },
+          style: {
+            paymentRequestButton: { type: "donate", theme: "dark", height: "44px" },
+          },
         });
         prButton.mount(mountRef.current);
 
         pr.on("paymentmethod", async (ev) => {
+          if (submittingRef.current) return;
+          submittingRef.current = true;
+
           try {
             if (ensureOnboarded) {
               const ok = await ensureOnboarded();
-              if (!ok) return ev.complete("fail");
+              if (!ok) {
+                submittingRef.current = false;
+                return ev.complete("fail");
+              }
             }
 
             const resp = await fetch(`${API}/api/payments/create-intent`, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                amountCents,
-                currency: "usd",
-                dealId,
-                donorName,
-              }),
+              body: JSON.stringify({ amountCents, currency: "usd", dealId, donorName }),
             });
             if (!resp.ok) throw new Error(`create-intent ${resp.status}`);
             const { clientSecret, error } = await resp.json();
@@ -82,18 +96,18 @@ export default function PaymentRequestButton({
               { payment_method: ev.paymentMethod.id },
               { handleActions: true }
             );
-
             if (confirm.error) {
               ev.complete("fail");
               alert(confirm.error.message);
+              submittingRef.current = false;
               return;
             }
-
             ev.complete("success");
 
             const result = await stripe.confirmCardPayment(clientSecret);
             if (result.error) {
               alert(result.error.message);
+              submittingRef.current = false;
               return;
             }
 
@@ -104,6 +118,8 @@ export default function PaymentRequestButton({
             console.error("[wallet confirm] error:", e);
             ev.complete("fail");
             alert(e?.message || "Payment failed");
+          } finally {
+            submittingRef.current = false;
           }
         });
       } catch (e) {
@@ -116,6 +132,7 @@ export default function PaymentRequestButton({
       try { pr && pr.off("paymentmethod"); } catch {}
       try { prButton && prButton.unmount(); } catch {}
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [amountCents, dealId, donorName, ensureOnboarded, onSuccess]);
 
   const fallbackGive = async () => {
@@ -127,11 +144,7 @@ export default function PaymentRequestButton({
       const resp = await fetch(`${API}/api/donate/session`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          amountCents,
-          donorName: donorName || "Anonymous",
-          dealId,
-        }),
+        body: JSON.stringify({ amountCents, donorName: donorName || "Anonymous", dealId }),
       });
       if (!resp.ok) {
         const text = await resp.text();

@@ -1,3 +1,4 @@
+// api/server.js
 require("dotenv").config();
 
 const express = require("express");
@@ -7,7 +8,6 @@ const Stripe = require("stripe");
 const { createClient } = require("@supabase/supabase-js");
 
 const app = express();
-const PORT = process.env.PORT || 3001;
 
 /* ---------- Stripe ---------- */
 if (!process.env.STRIPE_SECRET_KEY?.startsWith("sk_")) {
@@ -63,10 +63,7 @@ async function upsertProfileByEmail({ email, name, image_url = null }) {
     .select()
     .limit(1);
 
-  if (error) {
-    console.error("[upsertProfileByEmail] error:", error);
-    return { ok: false, error };
-  }
+  if (error) return { ok: false, error };
   return { ok: true, row: data?.[0] || null };
 }
 
@@ -84,10 +81,7 @@ async function recordDonation({
       .select("id")
       .eq("stripe_session_id", stripeSessionId)
       .maybeSingle();
-    if (existing) {
-      console.log("[recordDonation] already recorded for", stripeSessionId);
-      return { ok: true, already: true };
-    }
+    if (existing) return { ok: true, already: true };
   }
 
   const row = {
@@ -100,16 +94,8 @@ async function recordDonation({
     stripe_payment_intent_id: stripePaymentIntentId,
   };
 
-  const { data, error } = await supabaseAdmin
-    .from("activities")
-    .insert([row])
-    .select();
-
-  if (error) {
-    console.error("[recordDonation] supabase insert error:", error);
-    return { ok: false, error };
-  }
-  console.log("[recordDonation] inserted:", data?.[0] || row);
+  const { data, error } = await supabaseAdmin.from("activities").insert([row]).select();
+  if (error) return { ok: false, error };
   return { ok: true, row: data?.[0] || row };
 }
 
@@ -127,31 +113,22 @@ app.post(
         process.env.STRIPE_WEBHOOK_SECRET
       );
     } catch (err) {
-      console.error("[webhook] signature verification failed:", err.message);
       return res.status(400).send(`Webhook Error: ${err.message}`);
     }
 
     try {
-      console.log("[webhook] event:", event.type, event.id);
-
       switch (event.type) {
         case "checkout.session.completed": {
-          const session = event.data.object;
+          const s = event.data.object;
           await recordDonation({
-            amountCents: session.amount_total || 0,
-            dealId: session.metadata?.deal_id || "default",
-            donorName:
-              session.metadata?.donor_name ||
-              session.customer_details?.name ||
-              "Anonymous",
-            stripeSessionId: session.id,
+            amountCents: s.amount_total || 0,
+            dealId: s.metadata?.deal_id || "default",
+            donorName: s.metadata?.donor_name || s.customer_details?.name || "Anonymous",
+            stripeSessionId: s.id,
           });
           await upsertProfileByEmail({
-            email: session.customer_details?.email || null,
-            name:
-              session.metadata?.donor_name ||
-              session.customer_details?.name ||
-              null,
+            email: s.customer_details?.email || null,
+            name: s.metadata?.donor_name || s.customer_details?.name || null,
           });
           break;
         }
@@ -175,7 +152,6 @@ app.post(
 
       res.json({ received: true });
     } catch (err) {
-      console.error("[webhook] handler error:", err);
       res.status(500).send("Webhook handler error");
     }
   }
@@ -187,14 +163,8 @@ app.use(express.json());
 /* ---------- Create Checkout Session ---------- */
 app.post("/api/donate/session", async (req, res) => {
   try {
-    const {
-      amountCents = 1000,
-      donorName = "Anonymous",
-      dealId = "default",
-    } = req.body || {};
-
-    const origin =
-      req.headers.origin || process.env.OPENMAT_DOMAIN || "http://localhost:3000";
+    const { amountCents = 1000, donorName = "Anonymous", dealId = "default" } = req.body || {};
+    const origin = req.headers.origin || process.env.OPENMAT_DOMAIN || "http://localhost:3000";
 
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
@@ -204,58 +174,36 @@ app.post("/api/donate/session", async (req, res) => {
       line_items: [
         {
           quantity: 1,
-          price_data: {
-            currency: "usd",
-            unit_amount: amountCents,
-            product_data: { name: "Donation" },
-          },
+          price_data: { currency: "usd", unit_amount: amountCents, product_data: { name: "Donation" } },
         },
       ],
       metadata: { deal_id: dealId, donor_name: donorName },
       success_url: `${origin}/?success=1&session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${origin}/?canceled=1`,
+      cancel_url: `${origin}/give?canceled=1`,
     });
 
-    console.log("[create session] created:", session.id, "→", session.url);
     res.json({ url: session.url });
   } catch (err) {
-    console.error("[create session] error:", err);
-    res.status(500).json({
-      error: "failed_to_create_session",
-      details: err?.raw?.message || err?.message || "unknown",
-      code: err?.code || err?.raw?.code || null,
-    });
+    res.status(500).json({ error: "failed_to_create_session", details: err?.message || "unknown" });
   }
 });
 
 /* ---------- Wallet flow (PI) ---------- */
 app.post("/api/payments/create-intent", async (req, res) => {
   try {
-    const {
-      amountCents = 1000,
-      currency = "usd",
-      dealId = "default",
-      donorName = "Anonymous",
-    } = req.body || {};
-
+    const { amountCents = 1000, currency = "usd", dealId = "default", donorName = "Anonymous" } = req.body || {};
     if (!Number.isInteger(amountCents) || amountCents < 50) {
       return res.status(400).json({ error: "invalid_amount" });
     }
-
     const intent = await stripe.paymentIntents.create({
       amount: amountCents,
       currency,
       automatic_payment_methods: { enabled: true },
       metadata: { deal_id: dealId, donor_name: donorName },
     });
-
     res.json({ clientSecret: intent.client_secret });
   } catch (err) {
-    console.error("[create-intent] error:", err);
-    res.status(500).json({
-      error: "failed_to_create_intent",
-      details: err?.message || "unknown",
-    });
+    res.status(500).json({ error: "failed_to_create_intent", details: err?.message || "unknown" });
   }
 });
 
@@ -265,34 +213,20 @@ app.get("/api/checkout/confirm", async (req, res) => {
     const sessionId = req.query.session_id;
     if (!sessionId) return res.status(400).json({ error: "missing_session_id" });
 
-    const session = await stripe.checkout.sessions.retrieve(sessionId, {
-      expand: ["payment_intent", "customer_details"],
-    });
-    console.log("[confirm] retrieved:", session.id, session.payment_status);
-
-    if (session.payment_status !== "paid") {
-      return res.json({ ok: true, status: "not_paid" });
-    }
+    const s = await stripe.checkout.sessions.retrieve(sessionId, { expand: ["payment_intent", "customer_details"] });
+    if (s.payment_status !== "paid") return res.json({ ok: true, status: "not_paid" });
 
     const out = await recordDonation({
-      amountCents: session.amount_total || 0,
-      dealId: session.metadata?.deal_id || "default",
-      donorName:
-        session.metadata?.donor_name ||
-        session.customer_details?.name ||
-        "Anonymous",
+      amountCents: s.amount_total || 0,
+      dealId: s.metadata?.deal_id || "default",
+      donorName: s.metadata?.donor_name || s.customer_details?.name || "Anonymous",
       donorImage: null,
-      stripeSessionId: session.id,
-      stripePaymentIntentId: session.payment_intent?.id || null,
+      stripeSessionId: s.id,
+      stripePaymentIntentId: s.payment_intent?.id || null,
     });
 
-    console.log("[confirm] result:", out);
-    res.json({
-      ok: true,
-      status: out.already ? "already_recorded" : "inserted",
-    });
+    res.json({ ok: true, status: out.already ? "already_recorded" : "inserted" });
   } catch (err) {
-    console.error("[confirm] error:", err);
     res.status(500).json({ ok: false, error: err?.message || "unknown" });
   }
 });
@@ -310,31 +244,25 @@ if (process.env.NODE_ENV !== "production") {
     });
   });
 
-  app.get("/api/_debug/activities", async (req, res) => {
-    const { data, error } = await supabaseAdmin
-      .from("activities")
-      .select("*")
-      .order("created_at", { ascending: false })
-      .limit(20);
-
+  app.get("/api/_debug/activities", async (_req, res) => {
+    const { data, error } = await supabaseAdmin.from("activities").select("*").order("created_at", { ascending: false }).limit(20);
     if (error) return res.status(500).json({ error: error.message });
     res.json({ count: data?.length || 0, data });
   });
 
-  app.post("/api/_debug/activities/insert", async (req, res) => {
+  app.post("/api/_debug/activities/insert", async (_req, res) => {
     const out = await recordDonation({
       amountCents: Math.floor(Math.random() * 900) + 100,
       dealId: "default",
       donorName: "Debug",
-      donorImage: null,
-      stripeSessionId: null,
-      stripePaymentIntentId: null,
     });
     res.json(out);
   });
 }
 
-/* ---------- Start ---------- */
-app.listen(PORT, () => {
-  console.log(`API on http://localhost:${PORT}`);
-});
+/* ---------- Start (local) & Export (Vercel) ---------- */
+if (require.main === module) {
+  const PORT = process.env.PORT || 3001;
+  app.listen(PORT, () => console.log(`API on http://localhost:${PORT}`));
+}
+module.exports = app;
