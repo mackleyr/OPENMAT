@@ -26,3 +26,5 @@ yarn-error.log*
 api/.env
 .env
 api/.env
+.env
+api/.env
