@@ -24,3 +24,5 @@ yarn-error.log*
 .vercel
 .env
 api/.env
+.env
+api/.env
