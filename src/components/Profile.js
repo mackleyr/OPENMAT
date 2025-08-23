@@ -1,29 +1,24 @@
-import React from 'react';
-import profileDefault from '../assets/profile.svg';
+import React from "react";
+import profileDefault from "../assets/profile.svg";
 
-function Profile({ src = '', onClick, size = '50%', score }) {
-  // We no longer fetch from useAuth or profileData.
-  // Just display the provided src or a default image.
-  
+function Profile({ src = "", onClick, size = 80 }) {
+  const width = typeof size === "number" ? `${size}px` : String(size);
+
   return (
     <div
       onClick={onClick}
       className="relative inline-block cursor-pointer transition-opacity duration-150"
       style={{
-        width: size,
-        aspectRatio: '1 / 1',
-        display: 'flex',
-        justifyContent: 'center',
-        alignItems: 'center',
+        width,
+        aspectRatio: "1 / 1",
+        display: "flex",
+        justifyContent: "center",
+        alignItems: "center",
       }}
     >
-      {/* Profile Image */}
       <div
         className="rounded-full overflow-hidden bg-white"
-        style={{
-          width: '100%',
-          height: '100%',
-        }}
+        style={{ width: "100%", height: "100%" }}
       >
         <img
           src={src || profileDefault}

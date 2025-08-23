@@ -1,4 +1,3 @@
-// src/components/PaymentRequestButton.js
 import React, { useEffect, useRef, useState } from "react";
 import { loadStripe } from "@stripe/stripe-js";
 
@@ -19,10 +18,11 @@ const API =
 export default function PaymentRequestButton({
   amountCents,
   dealId = "default",
+  donorId,        // NEW
   donorName,
-  donorImageUrl, // unused but reserved
-  ensureOnboarded, // () => Promise<boolean>
-  onSuccess, // ({ payment_intent_id })
+  donorImageUrl,  // used when present
+  ensureOnboarded,
+  onSuccess,
 }) {
   const mountRef = useRef(null);
   const [walletReady, setWalletReady] = useState(false);
@@ -63,9 +63,7 @@ export default function PaymentRequestButton({
         elements = stripe.elements();
         prButton = elements.create("paymentRequestButton", {
           paymentRequest: pr,
-          style: {
-            paymentRequestButton: { type: "donate", theme: "dark", height: "44px" },
-          },
+          style: { paymentRequestButton: { type: "donate", theme: "dark", height: "44px" } },
         });
         prButton.mount(mountRef.current);
 
@@ -85,7 +83,14 @@ export default function PaymentRequestButton({
             const resp = await fetch(`${API}/api/payments/create-intent`, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ amountCents, currency: "usd", dealId, donorName }),
+              body: JSON.stringify({
+                amountCents,
+                currency: "usd",
+                dealId,
+                donorId,
+                donorName,
+                donorImageUrl,
+              }),
             });
             if (!resp.ok) throw new Error(`create-intent ${resp.status}`);
             const { clientSecret, error } = await resp.json();
@@ -132,8 +137,7 @@ export default function PaymentRequestButton({
       try { pr && pr.off("paymentmethod"); } catch {}
       try { prButton && prButton.unmount(); } catch {}
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [amountCents, dealId, donorName, ensureOnboarded, onSuccess]);
+  }, [amountCents, dealId, donorId, donorName, donorImageUrl, ensureOnboarded, onSuccess]);
 
   const fallbackGive = async () => {
     try {
@@ -144,7 +148,13 @@ export default function PaymentRequestButton({
       const resp = await fetch(`${API}/api/donate/session`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ amountCents, donorName: donorName || "Anonymous", dealId }),
+        body: JSON.stringify({
+          amountCents,
+          donorId,
+          donorName: donorName || "Anonymous",
+          donorImageUrl: donorImageUrl || null,
+          dealId,
+        }),
       });
       if (!resp.ok) {
         const text = await resp.text();

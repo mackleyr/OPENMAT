@@ -1,5 +1,4 @@
-// src/pages/Give.js
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import MainContainer from "../components/MainContainer";
 import Footer from "../components/Footer";
 import AmountChips from "../components/AmountChips";
@@ -8,6 +7,7 @@ import { useLocalUser } from "../contexts/LocalUserContext";
 import { supabase } from "../supabaseClient";
 import Onboard from "../components/Onboard";
 import { useNavigate, useSearchParams } from "react-router-dom";
+import { CREATOR } from "../config/Creator";
 
 const DEAL_ID = "default";
 
@@ -19,13 +19,15 @@ export default function Give() {
   const { localUser, setLocalUser } = useLocalUser();
   const [amount, setAmount] = useState(preset ? Number(preset) : 50);
   const [showOnboard, setShowOnboard] = useState(false);
+  const payRef = useRef(null);
 
   const amountCents = useMemo(
     () => Math.round(Number(amount || 0) * 100),
     [amount]
   );
 
-  const needsOnboarding = !localUser?.name || !localUser?.image_url;
+  // require both name and image
+  const needsOnboarding = !localUser?.name?.trim() || !localUser?.image_url;
 
   const ensureOnboarded = async () => {
     if (needsOnboarding) {
@@ -36,13 +38,21 @@ export default function Give() {
   };
 
   const handleOnboardDone = (p) => {
-    setLocalUser((prev) => ({ ...prev, ...p }));
+    const next = {
+      ...localUser,
+      name: p?.name?.trim() || "Anonymous",
+      image_url: p?.image_url || null,
+    };
+    setLocalUser(next);
     setShowOnboard(false);
-    navigate(`/give?amount=${amount}`);
+
+    // Auto-start payment flow (Checkout) to minimize taps
+    setTimeout(() => {
+      try { payRef.current?.start?.(); } catch {}
+    }, 0);
   };
 
   const onPaid = async ({ payment_intent_id = null } = {}) => {
-    // Optimistic insert so Activity feed pops instantly
     try {
       await supabase.from("activities").insert({
         deal_id: DEAL_ID,
@@ -62,12 +72,11 @@ export default function Give() {
     <MainContainer>
       <div className="flex flex-col items-center justify-start flex-1 w-full p-6">
         <h2 className="mt-2 text-xl font-bold text-center">
-          Donate to {localUser?.name || "Anonymous"}
+          Give to {CREATOR?.name || "OPENMAT"}
         </h2>
 
         <div className="w-full mt-6 max-w-md space-y-4">
           <AmountChips value={Number(amount)} onChange={setAmount} />
-
           <input
             type="number"
             min="1"
@@ -80,10 +89,10 @@ export default function Give() {
           />
 
           <PaymentRequestButton
+            ref={payRef}
             amountCents={amountCents}
             dealId={DEAL_ID}
             donorName={localUser?.name || "Anonymous"}
-            donorImageUrl={localUser?.image_url || null}
             ensureOnboarded={ensureOnboarded}
             onSuccess={onPaid}
           />
