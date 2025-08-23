@@ -1,11 +1,11 @@
 # What changed
 
 Branch: main
-Commit: 693df4c
+Commit: 3834f8f
 
 ## Last commit message
 
-chore(context): refresh .chatgpt-context
+api: add vercel routing + health canary + server entry
 
 
 ## Diff (name+status vs previous commit)

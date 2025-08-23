@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "functions": {
+    "index.js": {
+      "runtime": "nodejs18.x",
+      "memory": 512,
+      "maxDuration": 10
+    }
+  },
+  "routes": [
+    { "src": "^/api/health$", "dest": "/health.js" },
+    { "src": "^/api/(.*)$", "dest": "/index.js" }
+  ]
+}

@@ -1,72 +1,95 @@
-require("dotenv").config();
+// api/server.js
+
+const path = require("path");
+const fs = require("fs");
+const envLocal = path.join(__dirname, ".env.local");
+const envFile = fs.existsSync(envLocal) ? envLocal : path.join(__dirname, ".env");
+require("dotenv").config({ path: envFile });
 
 const express = require("express");
 const cors = require("cors");
 const morgan = require("morgan");
-const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
+const Stripe = require("stripe");
 const { createClient } = require("@supabase/supabase-js");
 
 const app = express();
-const PORT = process.env.PORT || 3001;
 
-// ---- Boot sanity logs ----
-console.log("[boot] NODE_ENV:", process.env.NODE_ENV);
-console.log(
-  "[boot] Stripe key present?",
-  !!process.env.STRIPE_SECRET_KEY,
-  (process.env.STRIPE_SECRET_KEY || "").slice(0, 10) + "…"
-);
-console.log("[boot] Webhook secret present?", !!process.env.STRIPE_WEBHOOK_SECRET);
-console.log("[boot] Default origin:", process.env.OPENMAT_DOMAIN || "(none)");
+/* ---------- Stripe ---------- */
+if (!process.env.STRIPE_SECRET_KEY?.startsWith("sk_")) {
+  console.warn("[boot] Missing or invalid STRIPE_SECRET_KEY");
+}
+const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
 
-// Basic middleware
-app.use(cors());
-app.use(morgan("dev"));
+/* ---------- Supabase (server/admin) ---------- */
+const SUPABASE_URL =
+  process.env.SUPABASE_URL || process.env.PROJECT_SUPABASE_URL;
+const SUPABASE_SERVICE_ROLE_KEY =
+  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SERVICE_ROLE_KEY;
 
-// ---- Shared helper: record a donation in Supabase ----
-async function recordDonation({
-  amountCents = 0,
-  dealId = "default",
-  donorName = "Anonymous",
-  stripeSessionId = null,
-}) {
-  const supabase = createClient(
-    process.env.PROJECT_SUPABASE_URL,
-    process.env.SERVICE_ROLE_KEY,
-    { auth: { persistSession: false, autoRefreshToken: false } }
+if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+  console.warn(
+    "[boot] Supabase admin env missing. URL:",
+    !!SUPABASE_URL,
+    "SERVICE_ROLE:",
+    !!SUPABASE_SERVICE_ROLE_KEY
   );
-
-  // idempotency (requires unique index on stripe_session_id where not null)
-  if (stripeSessionId) {
-    const { data: existing } = await supabase
-      .from("activities")
-      .select("id")
-      .eq("stripe_session_id", stripeSessionId)
-      .maybeSingle();
-    if (existing) {
-      console.log("[recordDonation] already recorded for", stripeSessionId);
-      return { ok: true, already: true };
-    }
-  }
-
-  const row = {
-    deal_id: dealId,
-    type: "donation",
-    amount_cents: amountCents,
-    donor_name: donorName,
-    stripe_session_id: stripeSessionId,
-  };
-
-  const { data, error } = await supabase.from("activities").insert([row]).select();
-  if (error) {
-    console.error("[recordDonation] supabase insert error:", error);
-    return { ok: false, error };
-  }
-  console.log("[recordDonation] inserted:", data?.[0] || row);
-  return { ok: true, row: data?.[0] || row };
 }
 
-// ---- Webhook (raw body!) ----
+const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+  auth: { persistSession: false, autoRefreshToken: false },
+});
+
+/* ---------- Boot logs ---------- */
+console.log("[boot] NODE_ENV:", process.env.NODE_ENV);
+console.log(
+  "[boot] Stripe key starts:",
+  (process.env.STRIPE_SECRET_KEY || "").slice(0, 10) + "…"
+);
+console.log(
+  "[boot] Webhook secret present?",
+  !!process.env.STRIPE_WEBHOOK_SECRET
+);
+console.log("[boot] Supabase URL present?", !!SUPABASE_URL);
+console.log("[boot] Service role present?", !!SUPABASE_SERVICE_ROLE_KEY);
+console.log("[boot] Default origin:", process.env.OPENMAT_DOMAIN || "(none)");
+console.log("[boot] Env file used:", envFile);
+
+/* ---------- CORS / middleware ---------- */
+// Allow localhost, production, and Vercel preview frontends; ensure ALL responses include CORS
+const allowOrigin = (origin) => {
+  if (!origin) return true; // server-to-server/webhooks
+  const o = String(origin).toLowerCase();
+
+  const fixed = new Set(
+    [
+      "http://localhost:3000",
+      "http://127.0.0.1:3000",
+      "https://openmat.app",
+      "https://openmat.vercel.app",
+      (process.env.OPENMAT_DOMAIN || "").toLowerCase(),
+    ].filter(Boolean)
+  );
+  if (fixed.has(o)) return true;
+
+  // Any Vercel preview for the frontend, e.g. https://openmat-xxxxx-openmat.vercel.app
+  if (/^https:\/\/openmat-.*\.vercel\.app$/.test(o)) return true;
+
+  return false;
+};
+
+const dynamicCors = cors({
+  origin: (origin, cb) => cb(null, allowOrigin(origin)),
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization", "Stripe-Signature"],
+});
+
+app.use((req, res, next) => dynamicCors(req, res, next));
+app.options("*", (req, res) => dynamicCors(req, res, () => res.sendStatus(204)));
+
+app.use(morgan("dev"));
+
+/* ---------- Stripe webhook (raw body) ---------- */
+// IMPORTANT: register the raw body route BEFORE express.json()
 app.post(
   "/api/stripe/webhook",
   express.raw({ type: "application/json" }),
@@ -80,21 +103,27 @@ app.post(
         process.env.STRIPE_WEBHOOK_SECRET
       );
     } catch (err) {
-      console.error("[webhook] signature verification failed:", err.message);
       return res.status(400).send(`Webhook Error: ${err.message}`);
     }
 
     try {
-      console.log("[webhook] event:", event.type, event.id);
-
       switch (event.type) {
         case "checkout.session.completed": {
-          const session = event.data.object;
+          const s = event.data.object;
           await recordDonation({
-            amountCents: session.amount_total || 0,
-            dealId: session.metadata?.deal_id || "default",
-            donorName: session.customer_details?.name || "Anonymous",
-            stripeSessionId: session.id,
+            amountCents: s.amount_total || 0,
+            dealId: s.metadata?.deal_id || "default",
+            donorId: s.metadata?.donor_id || null,
+            donorName:
+              s.metadata?.donor_name || s.customer_details?.name || "Anonymous",
+            donorImage: s.metadata?.donor_image || null,
+            stripeSessionId: s.id,
+          });
+          await upsertProfileByEmail({
+            email: s.customer_details?.email || null,
+            name:
+              s.metadata?.donor_name || s.customer_details?.name || null,
+            image_url: s.metadata?.donor_image || null,
           });
           break;
         }
@@ -103,43 +132,161 @@ app.post(
           await recordDonation({
             amountCents: pi.amount_received || pi.amount || 0,
             dealId: pi.metadata?.deal_id || "default",
+            donorId: pi.metadata?.donor_id || null,
             donorName: pi.metadata?.donor_name || "Anonymous",
+            donorImage: pi.metadata?.donor_image || null,
+            stripePaymentIntentId: pi.id || null,
+          });
+          await upsertProfileByEmail({
+            email: pi.metadata?.donor_email || null,
+            name: pi.metadata?.donor_name || null,
+            image_url: pi.metadata?.donor_image || null,
           });
           break;
         }
         default:
-          // ignore others
           break;
       }
 
       res.json({ received: true });
     } catch (err) {
-      console.error("[webhook] handler error:", err);
       res.status(500).send("Webhook handler error");
     }
   }
 );
 
-// ---- JSON body AFTER webhook ----
+/* ---------- JSON body parser (after webhook) ---------- */
 app.use(express.json());
 
-// ---- Create checkout session ----
+/* ---------- Helpers ---------- */
+async function fetchProfileImageById(id) {
+  if (!id) return null;
+  const { data, error } = await supabaseAdmin
+    .from("profiles")
+    .select("image_url")
+    .eq("id", id)
+    .maybeSingle();
+  if (error) return null;
+  return data?.image_url || null;
+}
+
+async function upsertProfileByEmail({ email, name, image_url = null }) {
+  if (!email) return { ok: false, reason: "no_email" };
+  const sb = createClient(
+    process.env.PROJECT_SUPABASE_URL || process.env.SUPABASE_URL,
+    process.env.SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY,
+    { auth: { persistSession: false, autoRefreshToken: false } }
+  );
+
+  const { data, error } = await sb
+    .from("profiles")
+    .upsert([{ email: String(email).toLowerCase(), name, image_url }], {
+      onConflict: "email",
+    })
+    .select()
+    .limit(1);
+
+  if (error) return { ok: false, error };
+  return { ok: true, row: data?.[0] || null };
+}
+
+async function recordDonation({
+  amountCents = 0,
+  dealId = "default",
+  donorId = null,
+  donorName = "Anonymous",
+  donorImage = null,
+  stripeSessionId = null,
+  stripePaymentIntentId = null,
+}) {
+  // dedupe by session id
+  if (stripeSessionId) {
+    const { data: existing } = await supabaseAdmin
+      .from("activities")
+      .select("id")
+      .eq("stripe_session_id", stripeSessionId)
+      .maybeSingle();
+    if (existing) return { ok: true, already: true };
+  }
+
+  // server‑side backfill of donor image if missing
+  let finalImage = donorImage;
+  if (!finalImage && donorId) {
+    finalImage = await fetchProfileImageById(donorId);
+  }
+
+  const row = {
+    deal_id: dealId,
+    type: "give",
+    amount_cents: amountCents,
+    donor_name: donorName,
+    donor_image: finalImage || null,
+    stripe_session_id: stripeSessionId,
+    stripe_payment_intent_id: stripePaymentIntentId,
+    user_id: donorId || null,
+  };
+
+  const { data, error } = await supabaseAdmin
+    .from("activities")
+    .insert([row])
+    .select();
+  if (error) return { ok: false, error };
+  return { ok: true, row: data?.[0] || row };
+}
+
+/* ---------- Profiles (simple persistence by id) ---------- */
+app.post("/api/profile/upsert", async (req, res) => {
+  try {
+    const { id, name, image_url = null } = req.body || {};
+    if (!id || !name) return res.status(400).json({ error: "missing_fields" });
+
+    const { data, error } = await supabaseAdmin
+      .from("profiles")
+      .upsert([{ id, name, image_url }], { onConflict: "id" })
+      .select()
+      .limit(1);
+
+    if (error) return res.status(500).json({ error: error.message });
+    res.json({ ok: true, profile: data?.[0] || null });
+  } catch (err) {
+    res
+      .status(500)
+      .json({ error: "profile_upsert_failed", details: err?.message || "unknown" });
+  }
+});
+
+app.get("/api/profile/get", async (req, res) => {
+  try {
+    const id = req.query.id;
+    if (!id) return res.status(400).json({ error: "missing_id" });
+
+    const { data, error } = await supabaseAdmin
+      .from("profiles")
+      .select("id,name,image_url")
+      .eq("id", id)
+      .maybeSingle();
+
+    if (error) return res.status(500).json({ error: error.message });
+    res.json({ ok: true, profile: data || null });
+  } catch (err) {
+    res
+      .status(500)
+      .json({ error: "profile_get_failed", details: err?.message || "unknown" });
+  }
+});
+
+/* ---------- Payments (Checkout + PI) ---------- */
 app.post("/api/donate/session", async (req, res) => {
   try {
-    if (!process.env.STRIPE_SECRET_KEY?.startsWith("sk_")) {
-      throw new Error("Missing/invalid STRIPE_SECRET_KEY");
-    }
-
     const {
       amountCents = 1000,
-      creatorName = "Anonymous",
+      donorId = null,
+      donorName = "Anonymous",
+      donorImageUrl = null,
       dealId = "default",
     } = req.body || {};
     const origin =
       req.headers.origin || process.env.OPENMAT_DOMAIN || "http://localhost:3000";
-
-    console.log("[create session] body:", req.body);
-    console.log("[create session] origin:", origin);
 
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
@@ -152,122 +299,128 @@ app.post("/api/donate/session", async (req, res) => {
           price_data: {
             currency: "usd",
             unit_amount: amountCents,
-            product_data: { name: `Donation to ${creatorName}` },
+            product_data: { name: "Donation" },
           },
         },
       ],
+      metadata: {
+        deal_id: dealId,
+        donor_id: donorId || "",
+        donor_name: donorName,
+        donor_image: donorImageUrl || "",
+      },
       success_url: `${origin}/?success=1&session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${origin}/?canceled=1`,
-      metadata: { deal_id: dealId },
+      cancel_url: `${origin}/give?canceled=1`,
     });
 
-    console.log("[create session] created:", session.id, "→", session.url);
     res.json({ url: session.url });
   } catch (err) {
-    console.error("[create session] error:", err);
     res.status(500).json({
       error: "failed_to_create_session",
-      details: err?.raw?.message || err?.message || "unknown",
-      code: err?.code || err?.raw?.code || null,
+      details: err?.message || "unknown",
     });
   }
 });
 
-// ---- Wallet flow (optional) ----
 app.post("/api/payments/create-intent", async (req, res) => {
   try {
     const {
       amountCents = 1000,
       currency = "usd",
       dealId = "default",
+      donorId = null,
       donorName = "Anonymous",
+      donorImageUrl = null,
     } = req.body || {};
-
     if (!Number.isInteger(amountCents) || amountCents < 50) {
       return res.status(400).json({ error: "invalid_amount" });
     }
-
     const intent = await stripe.paymentIntents.create({
       amount: amountCents,
       currency,
       automatic_payment_methods: { enabled: true },
-      metadata: { deal_id: dealId, donor_name: donorName },
+      metadata: {
+        deal_id: dealId,
+        donor_id: donorId || "",
+        donor_name: donorName,
+        donor_image: donorImageUrl || "",
+      },
     });
-
     res.json({ clientSecret: intent.client_secret });
   } catch (err) {
-    console.error("[create-intent] error:", err);
-    res
-      .status(500)
-      .json({ error: "failed_to_create_intent", details: err?.message || "unknown" });
+    res.status(500).json({
+      error: "failed_to_create_intent",
+      details: err?.message || "unknown",
+    });
   }
 });
 
-// ---- Redirect confirmation (fallback if webhook didn’t write) ----
+/* ---------- Checkout redirect confirmation ---------- */
 app.get("/api/checkout/confirm", async (req, res) => {
   try {
     const sessionId = req.query.session_id;
-    if (!sessionId) return res.status(400).json({ error: "missing_session_id" });
+    if (!sessionId)
+      return res.status(400).json({ error: "missing_session_id" });
 
-    const session = await stripe.checkout.sessions.retrieve(sessionId);
-    console.log("[confirm] retrieved:", session.id, session.payment_status);
-
-    if (session.payment_status !== "paid") {
+    const s = await stripe.checkout.sessions.retrieve(sessionId, {
+      expand: ["payment_intent", "customer_details"],
+    });
+    if (s.payment_status !== "paid")
       return res.json({ ok: true, status: "not_paid" });
-    }
 
     const out = await recordDonation({
-      amountCents: session.amount_total || 0,
-      dealId: session.metadata?.deal_id || "default",
-      donorName: session.customer_details?.name || "Anonymous",
-      stripeSessionId: session.id,
+      amountCents: s.amount_total || 0,
+      dealId: s.metadata?.deal_id || "default",
+      donorId: s.metadata?.donor_id || null,
+      donorName:
+        s.metadata?.donor_name || s.customer_details?.name || "Anonymous",
+      donorImage: s.metadata?.donor_image || null,
+      stripeSessionId: s.id,
+      stripePaymentIntentId: s.payment_intent?.id || null,
     });
 
-    console.log("[confirm] result:", out);
-    res.json({ ok: true, status: out.already ? "already_recorded" : "inserted" });
+    res.json({
+      ok: true,
+      status: out.already ? "already_recorded" : "inserted",
+    });
   } catch (err) {
-    console.error("[confirm] error:", err);
     res.status(500).json({ ok: false, error: err?.message || "unknown" });
   }
 });
 
-// ---- DEBUG endpoints (safe for dev) ----
+/* ---------- Health ---------- */
+app.get("/api/health", (_req, res) => res.json({ ok: true }));
+
+/* ---------- DEBUG (dev only) ---------- */
 if (process.env.NODE_ENV !== "production") {
-  app.get("/api/_debug/env", (req, res) => {
+  app.get("/api/_debug/env", (_req, res) => {
     res.json({
       nodeEnv: process.env.NODE_ENV,
       stripeKeyStarts: (process.env.STRIPE_SECRET_KEY || "").slice(0, 10) + "…",
       webhookSecretSet: !!process.env.STRIPE_WEBHOOK_SECRET,
-      originDefault: process.env.OPENMAT_DOMAIN,
+      originDefault: process.env.OPENMAT_DOMAIN || null,
+      supabaseUrlSet: !!SUPABASE_URL,
+      serviceRoleSet: !!SUPABASE_SERVICE_ROLE_KEY,
+      envFileUsed: envFile,
     });
-  });
-
-  app.get("/api/_debug/activities", async (req, res) => {
-    const supabase = createClient(
-      process.env.PROJECT_SUPABASE_URL,
-      process.env.SERVICE_ROLE_KEY,
-      { auth: { persistSession: false, autoRefreshToken: false } }
-    );
-    const { data, error } = await supabase
-      .from("activities")
-      .select("*")
-      .order("created_at", { ascending: false })
-      .limit(20);
-    if (error) return res.status(500).json({ error: error.message });
-    res.json({ count: data?.length || 0, data });
-  });
-
-  app.post("/api/_debug/activities/insert", async (req, res) => {
-    const out = await recordDonation({
-      amountCents: Math.floor(Math.random() * 900) + 100,
-      dealId: "default",
-      donorName: "Debug",
-      stripeSessionId: null,
-    });
-    res.json(out);
   });
 }
 
-app.listen(PORT, () => {
-  console.log(`API on http://localhost:${PORT}`);
+/* ---------- 404 & Error (with CORS) ---------- */
+app.use((req, res) => {
+  res.status(404).json({ error: "not_found", path: req.path });
 });
+
+app.use((err, _req, res, _next) => {
+  console.error("[server error]", err);
+  res
+    .status(500)
+    .json({ error: "server_error", message: err?.message || "unknown" });
+});
+
+/* ---------- Start (local) & Export (Vercel) ---------- */
+if (require.main === module) {
+  const PORT = process.env.PORT || 3001;
+  app.listen(PORT, () => console.log(`API on http://localhost:${PORT}`));
+}
+module.exports = app;

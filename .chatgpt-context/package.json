@@ -2,19 +2,19 @@
   "name": "sharedeals",
   "version": "0.1.0",
   "private": true,
-  "proxy": "http://localhost:3001",
   "engines": {
     "node": "18.x"
   },
   "dependencies": {
-    "@stripe/react-stripe-js": "^3.9.1",
+    "@paypal/checkout-server-sdk": "^1.0.3",
+    "@paypal/react-paypal-js": "^8.7.0",
     "@stripe/stripe-js": "^7.8.0",
-    "@supabase/supabase-js": "^2.55.0",
+    "@supabase/supabase-js": "^2.56.0",
     "@testing-library/jest-dom": "^5.17.0",
     "@testing-library/react": "^13.4.0",
     "@testing-library/user-event": "^13.5.0",
     "cors": "^2.8.5",
-    "dotenv": "^17.2.1",
+    "dotenv": "^16.4.5",
     "express": "^4.21.2",
     "html2canvas": "^1.4.1",
     "jwt-decode": "^4.0.0",
@@ -31,12 +31,12 @@
     "web-vitals": "^2.1.4"
   },
   "scripts": {
-    "start": "react-scripts start",
-    "server": "node api/server.js",
-    "dev": "concurrently \"npm run start\" \"npm run server\"",
+    "web": "react-scripts start",
+    "api": "node api/server.js",
+    "dev": "concurrently -k -n API,WEB -c yellow,cyan \"npm:api\" \"npm:web\"",
     "build": "react-scripts build",
-    "test": "react-scripts test",
-    "eject": "react-scripts eject"
+    "start": "react-scripts start",
+    "test": "react-scripts test"
   },
   "eslintConfig": {
     "extends": [
