@@ -81,7 +81,11 @@ const PaymentRequestButton = forwardRef(function PaymentRequestButton(
         const prButton = elements.create("paymentRequestButton", {
           paymentRequest: pr,
           style: {
-            paymentRequestButton: { type: "donate", theme: "dark", height: "44px" },
+            paymentRequestButton: {
+              type: "donate",
+              theme: "dark",
+              height: "44px",
+            },
           },
         });
         prButtonRef.current = prButton;
@@ -148,7 +152,8 @@ const PaymentRequestButton = forwardRef(function PaymentRequestButton(
             }
 
             onSuccess?.({
-              payment_intent_id: result.paymentIntent?.id || confirm.paymentIntent?.id,
+              payment_intent_id:
+                result.paymentIntent?.id || confirm.paymentIntent?.id,
             });
           } catch (e) {
             console.error("[wallet confirm] error:", e);
@@ -173,7 +178,15 @@ const PaymentRequestButton = forwardRef(function PaymentRequestButton(
         prButtonRef.current && prButtonRef.current.unmount();
       } catch {}
     };
-  }, [amountCents, dealId, donorId, donorName, donorImageUrl, ensureOnboarded, onSuccess]);
+  }, [
+    amountCents,
+    dealId,
+    donorId,
+    donorName,
+    donorImageUrl,
+    ensureOnboarded,
+    onSuccess,
+  ]);
 
   const fallbackGive = async () => {
     try {
@@ -207,8 +220,14 @@ const PaymentRequestButton = forwardRef(function PaymentRequestButton(
 
   return (
     <div className="w-full">
-      {/* Always render the mount target; show the fallback Give button when wallets aren’t available */}
-      <div ref={mountRef} className="w-full flex justify-center" />
+      {/* Wallet button mount target needs a minimum height to be visible */}
+      <div
+        ref={mountRef}
+        className="w-full flex justify-center"
+        style={{ minHeight: 48 }}
+      />
+
+      {/* Fallback Give button if wallets are not available */}
       {!walletReady && (
         <button
           type="button"
@@ -218,6 +237,7 @@ const PaymentRequestButton = forwardRef(function PaymentRequestButton(
           Give
         </button>
       )}
+
       <p className="text-xs text-center text-gray-500 mt-3">
         If no wallet button shows, your device/browser doesn’t support Apple/Google Pay.
       </p>
