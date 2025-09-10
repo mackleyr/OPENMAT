@@ -1,14 +1,6 @@
 // src/components/Onboard.js
 import React, { useEffect, useRef, useState } from "react";
-import { supabase } from "../supabaseClient";
-
-const BUCKET = "publicbucket";
-const FOLDER = "avatars";
-
-function makeKey(ext = "jpg") {
-  const rand = Math.random().toString(36).slice(2, 8);
-  return `${FOLDER}/${Date.now()}-${rand}.${ext.replace(/^\./, "")}`;
-}
+import { API_BASE } from "../config/Creator";
 
 export default function Onboard({ open, current, onClose, onDone }) {
   const [name, setName] = useState("");
@@ -37,29 +29,36 @@ export default function Onboard({ open, current, onClose, onDone }) {
     setPreview(URL.createObjectURL(f));
   };
 
-  const upload = async () => {
-    if (!file) return current?.image_url || null;
-    const ext = (file.name.split(".").pop() || "jpg").toLowerCase();
-    const key = makeKey(ext);
-    const { error } = await supabase.storage
-      .from(BUCKET)
-      .upload(key, file, {
-        cacheControl: "3600",
-        upsert: true,
-        contentType: file.type || "image/jpeg",
-      });
-    if (error) throw new Error(error.message || "Upload failed");
-    const { data } = supabase.storage.from(BUCKET).getPublicUrl(key);
-    return data.publicUrl;
-  };
+  async function signedUpload(f) {
+    if (!f) return current?.image_url || null;
+
+    const r = await fetch(`${API_BASE}/api/storage/avatar-url`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        filename: f.name,
+        contentType: f.type || "image/jpeg",
+      }),
+    });
+    if (!r.ok) throw new Error("Could not get upload URL");
+    const { uploadUrl, publicUrl, error } = await r.json();
+    if (error || !uploadUrl || !publicUrl) throw new Error(error || "Bad upload URL");
+
+    const put = await fetch(uploadUrl, {
+      method: "PUT",
+      body: f,
+      headers: { "Content-Type": f.type || "application/octet-stream" },
+    });
+    if (!put.ok) throw new Error("Upload failed");
+    return publicUrl;
+  }
 
   const handleSave = async () => {
     try {
       if (!canSave) return;
       setBusy(true);
-      const imageUrl = await upload();
+      const imageUrl = await signedUpload(file);
       if (!imageUrl) throw new Error("Please choose a photo.");
-      // Hand back to parent; LocalUserContext will auto-upsert to API
       onDone({ name: name.trim(), image_url: imageUrl });
     } catch (e) {
       alert(e?.message || "Could not save");

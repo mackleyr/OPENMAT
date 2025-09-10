@@ -3,14 +3,19 @@ import React, { createContext, useCallback, useContext, useEffect, useRef, useSt
 import { v4 as uuidv4 } from "uuid";
 import { API_BASE } from "../config/Creator";
 
-// Tiny polyfill if uuid isn't installed for some reason
-function fallbackUuid() {
-  try { return uuidv4(); } catch {
-    // rudimentary fallback
-    return ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g, c =>
-      (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16)
-    );
+// Safer fallback UUID v4 (no mixed bitwise ops)
+function safeUuid() {
+  if (typeof crypto?.getRandomValues === "function") {
+    const b = new Uint8Array(16);
+    crypto.getRandomValues(b);
+    b[6] = (b[6] & 0x0f) | 0x40; // version
+    b[8] = (b[8] & 0x3f) | 0x80; // variant
+    const h = [...b].map(x => x.toString(16).padStart(2, "0")).join("");
+    return `${h.slice(0,8)}-${h.slice(8,12)}-${h.slice(12,16)}-${h.slice(16,20)}-${h.slice(20)}`;
   }
+  try { return uuidv4(); } catch { /* ignore */ }
+  // Last-ditch readable id
+  return `id-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
 const LS_KEY = "openmat.local_user";
@@ -27,67 +32,60 @@ export function LocalUserProvider({ children }) {
     try { return JSON.parse(raw); } catch { return null; }
   });
 
-  // Ensure we always have a stable id
+  // Ensure stable id
   useEffect(() => {
     if (!localUser?.id) {
-      const next = { id: fallbackUuid(), ...(localUser || {}) };
+      const next = { id: safeUuid(), ...(localUser || {}) };
       localStorage.setItem(LS_KEY, JSON.stringify(next));
       setLocalUserState(next);
     }
+  // only on mount / id missing
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const setLocalUser = useCallback((updater) => {
     setLocalUserState((prev) => {
       const next = typeof updater === "function" ? updater(prev) : updater;
-      const withId = next?.id ? next : { ...next, id: prev?.id || fallbackUuid() };
+      const withId = next?.id ? next : { ...next, id: prev?.id || safeUuid() };
       localStorage.setItem(LS_KEY, JSON.stringify(withId));
       return withId;
     });
   }, []);
 
-  // Hydrate from API if we have an id but no profile fields
+  // Hydrate from API once if we have id but no profile
   const hydratedRef = useRef(false);
+  const id = localUser?.id;
+  const hasProfile = Boolean(localUser?.name && localUser?.image_url);
+
   useEffect(() => {
     (async () => {
-      if (hydratedRef.current) return;
-      const id = localUser?.id;
-      if (!id) return;
-
-      // If we already have name+image_url, skip hydrate
-      if (localUser?.name && localUser?.image_url) {
-        hydratedRef.current = true;
-        return;
-      }
-
+      if (hydratedRef.current || !id || hasProfile) return;
       try {
         const r = await fetch(`${API_BASE}/api/profile/get?id=${encodeURIComponent(id)}`);
         const j = await r.json();
         if (j?.ok && j.profile) {
           setLocalUser((prev) => ({ ...prev, ...j.profile }));
         }
-      } catch (e) {
-        // silent
+      } catch {
+        /* silent */
       } finally {
         hydratedRef.current = true;
       }
     })();
-  }, [localUser?.id, localUser?.name, localUser?.image_url, setLocalUser]);
+  }, [id, hasProfile, setLocalUser]);
 
-  // Auto-save to API whenever we have id + name + image_url
+  // Auto-save to API when we have id+name+image_url
   useEffect(() => {
+    const { id, name, image_url } = localUser || {};
+    if (!id || !name || !image_url) return;
     (async () => {
-      const { id, name, image_url } = localUser || {};
-      if (!id || !name || !image_url) return;
       try {
         await fetch(`${API_BASE}/api/profile/upsert`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ id, name, image_url }),
         });
-      } catch {
-        /* ignore; we’ll retry on next change */
-      }
+      } catch { /* retry on next change */ }
     })();
   }, [localUser?.id, localUser?.name, localUser?.image_url]);
 

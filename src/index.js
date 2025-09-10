@@ -10,7 +10,7 @@ import { ActivityProvider } from "./contexts/ActivityContext";
 
 const root = createRoot(document.getElementById("root"));
 root.render(
-  <BrowserRouter>
+  <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
     <ActivityProvider>
       <LocalUserProvider>
         <App />
