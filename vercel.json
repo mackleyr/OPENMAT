@@ -1,12 +1,6 @@
 {
   "version": 2,
-  "builds": [
-    { "src": "api/server.js", "use": "@vercel/node" },
-    { "src": "package.json", "use": "@vercel/static-build" }
-  ],
-  "routes": [
-    { "src": "^/api/stripe/webhook$", "dest": "/api/server.js" },
-    { "src": "^/api/.*", "dest": "/api/server.js" },
-    { "src": "^(?!/api/).*", "dest": "/index.html" }
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "/api/server.js" }
   ]
 }
