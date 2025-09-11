@@ -1,5 +1,5 @@
 // src/pages/Offer.js
-import React, { useEffect, useRef, useState, useMemo } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import MainContainer from "../components/MainContainer";
 import Footer from "../components/Footer";
@@ -14,7 +14,7 @@ import Fab from "../components/Fab";
 
 export default function Offer() {
   const { offerId } = useParams();
-  const { fetchActivities, activities, getActivitiesByOffer } = useActivity();
+  const { fetchActivities, getActivitiesByOffer } = useActivity();
   const { localUser } = useLocalUser();
   const [offer, setOffer] = useState(null);
   const [showOnboard, setShowOnboard] = useState(false);
@@ -22,11 +22,10 @@ export default function Offer() {
   const needsOnboarding = !localUser?.name?.trim() || !localUser?.image_url;
   const busyRef = useRef(false);
 
-  // keep score live from context (never filler)
-  const claimsForThisOffer = useMemo(
-    () => getActivitiesByOffer(offerId).filter(a => (a.type === "claim" || a.action === "claimed")),
-    [offerId, getActivitiesByOffer, activities]
-  );
+  // live score from context (never filler)
+  const claimsForThisOffer = getActivitiesByOffer(offerId).filter(
+    (a) => a.type === "claim" || a.action === "claimed"
+  ).length;
 
   useEffect(() => {
     (async () => {
@@ -37,7 +36,7 @@ export default function Offer() {
     fetchActivities({ offerId });
   }, [offerId, fetchActivities]);
 
-  // Handle Stripe redirect confirmation on this page too (ensures refresh)
+  // confirm Stripe redirect here too, then refresh activities
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const sid = params.get("session_id");
@@ -72,7 +71,7 @@ export default function Offer() {
       if (!ok) { busyRef.current = false; return; }
 
       if (!offer || offer.price_cents <= 0) {
-        // FREE CLAIM: write immediately
+        // FREE claim
         const r = await fetch(`${API_BASE}/api/claims/free`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -86,12 +85,11 @@ export default function Offer() {
         });
         const j = await r.json();
         if (!j?.ok) throw new Error(j?.error || "claim_failed");
-        // local refresh ensures visible immediately even if realtime lags
-        fetchActivities({ offerId });
+        fetchActivities({ offerId }); // reflect immediately
         return;
       }
 
-      // PAID CLAIM: Stripe Checkout
+      // PAID claim via Stripe Checkout
       const r = await fetch(`${API_BASE}/api/claims/session`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -127,9 +125,13 @@ export default function Offer() {
         className="flex flex-col flex-1 min-h-0 w-full p-6 overflow-y-auto"
         style={{ WebkitOverflowScrolling: "touch", touchAction: "pan-y" }}
       >
-        {/* Creator row mirrors Home */}
+        {/* Offer header (matches Home) */}
         <div className="flex items-center gap-3 mb-2">
-          <img src={CREATOR.imageUrl} alt="" className="h-7 w-7 rounded-full object-cover" />
+          <img
+            src={CREATOR.imageUrl || "/avatar-fallback.png"}
+            alt=""
+            className="h-7 w-7 rounded-full object-cover"
+          />
           <div className="text-sm font-semibold">{CREATOR.name}</div>
         </div>
 
@@ -142,30 +144,35 @@ export default function Offer() {
         <div className="mb-3">
           <div className="text-lg font-semibold">{offer.title}</div>
           <div className="text-sm text-gray-500">
-            {offer.price_cents > 0 ? `$${(offer.price_cents/100).toFixed(2)}` : "Free"} · Score = {claimsForThisOffer.length}
+            {offer.price_cents > 0 ? `$${(offer.price_cents / 100).toFixed(2)}` : "Free"}
+            {" · "}
+            Score = {claimsForThisOffer}
           </div>
         </div>
 
         <div className="grid grid-cols-2 gap-3 mb-6">
           <Button type="primary" onClick={claim}>Claim</Button>
-          <Button type="secondary" onClick={async () => {
-            await navigator.clipboard.writeText(window.location.href);
-            alert("Link copied");
-          }}>Share</Button>
+          <Button
+            type="secondary"
+            onClick={async () => {
+              await navigator.clipboard.writeText(window.location.href);
+              alert("Link copied");
+            }}
+          >
+            Share
+          </Button>
         </div>
 
-        {/* Offer-scoped activity (duplicated header via ActivityLog) */}
+        {/* Offer-scoped Activity */}
         <div className="flex-1 min-h-0">
           <ActivityLog offerId={offerId} />
         </div>
       </div>
 
       <Footer />
-
-      {/* Floating creator “+” */}
       <Fab onClick={startCreateOffer} />
 
-      {/* Gate then create */}
+      {/* Gate -> Create */}
       <Onboard
         open={showOnboard}
         current={localUser}
