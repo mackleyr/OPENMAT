@@ -4,6 +4,10 @@ CREATE TABLE users (
   role TEXT NOT NULL DEFAULT 'creator',
   username TEXT,
   stripe_account_id TEXT,
+  stripe_access_token TEXT,
+  stripe_refresh_token TEXT,
+  stripe_publishable_key TEXT,
+  stripe_account_email TEXT,
   bio TEXT,
   phone TEXT,
   image_url TEXT,
@@ -39,6 +43,10 @@ CREATE TABLE claims (
   slot_id BIGINT REFERENCES offer_slots(id),
   address TEXT,
   deposit_cents INTEGER NOT NULL DEFAULT 0,
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'deposit_paid', 'redeemed', 'failed')),
+  deposit_payment_intent_id TEXT,
+  balance_payment_intent_id TEXT,
+  redeemed_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
@@ -46,7 +54,7 @@ CREATE TABLE payments (
   id BIGSERIAL PRIMARY KEY,
   claim_id BIGINT NOT NULL REFERENCES claims(id),
   amount_cents INTEGER NOT NULL CHECK (amount_cents >= 0),
-  status TEXT NOT NULL CHECK (status IN ('pending', 'paid', 'failed')),
+  status TEXT NOT NULL CHECK (status IN ('pending', 'paid', 'failed', 'zero')),
   provider TEXT NOT NULL DEFAULT 'stripe',
   provider_ref TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()

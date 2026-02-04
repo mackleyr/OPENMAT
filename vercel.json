@@ -1,0 +1,20 @@
+{
+  "rewrites": [
+    { "source": "/stripe/:path*", "destination": "/api" },
+    { "source": "/terminal/:path*", "destination": "/api" },
+    { "source": "/users/:path*", "destination": "/api" },
+    { "source": "/offers/:path*", "destination": "/api" },
+    { "source": "/claims/:path*", "destination": "/api" },
+    { "source": "/checkout/:path*", "destination": "/api" },
+    { "source": "/wallet/:path*", "destination": "/api" },
+    { "source": "/redemptions/:path*", "destination": "/api" },
+    { "source": "/u/:path*", "destination": "/api" },
+    { "source": "/sessions/:path*", "destination": "/api" },
+    { "source": "/me", "destination": "/api" },
+    { "source": "/profile/:path*", "destination": "/api" },
+    { "source": "/inbox/:path*", "destination": "/api" },
+    { "source": "/metrics/:path*", "destination": "/api" },
+    { "source": "/events/:path*", "destination": "/api" },
+    { "source": "/referrals/:path*", "destination": "/api" }
+  ]
+}

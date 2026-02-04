@@ -5,12 +5,20 @@ const PUBLIC_BASE_URL = import.meta.env.VITE_PUBLIC_BASE_URL || window.location.
 export type User = {
   id: number;
   name: string;
+  role: "creator" | "customer";
   bio: string | null;
   phone: string | null;
   image_url: string | null;
   username?: string | null;
   stripe_account_id?: string | null;
   created_at: string;
+};
+
+export type PublicUser = {
+  id: number;
+  handle: string;
+  name: string;
+  photo_url: string | null;
 };
 
 export type Offer = {
@@ -50,6 +58,26 @@ export type ProfileResponse = {
   user: User;
   score: number;
   offers: Offer[];
+};
+
+export type PublicProfileResponse = {
+  user: PublicUser;
+  last_paid_amount_cents: number | null;
+  redeemed_public_sessions: Array<{
+    id: number;
+    amount_cents: number;
+    redeemed_at: string | null;
+    proof_url: string | null;
+  }>;
+};
+
+export type SessionSummary = {
+  id: number;
+  status: string;
+  created_at: string;
+  redeemed_at: string | null;
+  price_cents: number;
+  guest_name: string | null;
 };
 
 export type OfferDetailResponse = {
@@ -106,6 +134,7 @@ export type CreateUserInput = {
   phone?: string;
   image_url?: string | null;
   username?: string;
+  role?: "creator" | "customer";
 };
 
 export type CreateClaimInput = {
@@ -139,12 +168,13 @@ const request = async <T,>(path: string, options?: RequestInit): Promise<T> => {
 
 let mockUser: User | null = {
   id: 1,
-  name: "Jordan Sara",
-  bio: "Personal trainer at LifeTime Fitness",
+  name: "Mackley",
+  role: "creator",
+  bio: "Personal trainer at South Suburban Recreation Center",
   phone: "",
   image_url: null,
-  username: "jordan",
-  stripe_account_id: null,
+  username: "mackley",
+  stripe_account_id: "acct_mocked",
   created_at: new Date().toISOString(),
 };
 
@@ -152,16 +182,16 @@ let mockOffers: Offer[] = [
   {
     id: 1,
     creator_id: 1,
-    title: "Five sessions package",
-    price_cents: 30000,
+    title: "Diagnosis + first session",
+    price_cents: 12000,
     deposit_cents: 2000,
     payment_mode: "deposit",
-    capacity: 18,
-    location_text: "L.A. Live, Staples Center, CA",
-    description: "Train with me 1:1, show up ready.",
+    capacity: 1,
+    location_text: "South Suburban Rec Center",
+    description: "Assessment + first workout.",
     image_url: null,
     created_at: new Date().toISOString(),
-    claimed_count: 13,
+    claimed_count: 5,
   },
 ];
 
@@ -198,6 +228,30 @@ const mockInbox: InboxResponse = {
   ],
 };
 
+const mockPublicProfile: PublicProfileResponse = {
+  user: {
+    id: mockUser!.id,
+    handle: mockUser!.username ?? "mackley",
+    name: mockUser!.name,
+    photo_url: mockUser!.image_url,
+  },
+  last_paid_amount_cents: 20000,
+  redeemed_public_sessions: [
+    {
+      id: 1,
+      amount_cents: 20000,
+      redeemed_at: new Date().toISOString(),
+      proof_url: null,
+    },
+    {
+      id: 2,
+      amount_cents: 12000,
+      redeemed_at: new Date(Date.now() - 86400000).toISOString(),
+      proof_url: null,
+    },
+  ],
+};
+
 export const getProfile = (userId: number) =>
   USE_MOCKS
     ? Promise.resolve({
@@ -206,6 +260,14 @@ export const getProfile = (userId: number) =>
         offers: mockOffers.map((offer) => ({ ...offer })),
       })
     : request<ProfileResponse>(`/profile/${userId}`);
+
+export const getPublicProfile = (handle: string) =>
+  USE_MOCKS
+    ? Promise.resolve({
+        ...mockPublicProfile,
+        user: { ...mockPublicProfile.user, handle },
+      })
+    : request<PublicProfileResponse>(`/u/${encodeURIComponent(handle)}`);
 
 export const getOffer = (offerId: number) =>
   USE_MOCKS
@@ -233,11 +295,70 @@ export const getStripeStatus = (userId: number) =>
       })
     : request<StripeStatusResponse>(`/stripe/status?user_id=${userId}`);
 
+export const getMe = (userId: number) =>
+  USE_MOCKS ? Promise.resolve({ user: mockUser! }) : request<{ user: User }>(`/me?user_id=${userId}`);
+
+export const updateMe = (userId: number, input: { name?: string; photo_url?: string; handle?: string }) =>
+  USE_MOCKS
+    ? Promise.resolve({ user: { ...mockUser!, ...input } })
+    : request<{ user: User }>(`/me?user_id=${userId}`, {
+        method: "PATCH",
+        body: JSON.stringify(input),
+      });
+
+export const createStripeConnectLink = (userId: number) =>
+  USE_MOCKS
+    ? Promise.resolve({ url: `${PUBLIC_BASE_URL}/stripe/connect?user_id=${userId}` })
+    : request<{ url: string }>("/stripe/connect_link", {
+        method: "POST",
+        body: JSON.stringify({ user_id: userId }),
+      });
+
+export const initSession = (input: { host_handle: string; amount_cents: number }) =>
+  USE_MOCKS
+    ? Promise.resolve({ session_id: 1, amount_cents: input.amount_cents, checkout_url: null })
+    : request<{ session_id: number; amount_cents: number; checkout_url?: string }>(
+        "/sessions/init",
+        {
+          method: "POST",
+          body: JSON.stringify(input),
+        }
+      );
+
+export const getSessions = (userId: number, status?: "pending" | "redeemed") =>
+  USE_MOCKS
+    ? Promise.resolve({
+        sessions: [
+          {
+            id: 1,
+            status: "pending",
+            created_at: new Date().toISOString(),
+            redeemed_at: null,
+            price_cents: 12000,
+            guest_name: "Guest",
+          },
+        ] as SessionSummary[],
+      })
+    : request<{ sessions: SessionSummary[] }>(
+        `/sessions?user_id=${userId}${status ? `&status=${status}` : ""}`
+      );
+
+export const redeemSession = (sessionId: number, userId: number) =>
+  USE_MOCKS
+    ? Promise.resolve({ session: { id: sessionId, status: "redeemed" }, last_paid_amount_cents: 12000 })
+    : request<{ session: { id: number; status: string }; last_paid_amount_cents: number | null }>(
+        `/sessions/${sessionId}/redeem?user_id=${userId}`,
+        {
+          method: "POST",
+        }
+      );
+
 export const createUser = (input: CreateUserInput) => {
   if (USE_MOCKS) {
     mockUser = {
       id: mockUser?.id ?? 2,
       name: input.name,
+      role: input.role ?? "creator",
       bio: input.bio ?? null,
       phone: input.phone ?? null,
       image_url: input.image_url ?? null,
@@ -330,13 +451,26 @@ export const createClaim = (input: CreateClaimInput) => {
   });
 };
 
-export const createCheckoutSession = (claimId: number) => {
+export const createRedemption = (claimId: number) => {
   if (USE_MOCKS) {
-    return Promise.resolve({ url: `${PUBLIC_BASE_URL}/?claim=${claimId}&paid=1` });
+    return Promise.resolve({
+      redemption: { id: Date.now(), claim_id: claimId, redeemed_at: new Date().toISOString() },
+    });
+  }
+  return request<{ redemption: { id: number; claim_id: number; redeemed_at: string } }>("/redemptions", {
+    method: "POST",
+    body: JSON.stringify({ claim_id: claimId }),
+  });
+};
+
+export const createCheckoutSession = (claimId: number, returnPath?: string) => {
+  if (USE_MOCKS) {
+    const base = `${PUBLIC_BASE_URL}${returnPath || ""}`.replace(/\/+$/, "");
+    return Promise.resolve({ url: `${base}/?claim=${claimId}&paid=1` });
   }
   return request<{ url: string }>("/checkout/session", {
     method: "POST",
-    body: JSON.stringify({ claim_id: claimId }),
+    body: JSON.stringify({ claim_id: claimId, return_path: returnPath }),
   });
 };
 

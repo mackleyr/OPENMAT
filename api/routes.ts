@@ -1,35 +1,10 @@
-import "dotenv/config";
+// @ts-nocheck
+import { Router } from "express";
 import crypto from "node:crypto";
-import express from "express";
-import pg from "pg";
+import pool, { query } from "./db.js";
 import Stripe from "stripe";
 
-const app = express();
-app.use((req, res, next) => {
-  if (req.originalUrl === "/stripe/webhook") {
-    return express.raw({ type: "application/json" })(req, res, next);
-  }
-  return express.json()(req, res, next);
-});
-app.use((req, res, next) => {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
-  res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS,PATCH");
-  if (req.method === "OPTIONS") {
-    return res.sendStatus(204);
-  }
-  return next();
-});
-
-const connectionString = process.env.DATABASE_URL;
-const useSsl =
-  process.env.DATABASE_SSL === "true" || connectionString?.includes("supabase.co");
-const pool = new pg.Pool({
-  connectionString,
-  ssl: useSsl ? { rejectUnauthorized: false } : undefined,
-});
-
-const query = (text, params) => pool.query(text, params);
+const router = Router();
 
 const stripeSecret = process.env.STRIPE_SECRET_KEY;
 const stripeClientId = process.env.STRIPE_CLIENT_ID || "ca_SvAYOYk9QkUd2sUriWHgEtwc6ewEIBqd";
@@ -39,12 +14,12 @@ const publicBaseUrl = process.env.PUBLIC_BASE_URL || "http://localhost:5173";
 const stripeRedirectBaseUrl = process.env.STRIPE_REDIRECT_BASE_URL || publicBaseUrl;
 const stripe = stripeSecret ? new Stripe(stripeSecret, { apiVersion: "2024-06-20" }) : null;
 
-const signState = (value) => {
+const signState = (value: string) => {
   if (!stripeStateSecret) return null;
   return crypto.createHmac("sha256", stripeStateSecret).update(value).digest("base64url");
 };
 
-const encodeState = (payload) => {
+const encodeState = (payload: Record<string, unknown>) => {
   if (!stripeStateSecret) return null;
   const raw = Buffer.from(JSON.stringify(payload)).toString("base64url");
   const signature = signState(raw);
@@ -52,7 +27,7 @@ const encodeState = (payload) => {
   return `${raw}.${signature}`;
 };
 
-const decodeState = (state) => {
+const decodeState = (state: string) => {
   if (!stripeStateSecret) return null;
   const [raw, signature] = state.split(".");
   if (!raw || !signature) return null;
@@ -79,17 +54,18 @@ const EVENT_TYPES = {
   REDEEMED_IRL: "REDEEMED_IRL",
   REFERRAL_INVITE_SENT: "REFERRAL_INVITE_SENT",
   REFERRAL_CONVERTED: "REFERRAL_CONVERTED",
-};
+} as const;
 
-const isPositiveInteger = (value) =>
+const isPositiveInteger = (value: unknown) =>
   typeof value === "number" && Number.isInteger(value) && value > 0;
 
-const isNonNegativeInteger = (value) =>
+const isNonNegativeInteger = (value: unknown) =>
   typeof value === "number" && Number.isInteger(value) && value >= 0;
 
-const isNonEmptyString = (value) => typeof value === "string" && value.trim().length > 0;
+const isNonEmptyString = (value: unknown) =>
+  typeof value === "string" && value.trim().length > 0;
 
-const getUserIdFromRequest = (req) => {
+const getUserIdFromRequest = (req: any) => {
   const headerValue = req.headers["x-user-id"];
   const queryValue = req.query?.user_id;
   const bodyValue = req.body?.user_id;
@@ -98,7 +74,7 @@ const getUserIdFromRequest = (req) => {
   return Number.isFinite(parsed) ? parsed : null;
 };
 
-const loadUserById = async (userId) => {
+const loadUserById = async (userId: number) => {
   const result = await query(
     "SELECT id, name, role, bio, phone, image_url, username, stripe_account_id, created_at FROM users WHERE id = $1",
     [userId]
@@ -106,20 +82,20 @@ const loadUserById = async (userId) => {
   return result.rowCount > 0 ? result.rows[0] : null;
 };
 
-const requireUser = async (req, res, next) => {
+const requireUser = async (req: any, res: any, next: any) => {
   const userId = getUserIdFromRequest(req);
   if (!userId || !isPositiveInteger(userId)) {
     return res.status(401).json({ error: "unauthorized" });
   }
   const user = await loadUserById(userId);
   if (!user) {
-    return res.status(404).json({ error: "user_not_found" });
+    return res.status(404).json({ error: "User not found" });
   }
   req.user = user;
   return next();
 };
 
-const requireHost = async (req, res, next) => {
+const requireHost = async (req: any, res: any, next: any) => {
   await requireUser(req, res, async () => {
     if (!req.user?.stripe_account_id) {
       return res.status(401).json({ error: "stripe_not_connected" });
@@ -134,109 +110,108 @@ const updateClaimStatus = async ({
   depositPaymentIntentId,
   balancePaymentIntentId,
   redeemedAt,
+}: {
+  claimId: number;
+  status?: string;
+  depositPaymentIntentId?: string | null;
+  balancePaymentIntentId?: string | null;
+  redeemedAt?: string | null;
 }) => {
   await query(
     "UPDATE claims SET status = COALESCE($1, status), deposit_payment_intent_id = COALESCE($2, deposit_payment_intent_id), balance_payment_intent_id = COALESCE($3, balance_payment_intent_id), redeemed_at = COALESCE($4, redeemed_at) WHERE id = $5",
-    [
-      status ?? null,
-      depositPaymentIntentId ?? null,
-      balancePaymentIntentId ?? null,
-      redeemedAt ?? null,
-      claimId,
-    ]
+    [status ?? null, depositPaymentIntentId ?? null, balancePaymentIntentId ?? null, redeemedAt ?? null, claimId]
   );
 };
 
-app.post("/users", async (req, res) => {
-  const { name, bio, phone, image_url, username, role } = req.body || {};
+router.post("/users", async (req, res) => {
+  const { name, bio, phone, image_url, username, role } = req.body;
+
   if (!isNonEmptyString(name)) {
-    return res.status(400).json({ error: "invalid_user_payload" });
+    return res.status(400).json({ error: "Invalid user payload" });
   }
+
   const normalizedRole = role === "creator" || role === "customer" ? role : "creator";
   const normalizedUsername = isNonEmptyString(username)
     ? username.trim().toLowerCase()
     : name.trim().split(/\s+/)[0].toLowerCase();
-  const existing = await query(
-    "SELECT id FROM users WHERE username = $1",
-    [normalizedUsername]
-  );
+
+  const existing = await query("SELECT id FROM users WHERE username = $1", [normalizedUsername]);
   if (existing.rowCount > 0) {
-    return res.status(409).json({ error: "handle_exists" });
+    return res.status(409).json({ error: "Handle already exists" });
   }
+
   const result = await query(
-    "INSERT INTO users (name, role, bio, phone, image_url, username) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, name, role, bio, phone, image_url, username, stripe_account_id, created_at",
+    "INSERT INTO users (name, role, bio, phone, image_url, username) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, name, role, bio, phone, image_url, username, created_at",
     [name.trim(), normalizedRole, bio ?? "", phone ?? "", image_url ?? null, normalizedUsername]
   );
+
   return res.status(201).json({ user: result.rows[0] });
 });
 
-app.patch("/users/:id", async (req, res) => {
+router.patch("/users/:id", async (req, res) => {
   const userId = Number(req.params.id);
-  const { name, image_url, username } = req.body || {};
+  const { name, image_url, username } = req.body;
+
   if (!isPositiveInteger(userId)) {
-    return res.status(400).json({ error: "invalid_user_id" });
+    return res.status(400).json({ error: "Invalid user id" });
   }
-  const userResult = await query(
-    "SELECT id FROM users WHERE id = $1",
-    [userId]
-  );
+
+  const userResult = await query("SELECT id FROM users WHERE id = $1", [userId]);
   if (userResult.rowCount === 0) {
-    return res.status(404).json({ error: "user_not_found" });
+    return res.status(404).json({ error: "User not found" });
   }
+
   const updates = {
     name: isNonEmptyString(name) ? name.trim() : null,
     image_url: isNonEmptyString(image_url) ? image_url : null,
     username: isNonEmptyString(username) ? username.trim().toLowerCase() : null,
   };
+
   const result = await query(
     "UPDATE users SET name = COALESCE($1, name), image_url = COALESCE($2, image_url), username = COALESCE($3, username) WHERE id = $4 RETURNING id, name, role, bio, phone, image_url, username, stripe_account_id, created_at",
     [updates.name, updates.image_url, updates.username, userId]
   );
+
   return res.json({ user: result.rows[0] });
 });
 
-app.get("/me", requireUser, async (req, res) => {
+router.get("/me", requireUser, async (req: any, res) => {
   return res.json({ user: req.user });
 });
 
-app.patch("/me", requireUser, async (req, res) => {
+router.patch("/me", requireUser, async (req: any, res) => {
   const { name, photo_url, handle } = req.body || {};
   const nextHandle = isNonEmptyString(handle) ? handle.trim().toLowerCase() : null;
   if (nextHandle) {
-    const existing = await query(
-      "SELECT id FROM users WHERE username = $1 AND id <> $2",
-      [nextHandle, req.user.id]
-    );
+    const existing = await query("SELECT id FROM users WHERE username = $1 AND id <> $2", [
+      nextHandle,
+      req.user.id,
+    ]);
     if (existing.rowCount > 0) {
       return res.status(409).json({ error: "handle_taken" });
     }
   }
   const result = await query(
     "UPDATE users SET name = COALESCE($1, name), image_url = COALESCE($2, image_url), username = COALESCE($3, username) WHERE id = $4 RETURNING id, name, role, bio, phone, image_url, username, stripe_account_id, created_at",
-    [
-      isNonEmptyString(name) ? name.trim() : null,
-      isNonEmptyString(photo_url) ? photo_url : null,
-      nextHandle,
-      req.user.id,
-    ]
+    [isNonEmptyString(name) ? name.trim() : null, isNonEmptyString(photo_url) ? photo_url : null, nextHandle, req.user.id]
   );
   return res.json({ user: result.rows[0] });
 });
 
-app.post("/stripe/connect_link", async (req, res) => {
+router.post("/stripe/connect_link", async (req, res) => {
   const userId = getUserIdFromRequest(req);
   if (!userId || !isPositiveInteger(userId)) {
-    return res.status(400).json({ error: "invalid_user_id" });
+    return res.status(400).json({ error: "Invalid user id" });
   }
   if (!stripeClientId) {
-    return res.status(500).json({ error: "stripe_client_id_missing" });
+    return res.status(500).json({ error: "Stripe client id not configured" });
   }
   if (!stripeStateSecret) {
-    return res.status(500).json({ error: "stripe_state_secret_missing" });
+    return res.status(500).json({ error: "Stripe state secret not configured" });
   }
   const state = encodeState({ user_id: userId, issued_at: Date.now() });
   if (!state) {
-    return res.status(500).json({ error: "stripe_state_missing" });
+    return res.status(500).json({ error: "Stripe state not configured" });
   }
   const params = new URLSearchParams({
     response_type: "code",
@@ -248,7 +223,7 @@ app.post("/stripe/connect_link", async (req, res) => {
   return res.json({ url: `https://connect.stripe.com/oauth/authorize?${params.toString()}` });
 });
 
-app.post("/offers", async (req, res) => {
+router.post("/offers", async (req, res) => {
   const {
     creator_id,
     title,
@@ -260,7 +235,7 @@ app.post("/offers", async (req, res) => {
     image_url,
     slots,
     payment_mode,
-  } = req.body || {};
+  } = req.body;
 
   const normalizedPaymentMode =
     payment_mode === "full" || payment_mode === "pay_in_person" ? payment_mode : "deposit";
@@ -273,13 +248,14 @@ app.post("/offers", async (req, res) => {
     !isPositiveInteger(capacity) ||
     !isNonEmptyString(location_text)
   ) {
-    return res.status(400).json({ error: "invalid_offer_payload" });
+    return res.status(400).json({ error: "Invalid offer payload" });
   }
 
   const client = await pool.connect();
 
   try {
     await client.query("BEGIN");
+
     const offerResult = await client.query(
       "INSERT INTO offers (creator_id, title, price_cents, deposit_cents, payment_mode, capacity, location_text, description, image_url) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id, creator_id, title, price_cents, deposit_cents, payment_mode, capacity, location_text, description, image_url, created_at",
       [
@@ -294,7 +270,9 @@ app.post("/offers", async (req, res) => {
         image_url ?? null,
       ]
     );
+
     const offer = offerResult.rows[0];
+
     if (Array.isArray(slots)) {
       for (const slot of slots) {
         if (!slot?.start_at || !slot?.end_at) continue;
@@ -304,61 +282,72 @@ app.post("/offers", async (req, res) => {
         );
       }
     }
+
     await client.query(
       "INSERT INTO events (user_id, type, ref_id, metadata) VALUES ($1, $2, $3, $4)",
       [creator_id, EVENT_TYPES.OFFER_CREATED, offer.id, null]
     );
+
     await client.query("COMMIT");
+
     return res.status(201).json({ offer });
   } catch (error) {
     await client.query("ROLLBACK");
-    return res.status(500).json({ error: "create_offer_failed" });
+    return res.status(500).json({ error: "Unable to create offer" });
   } finally {
     client.release();
   }
 });
 
-app.get("/offers/:offer_id", async (req, res) => {
+router.get("/offers/:offer_id", async (req, res) => {
   const offerId = Number(req.params.offer_id);
+
   if (!isPositiveInteger(offerId)) {
-    return res.status(400).json({ error: "invalid_offer_id" });
+    return res.status(400).json({ error: "Invalid offer id" });
   }
+
   const offerResult = await query(
     "SELECT id, creator_id, title, price_cents, deposit_cents, payment_mode, capacity, location_text, description, image_url, created_at FROM offers WHERE id = $1",
     [offerId]
   );
+
   if (offerResult.rowCount === 0) {
-    return res.status(404).json({ error: "offer_not_found" });
+    return res.status(404).json({ error: "Offer not found" });
   }
+
   const slotResult = await query(
     "SELECT id, offer_id, start_at, end_at, remaining_capacity FROM offer_slots WHERE offer_id = $1 ORDER BY start_at ASC",
     [offerId]
   );
+
   const activityResult = await query(
     "SELECT e.id, e.type, e.ref_id, e.created_at, u.name AS actor_name, o.title AS offer_title FROM events e LEFT JOIN claims c ON e.type IN ($2, $3) AND c.id = e.ref_id LEFT JOIN offers o ON (e.type IN ($2, $3) AND o.id = c.offer_id) OR (e.type = $4 AND o.id = e.ref_id) LEFT JOIN users u ON u.id = c.user_id WHERE (o.id = $1 OR e.ref_id = $1) ORDER BY e.created_at DESC LIMIT 10",
     [offerId, EVENT_TYPES.OFFER_CLAIMED, EVENT_TYPES.REDEMPTION_COMPLETED, EVENT_TYPES.OFFER_CREATED]
   );
+
   return res.json({ offer: offerResult.rows[0], slots: slotResult.rows, activity: activityResult.rows });
 });
 
-app.post("/claims", async (req, res) => {
-  const { offer_id, user_id, slot_id, address, referral_code } = req.body || {};
+router.post("/claims", async (req, res) => {
+  const { offer_id, user_id, slot_id, address, referral_code } = req.body;
 
   if (!isPositiveInteger(offer_id) || !isPositiveInteger(user_id)) {
-    return res.status(400).json({ error: "invalid_claim_payload" });
+    return res.status(400).json({ error: "Invalid claim payload" });
   }
 
   const client = await pool.connect();
 
   try {
     await client.query("BEGIN");
+
     const offerResult = await client.query(
       "SELECT id, creator_id, deposit_cents, payment_mode, price_cents FROM offers WHERE id = $1",
       [offer_id]
     );
+
     if (offerResult.rowCount === 0) {
       await client.query("ROLLBACK");
-      return res.status(404).json({ error: "offer_not_found" });
+      return res.status(404).json({ error: "Offer not found" });
     }
 
     if (slot_id) {
@@ -368,19 +357,28 @@ app.post("/claims", async (req, res) => {
       );
       if (slotResult.rowCount === 0) {
         await client.query("ROLLBACK");
-        return res.status(404).json({ error: "slot_not_found" });
+        return res.status(404).json({ error: "Slot not found" });
       }
       const remaining = Number(slotResult.rows[0].remaining_capacity);
       if (remaining <= 0) {
         await client.query("ROLLBACK");
-        return res.status(409).json({ error: "slot_full" });
+        return res.status(409).json({ error: "Slot full" });
       }
-      await client.query("UPDATE offer_slots SET remaining_capacity = remaining_capacity - 1 WHERE id = $1", [slot_id]);
+      await client.query(
+        "UPDATE offer_slots SET remaining_capacity = remaining_capacity - 1 WHERE id = $1",
+        [slot_id]
+      );
     }
 
     const claimResult = await client.query(
       "INSERT INTO claims (offer_id, user_id, slot_id, address, deposit_cents) VALUES ($1, $2, $3, $4, $5) RETURNING id, offer_id, user_id, slot_id, address, deposit_cents, created_at",
-      [offer_id, user_id, slot_id ?? null, address ?? null, offerResult.rows[0].deposit_cents]
+      [
+        offer_id,
+        user_id,
+        slot_id ?? null,
+        address ?? null,
+        offerResult.rows[0].deposit_cents,
+      ]
     );
 
     const claim = claimResult.rows[0];
@@ -405,26 +403,28 @@ app.post("/claims", async (req, res) => {
     }
 
     await client.query("COMMIT");
+
     return res.status(201).json({ claim, payment_mode: offerResult.rows[0].payment_mode });
   } catch (error) {
     await client.query("ROLLBACK");
-    return res.status(500).json({ error: "create_claim_failed" });
+    return res.status(500).json({ error: "Unable to create claim" });
   } finally {
     client.release();
   }
 });
 
-app.post("/sessions/init", async (req, res) => {
+router.post("/sessions/init", async (req, res) => {
   const { host_handle, amount_cents } = req.body || {};
   if (!isNonEmptyString(host_handle) || !isNonNegativeInteger(amount_cents)) {
-    return res.status(400).json({ error: "invalid_session_payload" });
+    return res.status(400).json({ error: "Invalid session payload" });
   }
+
   const hostResult = await query(
     "SELECT id, stripe_account_id, stripe_access_token FROM users WHERE LOWER(username) = $1",
     [host_handle.trim().toLowerCase()]
   );
   if (hostResult.rowCount === 0) {
-    return res.status(404).json({ error: "host_not_found" });
+    return res.status(404).json({ error: "Host not found" });
   }
   const host = hostResult.rows[0];
   if (amount_cents > 0 && (!host.stripe_account_id || !host.stripe_access_token)) {
@@ -503,23 +503,23 @@ app.post("/sessions/init", async (req, res) => {
     return res.status(201).json({ session_id: claimId, amount_cents, checkout_url: session.url });
   } catch (error) {
     await client.query("ROLLBACK");
-    return res.status(500).json({ error: "create_session_failed" });
+    return res.status(500).json({ error: "Unable to create session" });
   } finally {
     client.release();
   }
 });
 
-app.post("/sessions/:id/redeem", requireHost, async (req, res) => {
+router.post("/sessions/:id/redeem", requireHost, async (req: any, res) => {
   const sessionId = Number(req.params.id);
   if (!isPositiveInteger(sessionId)) {
-    return res.status(400).json({ error: "invalid_session_id" });
+    return res.status(400).json({ error: "Invalid session id" });
   }
   const sessionResult = await query(
     "SELECT c.id, c.status, c.redeemed_at, o.creator_id, o.price_cents FROM claims c JOIN offers o ON o.id = c.offer_id WHERE c.id = $1",
     [sessionId]
   );
   if (sessionResult.rowCount === 0) {
-    return res.status(404).json({ error: "session_not_found" });
+    return res.status(404).json({ error: "Session not found" });
   }
   const session = sessionResult.rows[0];
   if (Number(session.creator_id) !== Number(req.user.id)) {
@@ -538,6 +538,7 @@ app.post("/sessions/:id/redeem", requireHost, async (req, res) => {
       return res.status(409).json({ error: "payment_pending" });
     }
   }
+
   const redeemedAt = new Date().toISOString();
   await updateClaimStatus({ claimId: sessionId, status: "redeemed", redeemedAt });
   await query("INSERT INTO redemptions (claim_id) VALUES ($1) ON CONFLICT DO NOTHING", [
@@ -547,10 +548,12 @@ app.post("/sessions/:id/redeem", requireHost, async (req, res) => {
     "INSERT INTO events (user_id, type, ref_id) VALUES ($1, $2, $3)",
     [req.user.id, EVENT_TYPES.REDEMPTION_COMPLETED, sessionId]
   );
+
   const lastPaidResult = await query(
     "SELECT o.price_cents FROM redemptions r JOIN claims c ON c.id = r.claim_id JOIN offers o ON o.id = c.offer_id WHERE o.creator_id = $1 AND o.price_cents > 0 ORDER BY r.redeemed_at DESC NULLS LAST, r.created_at DESC LIMIT 1",
     [req.user.id]
   );
+
   return res.json({
     session: {
       id: sessionId,
@@ -558,12 +561,11 @@ app.post("/sessions/:id/redeem", requireHost, async (req, res) => {
       status: "redeemed",
       redeemed_at: redeemedAt,
     },
-    last_paid_amount_cents:
-      lastPaidResult.rowCount > 0 ? Number(lastPaidResult.rows[0].price_cents) : null,
+    last_paid_amount_cents: lastPaidResult.rowCount > 0 ? lastPaidResult.rows[0].price_cents : null,
   });
 });
 
-app.get("/sessions", requireHost, async (req, res) => {
+router.get("/sessions", requireHost, async (req: any, res) => {
   const status = typeof req.query.status === "string" ? req.query.status : null;
   const values = [req.user.id];
   let filter = "";
@@ -582,13 +584,13 @@ app.get("/sessions", requireHost, async (req, res) => {
   return res.json({ sessions: sessionsResult.rows });
 });
 
-app.post("/checkout/session", async (req, res) => {
+router.post("/checkout/session", async (req, res) => {
   if (!stripe) {
-    return res.status(500).json({ error: "stripe_not_configured" });
+    return res.status(500).json({ error: "Stripe not configured" });
   }
-  const { claim_id, return_path } = req.body || {};
+  const { claim_id, return_path } = req.body;
   if (!isPositiveInteger(claim_id)) {
-    return res.status(400).json({ error: "invalid_checkout_payload" });
+    return res.status(400).json({ error: "Invalid checkout payload" });
   }
 
   const claimResult = await query(
@@ -597,7 +599,7 @@ app.post("/checkout/session", async (req, res) => {
   );
 
   if (claimResult.rowCount === 0) {
-    return res.status(404).json({ error: "claim_not_found" });
+    return res.status(404).json({ error: "Claim not found" });
   }
 
   const claim = claimResult.rows[0];
@@ -608,6 +610,12 @@ app.post("/checkout/session", async (req, res) => {
     return res.status(409).json({ error: "creator_not_connected" });
   }
   const creatorStripe = new Stripe(creatorStripeToken, { apiVersion: "2024-06-20" });
+  const metadata = {
+    claim_id: String(claim_id),
+    offer_id: String(claim.offer_id),
+    creator_id: String(claim.creator_id),
+    purpose: "deposit",
+  };
   const rawReturnPath = typeof return_path === "string" ? return_path : "/";
   const sanitizedPath = rawReturnPath.split("?")[0].split("#")[0];
   const safePath =
@@ -622,12 +630,7 @@ app.post("/checkout/session", async (req, res) => {
   const cancelUrl = new URL(baseUrl.toString());
   cancelUrl.searchParams.set("claim", String(claim_id));
   cancelUrl.searchParams.set("cancel", "1");
-  const metadata = {
-    claim_id: String(claim_id),
-    offer_id: String(claim.offer_id),
-    creator_id: String(claim.creator_id),
-    purpose: "deposit",
-  };
+
   const session = await creatorStripe.checkout.sessions.create({
     mode: "payment",
     success_url: successUrl.toString(),
@@ -658,11 +661,83 @@ app.post("/checkout/session", async (req, res) => {
   return res.json({ url: session.url });
 });
 
-app.post("/wallet/:platform", async (req, res) => {
+router.post("/terminal/connection-token", async (req, res) => {
+  if (!stripe) {
+    return res.status(500).json({ error: "Stripe not configured" });
+  }
+  const { user_id } = req.body;
+  if (!isPositiveInteger(user_id)) {
+    return res.status(400).json({ error: "Invalid user id" });
+  }
+  const userResult = await query(
+    "SELECT stripe_account_id, stripe_access_token FROM users WHERE id = $1",
+    [user_id]
+  );
+  if (userResult.rowCount === 0) {
+    return res.status(404).json({ error: "User not found" });
+  }
+  const creatorStripeToken = userResult.rows[0].stripe_access_token;
+  const creatorStripeAccount = userResult.rows[0].stripe_account_id;
+  if (!creatorStripeToken || !creatorStripeAccount) {
+    return res.status(409).json({ error: "creator_not_connected" });
+  }
+  const creatorStripe = new Stripe(creatorStripeToken, { apiVersion: "2024-06-20" });
+  const token = await creatorStripe.terminal.connectionTokens.create();
+  return res.json({ secret: token.secret });
+});
+
+router.post("/terminal/payment-intent", async (req, res) => {
+  if (!stripe) {
+    return res.status(500).json({ error: "Stripe not configured" });
+  }
+  const { claim_id } = req.body;
+  if (!isPositiveInteger(claim_id)) {
+    return res.status(400).json({ error: "Invalid claim id" });
+  }
+  const claimResult = await query(
+    "SELECT c.id, c.deposit_cents, o.id AS offer_id, o.title, o.price_cents, o.payment_mode, o.creator_id, u.stripe_account_id, u.stripe_access_token FROM claims c JOIN offers o ON o.id = c.offer_id JOIN users u ON u.id = o.creator_id WHERE c.id = $1",
+    [claim_id]
+  );
+  if (claimResult.rowCount === 0) {
+    return res.status(404).json({ error: "Claim not found" });
+  }
+  const claim = claimResult.rows[0];
+  const creatorStripeToken = claim.stripe_access_token;
+  const creatorStripeAccount = claim.stripe_account_id;
+  if (!creatorStripeToken || !creatorStripeAccount) {
+    return res.status(409).json({ error: "creator_not_connected" });
+  }
+  const amountCents =
+    claim.payment_mode === "full"
+      ? claim.price_cents
+      : claim.payment_mode === "pay_in_person"
+      ? claim.price_cents
+      : Math.max(0, claim.price_cents - claim.deposit_cents);
+  if (amountCents <= 0) {
+    return res.status(409).json({ error: "balance_not_due" });
+  }
+  const creatorStripe = new Stripe(creatorStripeToken, { apiVersion: "2024-06-20" });
+  const metadata = {
+    claim_id: String(claim.id),
+    offer_id: String(claim.offer_id),
+    creator_id: String(claim.creator_id),
+    purpose: "balance",
+  };
+  const paymentIntent = await creatorStripe.paymentIntents.create({
+    amount: amountCents,
+    currency: "usd",
+    payment_method_types: ["card_present"],
+    capture_method: "automatic",
+    metadata,
+  });
+  return res.json({ client_secret: paymentIntent.client_secret, id: paymentIntent.id });
+});
+
+router.post("/wallet/:platform", async (req, res) => {
   const platform = req.params.platform;
-  const { claim_id } = req.body || {};
+  const { claim_id } = req.body;
   if (!isPositiveInteger(claim_id) || (platform !== "apple" && platform !== "google")) {
-    return res.status(400).json({ error: "invalid_wallet_payload" });
+    return res.status(400).json({ error: "Invalid wallet payload" });
   }
 
   await query(
@@ -673,60 +748,77 @@ app.post("/wallet/:platform", async (req, res) => {
   return res.json({ ok: true, message: "Wallet pass generation requires credentials" });
 });
 
-app.post("/redemptions", async (req, res) => {
-  const { claim_id } = req.body || {};
+router.post("/redemptions", async (req, res) => {
+  const { claim_id } = req.body;
+
   if (!isPositiveInteger(claim_id)) {
-    return res.status(400).json({ error: "invalid_redemption_payload" });
+    return res.status(400).json({ error: "Invalid redemption payload" });
   }
+
   const client = await pool.connect();
+
   try {
     await client.query("BEGIN");
+
     const claimResult = await client.query(
-      "SELECT c.id, o.creator_id FROM claims c JOIN offers o ON o.id = c.offer_id WHERE c.id = $1",
+      "SELECT c.id, c.user_id, o.creator_id FROM claims c JOIN offers o ON o.id = c.offer_id WHERE c.id = $1",
       [claim_id]
     );
+
     if (claimResult.rowCount === 0) {
       await client.query("ROLLBACK");
-      return res.status(404).json({ error: "claim_not_found" });
+      return res.status(404).json({ error: "Claim not found" });
     }
+
     const redemptionResult = await client.query(
       "INSERT INTO redemptions (claim_id) VALUES ($1) RETURNING id, claim_id, redeemed_at",
       [claim_id]
     );
+
+    const creatorId = claimResult.rows[0].creator_id;
+
     await client.query(
       "INSERT INTO events (user_id, type, ref_id) VALUES ($1, $2, $3)",
-      [claimResult.rows[0].creator_id, EVENT_TYPES.REDEMPTION_COMPLETED, claim_id]
+      [creatorId, EVENT_TYPES.REDEMPTION_COMPLETED, claim_id]
     );
+
     await client.query("COMMIT");
+
     return res.status(201).json({ redemption: redemptionResult.rows[0] });
   } catch (error) {
     await client.query("ROLLBACK");
-    return res.status(500).json({ error: "create_redemption_failed" });
+    return res.status(500).json({ error: "Unable to create redemption" });
   } finally {
     client.release();
   }
 });
 
-app.get("/profile/:user_id", async (req, res) => {
+router.get("/profile/:user_id", async (req, res) => {
   const userId = Number(req.params.user_id);
+
   if (!isPositiveInteger(userId)) {
-    return res.status(400).json({ error: "invalid_user_id" });
+    return res.status(400).json({ error: "Invalid user id" });
   }
+
   const userResult = await query(
     "SELECT id, name, role, bio, phone, image_url, username, stripe_account_id, created_at FROM users WHERE id = $1",
     [userId]
   );
+
   if (userResult.rowCount === 0) {
-    return res.status(404).json({ error: "user_not_found" });
+    return res.status(404).json({ error: "User not found" });
   }
+
   const scoreResult = await query(
     "SELECT COUNT(r.id) AS score FROM redemptions r JOIN claims c ON c.id = r.claim_id JOIN offers o ON o.id = c.offer_id WHERE o.creator_id = $1",
     [userId]
   );
+
   const offersResult = await query(
     "SELECT o.id, o.creator_id, o.title, o.price_cents, o.deposit_cents, o.payment_mode, o.capacity, o.location_text, o.description, o.image_url, o.created_at, COUNT(c.id) AS claimed_count FROM offers o LEFT JOIN claims c ON c.offer_id = o.id WHERE o.creator_id = $1 GROUP BY o.id ORDER BY o.created_at DESC",
     [userId]
   );
+
   return res.json({
     user: userResult.rows[0],
     score: Number(scoreResult.rows[0].score),
@@ -737,28 +829,34 @@ app.get("/profile/:user_id", async (req, res) => {
   });
 });
 
-app.get("/u/:handle", async (req, res) => {
+router.get("/u/:handle", async (req, res) => {
   const raw = typeof req.params.handle === "string" ? req.params.handle : "";
   const handle = raw.trim().toLowerCase();
   if (!isNonEmptyString(handle)) {
-    return res.status(400).json({ error: "invalid_handle" });
+    return res.status(400).json({ error: "Invalid handle" });
   }
+
   const userResult = await query(
     "SELECT id, name, image_url, username FROM users WHERE LOWER(username) = $1 ORDER BY id ASC LIMIT 1",
     [handle]
   );
+
   if (userResult.rowCount === 0) {
-    return res.status(404).json({ error: "user_not_found" });
+    return res.status(404).json({ error: "User not found" });
   }
+
   const userId = userResult.rows[0].id;
+
   const lastPaidResult = await query(
     "SELECT o.price_cents FROM redemptions r JOIN claims c ON c.id = r.claim_id JOIN offers o ON o.id = c.offer_id WHERE o.creator_id = $1 AND o.price_cents > 0 ORDER BY r.redeemed_at DESC NULLS LAST, r.created_at DESC LIMIT 1",
     [userId]
   );
+
   const redeemedResult = await query(
     "SELECT r.claim_id AS id, o.price_cents AS amount_cents, r.redeemed_at FROM redemptions r JOIN claims c ON c.id = r.claim_id JOIN offers o ON o.id = c.offer_id WHERE o.creator_id = $1 ORDER BY r.redeemed_at DESC NULLS LAST, r.created_at DESC LIMIT 12",
     [userId]
   );
+
   return res.json({
     user: {
       id: userId,
@@ -777,116 +875,88 @@ app.get("/u/:handle", async (req, res) => {
   });
 });
 
-app.get("/public/:username", async (req, res) => {
-  const raw = typeof req.params.username === "string" ? req.params.username : "";
-  const username = raw.trim().toLowerCase();
-  if (!isNonEmptyString(username)) {
-    return res.status(400).json({ error: "invalid_username" });
+router.get("/stripe/callback", async (req, res) => {
+  if (!stripe) {
+    return res.status(500).send("Stripe not configured");
   }
-  const userResult = await query(
-    "SELECT id, name, role, bio, phone, image_url, username, stripe_account_id, created_at FROM users WHERE LOWER(username) = $1 ORDER BY id ASC LIMIT 1",
-    [username]
-  );
-  if (userResult.rowCount === 0) {
-    return res.status(404).json({ error: "user_not_found" });
+  const code = req.query.code;
+  const state = req.query.state;
+  if (!code || !state || typeof code !== "string" || typeof state !== "string") {
+    return res.status(400).send("Invalid stripe callback");
   }
-  const userId = userResult.rows[0].id;
-  const scoreResult = await query(
-    "SELECT COUNT(r.id) AS score FROM redemptions r JOIN claims c ON c.id = r.claim_id JOIN offers o ON o.id = c.offer_id WHERE o.creator_id = $1",
-    [userId]
-  );
-  const offersResult = await query(
-    "SELECT o.id, o.creator_id, o.title, o.price_cents, o.deposit_cents, o.payment_mode, o.capacity, o.location_text, o.description, o.image_url, o.created_at, COUNT(c.id) AS claimed_count FROM offers o LEFT JOIN claims c ON c.offer_id = o.id WHERE o.creator_id = $1 GROUP BY o.id ORDER BY o.created_at DESC LIMIT 6",
-    [userId]
-  );
-  const lastPaidResult = await query(
-    "SELECT p.amount_cents, p.created_at, o.title AS offer_title, u.name AS customer_name FROM payments p JOIN claims c ON c.id = p.claim_id JOIN offers o ON o.id = c.offer_id JOIN users u ON u.id = c.user_id WHERE o.creator_id = $1 AND p.status = 'paid' ORDER BY p.created_at DESC LIMIT 1",
-    [userId]
-  );
-  const proofResult = await query(
-    "SELECT e.id, e.type, e.ref_id, e.created_at, u.name AS actor_name, o.title AS offer_title, o.location_text, p.amount_cents FROM events e LEFT JOIN claims c ON c.id = e.ref_id LEFT JOIN offers o ON o.id = c.offer_id LEFT JOIN users u ON u.id = c.user_id LEFT JOIN LATERAL (SELECT amount_cents FROM payments WHERE claim_id = c.id AND status = 'paid' ORDER BY created_at DESC LIMIT 1) p ON true WHERE e.user_id = $1 AND e.type IN ($2, $3, $4, $5) ORDER BY e.created_at DESC LIMIT 8",
-    [
-      userId,
-      EVENT_TYPES.OFFER_CLAIMED,
-      EVENT_TYPES.DEPOSIT_PAID,
-      EVENT_TYPES.REDEEMED_IRL,
-      EVENT_TYPES.REDEMPTION_COMPLETED,
-    ]
-  );
-  return res.json({
-    user: userResult.rows[0],
-    score: Number(scoreResult.rows[0].score),
-    offers: offersResult.rows.map((offer) => ({
-      ...offer,
-      claimed_count: Number(offer.claimed_count),
-    })),
-    last_paid: lastPaidResult.rowCount > 0 ? lastPaidResult.rows[0] : null,
-    proof: proofResult.rows,
-  });
-});
-
-app.get("/inbox/:user_id", async (req, res) => {
-  const userId = Number(req.params.user_id);
+  const parsed = decodeState(state);
+  if (!parsed) {
+    return res.status(400).send("Invalid state");
+  }
+  const userId = Number((parsed as { user_id?: number }).user_id);
   if (!isPositiveInteger(userId)) {
-    return res.status(400).json({ error: "invalid_user_id" });
+    return res.status(400).send("Invalid user id");
   }
-  const eventsResult = await query(
-    "SELECT e.id, e.type, e.ref_id, e.created_at, u.name AS actor_name, o.title AS offer_title FROM events e LEFT JOIN claims c ON e.type IN ($2, $3) AND c.id = e.ref_id LEFT JOIN offers o ON (e.type IN ($2, $3) AND o.id = c.offer_id) OR (e.type = $4 AND o.id = e.ref_id) LEFT JOIN users u ON u.id = c.user_id WHERE e.user_id = $1 ORDER BY e.created_at DESC",
-    [userId, EVENT_TYPES.OFFER_CLAIMED, EVENT_TYPES.REDEMPTION_COMPLETED, EVENT_TYPES.OFFER_CREATED]
-  );
-  return res.json({ events: eventsResult.rows });
+  try {
+    const tokenResponse = await stripe.oauth.token({
+      grant_type: "authorization_code",
+      code,
+    });
+    const stripeAccountId = tokenResponse.stripe_user_id;
+    const account = await stripe.accounts.retrieve(stripeAccountId);
+    const stripeName =
+      account.business_profile?.name ||
+      account.company?.name ||
+      [account.individual?.first_name, account.individual?.last_name]
+        .filter(Boolean)
+        .join(" ")
+        .trim() ||
+      null;
+    const stripePhone =
+      account.business_profile?.support_phone ||
+      account.company?.phone ||
+      account.individual?.phone ||
+      null;
+    const stripeEmail =
+      account.email || account.business_profile?.support_email || account.individual?.email || null;
+    const stripeUrl = account.business_profile?.url || account.business_profile?.support_url || null;
+
+    const userResult = await query(
+      "SELECT name, phone, bio, username FROM users WHERE id = $1",
+      [userId]
+    );
+    const user = userResult.rows[0] || {};
+    const currentName = typeof user.name === "string" ? user.name : "";
+    const nextName =
+      (!currentName || currentName === "New creator") && stripeName ? stripeName : currentName;
+    const currentPhone = typeof user.phone === "string" ? user.phone : "";
+    const nextPhone = !currentPhone && stripePhone ? stripePhone : currentPhone;
+    const currentBio = typeof user.bio === "string" ? user.bio : "";
+    const nextBio = !currentBio && stripeUrl ? stripeUrl : currentBio;
+    const currentUsername = typeof user.username === "string" ? user.username : "";
+    const usernameSource = stripeName || nextName || currentName;
+    const nextUsername =
+      !currentUsername && usernameSource
+        ? usernameSource.trim().split(/\s+/)[0].toLowerCase()
+        : currentUsername;
+
+    await query(
+      "UPDATE users SET stripe_account_id = $1, stripe_access_token = $2, stripe_refresh_token = $3, stripe_publishable_key = $4, stripe_account_email = COALESCE($5, stripe_account_email), name = $6, phone = $7, bio = $8, username = $9 WHERE id = $10",
+      [
+        stripeAccountId,
+        tokenResponse.access_token,
+        tokenResponse.refresh_token,
+        tokenResponse.stripe_publishable_key,
+        stripeEmail,
+        nextName || currentName,
+        nextPhone || currentPhone,
+        nextBio || currentBio,
+        nextUsername || currentUsername,
+        userId,
+      ]
+    );
+    return res.redirect(`${publicBaseUrl}/?connected=1&user_id=${userId}`);
+  } catch (error) {
+    return res.redirect(`${publicBaseUrl}/?connected=0&user_id=${userId}`);
+  }
 });
 
-app.get("/metrics/kfactor/:user_id", async (req, res) => {
-  const userId = Number(req.params.user_id);
-  if (!isPositiveInteger(userId)) {
-    return res.status(400).json({ error: "invalid_user_id" });
-  }
-  const invitesResult = await query(
-    "SELECT COUNT(id) AS invites FROM events WHERE user_id = $1 AND type = $2",
-    [userId, EVENT_TYPES.REFERRAL_INVITE_SENT]
-  );
-  const conversionsResult = await query(
-    "SELECT COUNT(id) AS conversions FROM events WHERE user_id = $1 AND type = $2",
-    [userId, EVENT_TYPES.REFERRAL_CONVERTED]
-  );
-  const invites = Number(invitesResult.rows[0].invites) || 0;
-  const conversions = Number(conversionsResult.rows[0].conversions) || 0;
-  const kFactor = invites === 0 ? 0 : Number((conversions / invites).toFixed(2));
-  return res.json({ invites, conversions, k_factor: kFactor });
-});
-
-app.post("/events", async (req, res) => {
-  const { user_id, type, ref_id, metadata } = req.body || {};
-  if (!isPositiveInteger(user_id) || !isNonEmptyString(type)) {
-    return res.status(400).json({ error: "invalid_event_payload" });
-  }
-  await query(
-    "INSERT INTO events (user_id, type, ref_id, metadata) VALUES ($1, $2, $3, $4)",
-    [user_id, type, ref_id ?? null, metadata ?? null]
-  );
-  return res.json({ ok: true });
-});
-
-app.post("/referrals", async (req, res) => {
-  const { inviter_id, offer_id } = req.body || {};
-  if (!isPositiveInteger(inviter_id) || !isPositiveInteger(offer_id)) {
-    return res.status(400).json({ error: "invalid_referral_payload" });
-  }
-  const code = Math.random().toString(36).slice(2, 8).toUpperCase();
-  await query(
-    "INSERT INTO referral_links (code, inviter_id, offer_id) VALUES ($1, $2, $3)",
-    [code, inviter_id, offer_id]
-  );
-  await query("INSERT INTO events (user_id, type, ref_id) VALUES ($1, $2, $3)", [
-    inviter_id,
-    EVENT_TYPES.REFERRAL_INVITE_SENT,
-    offer_id,
-  ]);
-  return res.status(201).json({ code });
-});
-
-app.get("/stripe/connect", async (req, res) => {
+router.get("/stripe/connect", async (req, res) => {
   if (!stripeClientId) {
     return res.status(500).send("Stripe client id not configured");
   }
@@ -911,84 +981,7 @@ app.get("/stripe/connect", async (req, res) => {
   return res.redirect(`https://connect.stripe.com/oauth/authorize?${params.toString()}`);
 });
 
-app.get("/stripe/callback", async (req, res) => {
-  if (!stripe) {
-    return res.status(500).send("Stripe not configured");
-  }
-  const code = req.query.code;
-  const state = req.query.state;
-  if (!code || !state || typeof code !== "string" || typeof state !== "string") {
-    return res.status(400).send("Invalid stripe callback");
-  }
-  const parsed = decodeState(state);
-  if (!parsed) {
-    return res.status(400).send("Invalid state");
-  }
-  const userId = Number(parsed.user_id);
-  if (!isPositiveInteger(userId)) {
-    return res.status(400).send("Invalid user id");
-  }
-  try {
-    const tokenResponse = await stripe.oauth.token({
-      grant_type: "authorization_code",
-      code,
-    });
-    const stripeAccountId = tokenResponse.stripe_user_id;
-    const account = await stripe.accounts.retrieve(stripeAccountId);
-    const stripeName =
-      account.business_profile?.name ||
-      account.company?.name ||
-      [account.individual?.first_name, account.individual?.last_name].filter(Boolean).join(" ") ||
-      null;
-    const stripePhone =
-      account.business_profile?.support_phone ||
-      account.company?.phone ||
-      account.individual?.phone ||
-      null;
-    const stripeEmail =
-      account.email || account.business_profile?.support_email || account.individual?.email || null;
-    const stripeUrl = account.business_profile?.url || account.business_profile?.support_url || null;
-
-    const userResult = await query("SELECT name, phone, bio, username FROM users WHERE id = $1", [
-      userId,
-    ]);
-    const user = userResult.rows[0] || {};
-    const currentName = typeof user.name === "string" ? user.name : "";
-    const nextName =
-      (!currentName || currentName === "New creator") && stripeName ? stripeName : currentName;
-    const currentPhone = typeof user.phone === "string" ? user.phone : "";
-    const nextPhone = !currentPhone && stripePhone ? stripePhone : currentPhone;
-    const currentBio = typeof user.bio === "string" ? user.bio : "";
-    const nextBio = !currentBio && stripeUrl ? stripeUrl : currentBio;
-    const currentUsername = typeof user.username === "string" ? user.username : "";
-    const usernameSource = stripeName || nextName || currentName;
-    const nextUsername =
-      !currentUsername && usernameSource
-        ? usernameSource.trim().split(/\\s+/)[0].toLowerCase()
-        : currentUsername;
-
-    await query(
-      "UPDATE users SET stripe_account_id = $1, stripe_access_token = $2, stripe_refresh_token = $3, stripe_publishable_key = $4, stripe_account_email = COALESCE($5, stripe_account_email), name = $6, phone = $7, bio = $8, username = $9 WHERE id = $10",
-      [
-        stripeAccountId,
-        tokenResponse.access_token,
-        tokenResponse.refresh_token,
-        tokenResponse.stripe_publishable_key,
-        stripeEmail,
-        nextName || currentName,
-        nextPhone || currentPhone,
-        nextBio || currentBio,
-        nextUsername || currentUsername,
-        userId,
-      ]
-    );
-    return res.redirect(`${publicBaseUrl}/?connected=1&user_id=${userId}`);
-  } catch (error) {
-    return res.redirect(`${publicBaseUrl}/?connected=0&user_id=${userId}`);
-  }
-});
-
-app.post("/stripe/webhook", async (req, res) => {
+router.post("/stripe/webhook", async (req, res) => {
   if (!stripe) {
     return res.status(500).send("Stripe not configured");
   }
@@ -1000,7 +993,7 @@ app.post("/stripe/webhook", async (req, res) => {
     return res.status(400).send("Missing stripe signature");
   }
 
-  let event;
+  let event: Stripe.Event;
   try {
     event = stripe.webhooks.constructEvent(req.body, signature, stripeWebhookSecret);
   } catch (error) {
@@ -1008,7 +1001,7 @@ app.post("/stripe/webhook", async (req, res) => {
   }
 
   if (event.type === "checkout.session.completed") {
-    const session = event.data.object;
+    const session = event.data.object as Stripe.Checkout.Session;
     const metadata = session.metadata || {};
     const claimId = Number(metadata.claim_id);
     if (Number.isFinite(claimId) && claimId > 0) {
@@ -1031,7 +1024,7 @@ app.post("/stripe/webhook", async (req, res) => {
   }
 
   if (event.type === "payment_intent.succeeded") {
-    const intent = event.data.object;
+    const intent = event.data.object as Stripe.PaymentIntent;
     const metadata = intent.metadata || {};
     const claimId = Number(metadata.claim_id);
     const purpose = metadata.purpose;
@@ -1056,17 +1049,17 @@ app.post("/stripe/webhook", async (req, res) => {
   return res.json({ received: true });
 });
 
-app.get("/stripe/status", async (req, res) => {
+router.get("/stripe/status", async (req, res) => {
   if (!stripe) {
-    return res.status(500).json({ error: "stripe_not_configured" });
+    return res.status(500).json({ error: "Stripe not configured" });
   }
   const userId = Number(req.query.user_id);
   if (!isPositiveInteger(userId)) {
-    return res.status(400).json({ error: "invalid_user_id" });
+    return res.status(400).json({ error: "Invalid user id" });
   }
   const userResult = await query("SELECT stripe_account_id FROM users WHERE id = $1", [userId]);
   if (userResult.rowCount === 0) {
-    return res.status(404).json({ error: "user_not_found" });
+    return res.status(404).json({ error: "User not found" });
   }
   const stripeAccountId = userResult.rows[0].stripe_account_id;
   if (!stripeAccountId) {
@@ -1084,7 +1077,79 @@ app.get("/stripe/status", async (req, res) => {
   }
 });
 
-const port = Number(process.env.PORT) || 3001;
-app.listen(port, () => {
-  console.log(`server listening on ${port}`);
+router.get("/inbox/:user_id", async (req, res) => {
+  const userId = Number(req.params.user_id);
+
+  if (!isPositiveInteger(userId)) {
+    return res.status(400).json({ error: "Invalid user id" });
+  }
+
+  const eventsResult = await query(
+    "SELECT e.id, e.type, e.ref_id, e.created_at, u.name AS actor_name, o.title AS offer_title FROM events e LEFT JOIN claims c ON e.type IN ($2, $3) AND c.id = e.ref_id LEFT JOIN offers o ON (e.type IN ($2, $3) AND o.id = c.offer_id) OR (e.type = $4 AND o.id = e.ref_id) LEFT JOIN users u ON u.id = c.user_id WHERE e.user_id = $1 ORDER BY e.created_at DESC",
+    [userId, EVENT_TYPES.OFFER_CLAIMED, EVENT_TYPES.REDEMPTION_COMPLETED, EVENT_TYPES.OFFER_CREATED]
+  );
+
+  return res.json({ events: eventsResult.rows });
 });
+
+router.get("/metrics/kfactor/:user_id", async (req, res) => {
+  const userId = Number(req.params.user_id);
+  if (!isPositiveInteger(userId)) {
+    return res.status(400).json({ error: "Invalid user id" });
+  }
+
+  const invitesResult = await query(
+    "SELECT COUNT(id) AS invites FROM events WHERE user_id = $1 AND type = $2",
+    [userId, EVENT_TYPES.REFERRAL_INVITE_SENT]
+  );
+  const conversionsResult = await query(
+    "SELECT COUNT(id) AS conversions FROM events WHERE user_id = $1 AND type = $2",
+    [userId, EVENT_TYPES.REFERRAL_CONVERTED]
+  );
+
+  const invites = Number(invitesResult.rows[0].invites) || 0;
+  const conversions = Number(conversionsResult.rows[0].conversions) || 0;
+  const kFactor = invites === 0 ? 0 : Number((conversions / invites).toFixed(2));
+
+  return res.json({ invites, conversions, k_factor: kFactor });
+});
+
+router.post("/events", async (req, res) => {
+  const { user_id, type, ref_id, metadata } = req.body;
+
+  if (!isPositiveInteger(user_id) || !isNonEmptyString(type)) {
+    return res.status(400).json({ error: "Invalid event payload" });
+  }
+
+  await query(
+    "INSERT INTO events (user_id, type, ref_id, metadata) VALUES ($1, $2, $3, $4)",
+    [user_id, type, ref_id ?? null, metadata ?? null]
+  );
+
+  return res.json({ ok: true });
+});
+
+router.post("/referrals", async (req, res) => {
+  const { inviter_id, offer_id } = req.body;
+
+  if (!isPositiveInteger(inviter_id) || !isPositiveInteger(offer_id)) {
+    return res.status(400).json({ error: "Invalid referral payload" });
+  }
+
+  const code = Math.random().toString(36).slice(2, 8).toUpperCase();
+
+  await query(
+    "INSERT INTO referral_links (code, inviter_id, offer_id) VALUES ($1, $2, $3)",
+    [code, inviter_id, offer_id]
+  );
+
+  await query("INSERT INTO events (user_id, type, ref_id) VALUES ($1, $2, $3)", [
+    inviter_id,
+    EVENT_TYPES.REFERRAL_INVITE_SENT,
+    offer_id,
+  ]);
+
+  return res.status(201).json({ code });
+});
+
+export default router;
