@@ -15,6 +15,7 @@ import {
 import "./styles.css";
 
 const HOST_ID_KEY = "openmat_host_user_id";
+const ONBOARD_KEY = "openmat_onboarding";
 
 const parseHandle = () => {
   const path = window.location.pathname;
@@ -83,6 +84,7 @@ const App = () => {
     }
     if (connected) {
       setRecentlyConnected(true);
+      localStorage.setItem(ONBOARD_KEY, "1");
       params.delete("connected");
       params.delete("user_id");
       const nextUrl = `${window.location.pathname}${params.toString() ? `?${params}` : ""}`;
@@ -94,6 +96,13 @@ const App = () => {
     const stored = localStorage.getItem(HOST_ID_KEY);
     if (stored && Number.isFinite(Number(stored))) {
       setHostUserId(Number(stored));
+    }
+  }, []);
+
+  useEffect(() => {
+    const onboarding = localStorage.getItem(ONBOARD_KEY);
+    if (onboarding) {
+      setRecentlyConnected(true);
     }
   }, []);
 
@@ -222,6 +231,7 @@ const App = () => {
   useEffect(() => {
     if (!onboardingStep && recentlyConnected) {
       setRecentlyConnected(false);
+      localStorage.removeItem(ONBOARD_KEY);
     }
   }, [onboardingStep, recentlyConnected]);
 
@@ -296,6 +306,7 @@ const App = () => {
       localStorage.setItem(HOST_ID_KEY, String(userId));
       setHostUserId(userId);
     }
+    localStorage.setItem(ONBOARD_KEY, "1");
     const { url } = await createStripeConnectLink(userId);
     window.location.href = url;
   };
@@ -322,7 +333,14 @@ const App = () => {
       payload.photo_url = editPhoto.trim();
     }
     try {
-      await updateMe(hostUserId, payload);
+      const response = await updateMe(hostUserId, payload);
+      const nextHandle = response.user.username;
+      if (nextHandle && nextHandle !== handle) {
+        window.history.replaceState({}, "", `/${nextHandle}`);
+        setHandle(nextHandle);
+        setEditOpen(false);
+        return;
+      }
       setEditOpen(false);
       await loadProfile();
     } catch (error) {
