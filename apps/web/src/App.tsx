@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import {
   createStripeConnectLink,
   createUser,
+  getMe,
   getPublicProfile,
   getSessions,
   getStripeStatus,
@@ -58,6 +59,7 @@ const App = () => {
   const [hostLoading, setHostLoading] = useState(false);
   const [hostError, setHostError] = useState<string | null>(null);
   const [stripeStatus, setStripeStatus] = useState<StripeStatusResponse | null>(null);
+  const [hostStripeAccount, setHostStripeAccount] = useState(false);
   const [publicStripeStatus, setPublicStripeStatus] = useState<StripeStatusResponse | null>(null);
 
   const hostMode = useMemo(() => {
@@ -136,6 +138,15 @@ const App = () => {
   }, [hostUserId]);
 
   useEffect(() => {
+    if (!hostUserId) return;
+    getMe(hostUserId)
+      .then((response) => {
+        setHostStripeAccount(Boolean(response.user.stripe_account_id));
+      })
+      .catch(() => setHostStripeAccount(false));
+  }, [hostUserId]);
+
+  useEffect(() => {
     if (!profile?.user.id) return;
     getStripeStatus(profile.user.id)
       .then(setPublicStripeStatus)
@@ -207,7 +218,7 @@ const App = () => {
   };
 
   useEffect(() => {
-    const shouldOnboard = recentlyConnected || stripeConnected;
+    const shouldOnboard = recentlyConnected || stripeConnected || hostStripeAccount;
     if (!isViewingOwnProfile || !shouldOnboard) {
       setOnboardingStep(null);
       return;
