@@ -65,6 +65,31 @@ const isNonNegativeInteger = (value: unknown) =>
 const isNonEmptyString = (value: unknown) =>
   typeof value === "string" && value.trim().length > 0;
 
+const slugifyHandle = (value: string) =>
+  value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "")
+    .trim();
+
+const getUniqueUsername = async (base: string, excludeUserId?: number) => {
+  const normalizedBase = slugifyHandle(base) || "user";
+  let candidate = normalizedBase;
+  let suffix = 1;
+  while (true) {
+    const existing = excludeUserId
+      ? await query("SELECT id FROM users WHERE username = $1 AND id <> $2", [
+          candidate,
+          excludeUserId,
+        ])
+      : await query("SELECT id FROM users WHERE username = $1", [candidate]);
+    if (existing.rowCount === 0) {
+      return candidate;
+    }
+    suffix += 1;
+    candidate = `${normalizedBase}${suffix}`;
+  }
+};
+
 const getUserIdFromRequest = (req: any) => {
   const headerValue = req.headers["x-user-id"];
   const queryValue = req.query?.user_id;
@@ -131,14 +156,8 @@ router.post("/users", async (req, res) => {
   }
 
   const normalizedRole = role === "creator" || role === "customer" ? role : "creator";
-  const normalizedUsername = isNonEmptyString(username)
-    ? username.trim().toLowerCase()
-    : name.trim().split(/\s+/)[0].toLowerCase();
-
-  const existing = await query("SELECT id FROM users WHERE username = $1", [normalizedUsername]);
-  if (existing.rowCount > 0) {
-    return res.status(409).json({ error: "Handle already exists" });
-  }
+  const baseUsername = isNonEmptyString(name) ? name : username;
+  const normalizedUsername = await getUniqueUsername(baseUsername || "user");
 
   const result = await query(
     "INSERT INTO users (name, role, bio, phone, image_url, username) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, name, role, bio, phone, image_url, username, created_at",
@@ -181,7 +200,8 @@ router.get("/me", requireUser, async (req: any, res) => {
 
 router.patch("/me", requireUser, async (req: any, res) => {
   const { name, photo_url, handle } = req.body || {};
-  const nextHandle = isNonEmptyString(handle) ? handle.trim().toLowerCase() : null;
+  const desiredHandle = isNonEmptyString(handle) ? handle.trim().toLowerCase() : null;
+  let nextHandle = desiredHandle;
   if (nextHandle) {
     const existing = await query("SELECT id FROM users WHERE username = $1 AND id <> $2", [
       nextHandle,
@@ -190,10 +210,21 @@ router.patch("/me", requireUser, async (req: any, res) => {
     if (existing.rowCount > 0) {
       return res.status(409).json({ error: "handle_taken" });
     }
+  } else if (isNonEmptyString(name)) {
+    const currentHandle = typeof req.user.username === "string" ? req.user.username : "";
+    const currentDerived = isNonEmptyString(req.user.name) ? slugifyHandle(req.user.name) : "";
+    if (!currentHandle || currentHandle === currentDerived) {
+      nextHandle = await getUniqueUsername(name, req.user.id);
+    }
   }
   const result = await query(
     "UPDATE users SET name = COALESCE($1, name), image_url = COALESCE($2, image_url), username = COALESCE($3, username) WHERE id = $4 RETURNING id, name, role, bio, phone, image_url, username, stripe_account_id, created_at",
-    [isNonEmptyString(name) ? name.trim() : null, isNonEmptyString(photo_url) ? photo_url : null, nextHandle, req.user.id]
+    [
+      isNonEmptyString(name) ? name.trim() : null,
+      isNonEmptyString(photo_url) ? photo_url : null,
+      nextHandle,
+      req.user.id,
+    ]
   );
   return res.json({ user: result.rows[0] });
 });
@@ -429,6 +460,19 @@ router.post("/sessions/init", async (req, res) => {
   const host = hostResult.rows[0];
   if (amount_cents > 0 && (!host.stripe_account_id || !host.stripe_access_token)) {
     return res.status(409).json({ error: "host_not_connected" });
+  }
+  if (amount_cents > 0) {
+    if (!stripe) {
+      return res.status(500).json({ error: "Stripe not configured" });
+    }
+    try {
+      const account = await stripe.accounts.retrieve(host.stripe_account_id);
+      if (!account.charges_enabled || !account.payouts_enabled) {
+        return res.status(409).json({ error: "payments_not_enabled" });
+      }
+    } catch {
+      return res.status(409).json({ error: "payments_not_enabled" });
+    }
   }
 
   const client = await pool.connect();
@@ -931,9 +975,7 @@ router.get("/stripe/callback", async (req, res) => {
     const currentUsername = typeof user.username === "string" ? user.username : "";
     const usernameSource = stripeName || nextName || currentName;
     const nextUsername =
-      !currentUsername && usernameSource
-        ? usernameSource.trim().split(/\s+/)[0].toLowerCase()
-        : currentUsername;
+      !currentUsername && usernameSource ? await getUniqueUsername(usernameSource, userId) : currentUsername;
 
     await query(
       "UPDATE users SET stripe_account_id = $1, stripe_access_token = $2, stripe_refresh_token = $3, stripe_publishable_key = $4, stripe_account_email = COALESCE($5, stripe_account_email), name = $6, phone = $7, bio = $8, username = $9 WHERE id = $10",
@@ -950,7 +992,10 @@ router.get("/stripe/callback", async (req, res) => {
         userId,
       ]
     );
-    return res.redirect(`${publicBaseUrl}/?connected=1&user_id=${userId}`);
+    const redirectHandle = nextUsername || currentUsername;
+    return res.redirect(
+      `${publicBaseUrl}/${redirectHandle ? redirectHandle : ""}?connected=1&user_id=${userId}`
+    );
   } catch (error) {
     return res.redirect(`${publicBaseUrl}/?connected=0&user_id=${userId}`);
   }

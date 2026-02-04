@@ -89,6 +89,31 @@ const isNonNegativeInteger = (value) =>
 
 const isNonEmptyString = (value) => typeof value === "string" && value.trim().length > 0;
 
+const slugifyHandle = (value) =>
+  value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "")
+    .trim();
+
+const getUniqueUsername = async (base, excludeUserId) => {
+  const normalizedBase = slugifyHandle(base) || "user";
+  let candidate = normalizedBase;
+  let suffix = 1;
+  while (true) {
+    const existing = excludeUserId
+      ? await query("SELECT id FROM users WHERE username = $1 AND id <> $2", [
+          candidate,
+          excludeUserId,
+        ])
+      : await query("SELECT id FROM users WHERE username = $1", [candidate]);
+    if (existing.rowCount === 0) {
+      return candidate;
+    }
+    suffix += 1;
+    candidate = `${normalizedBase}${suffix}`;
+  }
+};
+
 const getUserIdFromRequest = (req) => {
   const headerValue = req.headers["x-user-id"];
   const queryValue = req.query?.user_id;
@@ -153,16 +178,8 @@ app.post("/users", async (req, res) => {
     return res.status(400).json({ error: "invalid_user_payload" });
   }
   const normalizedRole = role === "creator" || role === "customer" ? role : "creator";
-  const normalizedUsername = isNonEmptyString(username)
-    ? username.trim().toLowerCase()
-    : name.trim().split(/\s+/)[0].toLowerCase();
-  const existing = await query(
-    "SELECT id FROM users WHERE username = $1",
-    [normalizedUsername]
-  );
-  if (existing.rowCount > 0) {
-    return res.status(409).json({ error: "handle_exists" });
-  }
+  const baseUsername = isNonEmptyString(name) ? name : username;
+  const normalizedUsername = await getUniqueUsername(baseUsername || "user");
   const result = await query(
     "INSERT INTO users (name, role, bio, phone, image_url, username) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, name, role, bio, phone, image_url, username, stripe_account_id, created_at",
     [name.trim(), normalizedRole, bio ?? "", phone ?? "", image_url ?? null, normalizedUsername]
@@ -201,7 +218,8 @@ app.get("/me", requireUser, async (req, res) => {
 
 app.patch("/me", requireUser, async (req, res) => {
   const { name, photo_url, handle } = req.body || {};
-  const nextHandle = isNonEmptyString(handle) ? handle.trim().toLowerCase() : null;
+  const desiredHandle = isNonEmptyString(handle) ? handle.trim().toLowerCase() : null;
+  let nextHandle = desiredHandle;
   if (nextHandle) {
     const existing = await query(
       "SELECT id FROM users WHERE username = $1 AND id <> $2",
@@ -209,6 +227,12 @@ app.patch("/me", requireUser, async (req, res) => {
     );
     if (existing.rowCount > 0) {
       return res.status(409).json({ error: "handle_taken" });
+    }
+  } else if (isNonEmptyString(name)) {
+    const currentHandle = typeof req.user.username === "string" ? req.user.username : "";
+    const currentDerived = isNonEmptyString(req.user.name) ? slugifyHandle(req.user.name) : "";
+    if (!currentHandle || currentHandle === currentDerived) {
+      nextHandle = await getUniqueUsername(name, req.user.id);
     }
   }
   const result = await query(
@@ -429,6 +453,19 @@ app.post("/sessions/init", async (req, res) => {
   const host = hostResult.rows[0];
   if (amount_cents > 0 && (!host.stripe_account_id || !host.stripe_access_token)) {
     return res.status(409).json({ error: "host_not_connected" });
+  }
+  if (amount_cents > 0) {
+    if (!stripe) {
+      return res.status(500).json({ error: "stripe_not_configured" });
+    }
+    try {
+      const account = await stripe.accounts.retrieve(host.stripe_account_id);
+      if (!account.charges_enabled || !account.payouts_enabled) {
+        return res.status(409).json({ error: "payments_not_enabled" });
+      }
+    } catch {
+      return res.status(409).json({ error: "payments_not_enabled" });
+    }
   }
 
   const client = await pool.connect();
@@ -963,9 +1000,7 @@ app.get("/stripe/callback", async (req, res) => {
     const currentUsername = typeof user.username === "string" ? user.username : "";
     const usernameSource = stripeName || nextName || currentName;
     const nextUsername =
-      !currentUsername && usernameSource
-        ? usernameSource.trim().split(/\\s+/)[0].toLowerCase()
-        : currentUsername;
+      !currentUsername && usernameSource ? await getUniqueUsername(usernameSource, userId) : currentUsername;
 
     await query(
       "UPDATE users SET stripe_account_id = $1, stripe_access_token = $2, stripe_refresh_token = $3, stripe_publishable_key = $4, stripe_account_email = COALESCE($5, stripe_account_email), name = $6, phone = $7, bio = $8, username = $9 WHERE id = $10",
@@ -982,7 +1017,10 @@ app.get("/stripe/callback", async (req, res) => {
         userId,
       ]
     );
-    return res.redirect(`${publicBaseUrl}/?connected=1&user_id=${userId}`);
+    const redirectHandle = nextUsername || currentUsername;
+    return res.redirect(
+      `${publicBaseUrl}/${redirectHandle ? redirectHandle : ""}?connected=1&user_id=${userId}`
+    );
   } catch (error) {
     return res.redirect(`${publicBaseUrl}/?connected=0&user_id=${userId}`);
   }

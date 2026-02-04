@@ -355,6 +355,11 @@ export const redeemSession = (sessionId: number, userId: number) =>
 
 export const createUser = (input: CreateUserInput) => {
   if (USE_MOCKS) {
+    const base = input.username ?? input.name;
+    const slug = base
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "")
+      .trim();
     mockUser = {
       id: mockUser?.id ?? 2,
       name: input.name,
@@ -362,7 +367,7 @@ export const createUser = (input: CreateUserInput) => {
       bio: input.bio ?? null,
       phone: input.phone ?? null,
       image_url: input.image_url ?? null,
-      username: input.username ?? input.name.split(/\s+/)[0].toLowerCase(),
+      username: slug || "user",
       created_at: new Date().toISOString(),
     };
     return Promise.resolve({ user: mockUser });

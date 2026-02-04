@@ -6,8 +6,8 @@ import {
   getSessions,
   getStripeStatus,
   initSession,
+  updateMe,
   redeemSession,
-  trackEvent,
   PublicProfileResponse,
   SessionSummary,
   StripeStatusResponse,
@@ -19,7 +19,10 @@ const HOST_ID_KEY = "openmat_host_user_id";
 const parseHandle = () => {
   const path = window.location.pathname;
   const segments = path.split("/").filter(Boolean);
-  return segments[0] || "mackley";
+  const raw = segments[0] || "mackley";
+  return decodeURIComponent(raw)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "");
 };
 
 const formatMoney = (cents: number | null) => {
@@ -34,21 +37,27 @@ const App = () => {
   const [profile, setProfile] = useState<PublicProfileResponse | null>(null);
   const [profileError, setProfileError] = useState<string | null>(null);
   const [loadingProfile, setLoadingProfile] = useState(false);
+  const [activeTab, setActiveTab] = useState<"profile" | "inbox">("profile");
 
   const [sheetOpen, setSheetOpen] = useState(false);
   const [amountInput, setAmountInput] = useState("");
   const [initError, setInitError] = useState<string | null>(null);
   const [initMessage, setInitMessage] = useState<string | null>(null);
 
-  const [messageOpen, setMessageOpen] = useState(false);
-  const [messageText, setMessageText] = useState("");
-  const [messageStatus, setMessageStatus] = useState<string | null>(null);
+  const [editOpen, setEditOpen] = useState(false);
+  const [editName, setEditName] = useState("");
+  const [editPhoto, setEditPhoto] = useState("");
+  const [editError, setEditError] = useState<string | null>(null);
+  const [editSaving, setEditSaving] = useState(false);
+  const [onboardingStep, setOnboardingStep] = useState<"name" | "photo" | null>(null);
+  const [recentlyConnected, setRecentlyConnected] = useState(false);
 
   const [hostUserId, setHostUserId] = useState<number | null>(null);
   const [hostSessions, setHostSessions] = useState<SessionSummary[]>([]);
   const [hostLoading, setHostLoading] = useState(false);
   const [hostError, setHostError] = useState<string | null>(null);
   const [stripeStatus, setStripeStatus] = useState<StripeStatusResponse | null>(null);
+  const [publicStripeStatus, setPublicStripeStatus] = useState<StripeStatusResponse | null>(null);
 
   const hostMode = useMemo(() => {
     const params = new URLSearchParams(window.location.search);
@@ -73,6 +82,7 @@ const App = () => {
       }
     }
     if (connected) {
+      setRecentlyConnected(true);
       params.delete("connected");
       params.delete("user_id");
       const nextUrl = `${window.location.pathname}${params.toString() ? `?${params}` : ""}`;
@@ -116,8 +126,18 @@ const App = () => {
       .catch(() => setStripeStatus(null));
   }, [hostUserId]);
 
+  useEffect(() => {
+    if (!profile?.user.id) return;
+    getStripeStatus(profile.user.id)
+      .then(setPublicStripeStatus)
+      .catch(() => setPublicStripeStatus(null));
+  }, [profile?.user.id]);
+
   const stripeConnected =
     stripeStatus?.charges_enabled || stripeStatus?.payouts_enabled || stripeStatus?.details_submitted;
+
+  const publicPaymentsEnabled =
+    publicStripeStatus?.charges_enabled && publicStripeStatus?.payouts_enabled ? true : false;
 
   const loadHostSessions = async () => {
     if (!hostUserId) return;
@@ -140,6 +160,86 @@ const App = () => {
   }, [hostMode, hostUserId, stripeConnected]);
 
   const lastPaid = profile?.last_paid_amount_cents ?? null;
+  const isViewingOwnProfile =
+    hostMode && hostUserId && profile?.user.id && Number(profile.user.id) === hostUserId;
+  const canEdit = Boolean(isViewingOwnProfile);
+  const nameIsPlaceholder =
+    Boolean(profile?.user.name) && profile?.user.name?.trim().toLowerCase() === handle.toLowerCase();
+  const showNameField = !onboardingStep || onboardingStep === "name";
+  const showPhotoField = !onboardingStep || onboardingStep === "photo";
+  const editTitle =
+    onboardingStep === "name"
+      ? "Confirm your name"
+      : onboardingStep === "photo"
+        ? "Add your photo"
+        : "Edit profile";
+  const saveLabel = onboardingStep === "name" ? "Next" : onboardingStep === "photo" ? "Finish" : "Save";
+
+  const openEditSheet = () => {
+    if (!canEdit) return;
+    setEditName(profile?.user.name || "");
+    setEditPhoto(profile?.user.photo_url || "");
+    setEditError(null);
+    setEditOpen(true);
+  };
+
+  useEffect(() => {
+    if (!isViewingOwnProfile || !profile?.user.handle) return;
+    if (profile.user.handle !== handle) {
+      const nextPath = `/${profile.user.handle}`;
+      window.history.replaceState({}, "", nextPath);
+      setHandle(profile.user.handle);
+    }
+  }, [isViewingOwnProfile, profile?.user.handle, handle]);
+
+  const closeEditSheet = () => {
+    if (onboardingStep) return;
+    setEditOpen(false);
+  };
+
+  useEffect(() => {
+    const shouldOnboard = recentlyConnected || stripeConnected;
+    if (!isViewingOwnProfile || !shouldOnboard) {
+      setOnboardingStep(null);
+      return;
+    }
+    if (!profile?.user.name || !profile.user.name.trim() || nameIsPlaceholder) {
+      setOnboardingStep("name");
+    } else if (!profile.user.photo_url) {
+      setOnboardingStep("photo");
+    } else {
+      setOnboardingStep(null);
+    }
+  }, [
+    isViewingOwnProfile,
+    stripeConnected,
+    recentlyConnected,
+    nameIsPlaceholder,
+    profile?.user.name,
+    profile?.user.photo_url,
+  ]);
+
+  useEffect(() => {
+    if (!onboardingStep && recentlyConnected) {
+      setRecentlyConnected(false);
+    }
+  }, [onboardingStep, recentlyConnected]);
+
+  useEffect(() => {
+    if (!onboardingStep) return;
+    if (!editOpen) {
+      setEditName(profile?.user.name || "");
+      setEditPhoto(profile?.user.photo_url || "");
+      setEditError(null);
+      setEditOpen(true);
+    }
+  }, [onboardingStep, editOpen, profile?.user.name, profile?.user.photo_url]);
+
+  useEffect(() => {
+    if (onboardingStep) {
+      setActiveTab("profile");
+    }
+  }, [onboardingStep]);
 
   const handleOpenSheet = () => {
     setInitMessage(null);
@@ -169,8 +269,11 @@ const App = () => {
       setSheetOpen(false);
       void loadProfile();
     } catch (error: any) {
-      if (String(error?.message || "").includes("host_not_connected")) {
+      const message = String(error?.message || "");
+      if (message.includes("host_not_connected")) {
         setInitError("Mackley hasn’t connected Stripe yet.");
+      } else if (message.includes("payments_not_enabled")) {
+        setInitError("Payments are not enabled yet.");
       } else {
         setInitError("Unable to start the session.");
       }
@@ -181,7 +284,7 @@ const App = () => {
     let userId = hostUserId;
     if (!userId) {
       try {
-        const created = await createUser({ name: handle, username: handle, role: "creator" });
+        const created = await createUser({ name: handle, role: "creator" });
         userId = created.user.id;
       } catch {
         userId = profile?.user.id ?? null;
@@ -197,6 +300,38 @@ const App = () => {
     window.location.href = url;
   };
 
+  const handleSaveEdit = async () => {
+    if (!hostUserId) return;
+    setEditSaving(true);
+    setEditError(null);
+    if (onboardingStep === "name" && !editName.trim()) {
+      setEditError("Enter your name.");
+      setEditSaving(false);
+      return;
+    }
+    if (onboardingStep === "photo" && !editPhoto.trim()) {
+      setEditError("Add a photo URL.");
+      setEditSaving(false);
+      return;
+    }
+    const payload: { name?: string; photo_url?: string } = {};
+    if (showNameField && editName.trim()) {
+      payload.name = editName.trim();
+    }
+    if (showPhotoField && editPhoto.trim()) {
+      payload.photo_url = editPhoto.trim();
+    }
+    try {
+      await updateMe(hostUserId, payload);
+      setEditOpen(false);
+      await loadProfile();
+    } catch (error) {
+      setEditError("Unable to update profile.");
+    } finally {
+      setEditSaving(false);
+    }
+  };
+
   const handleRedeem = async (sessionId: number) => {
     if (!hostUserId) return;
     setHostError(null);
@@ -209,130 +344,197 @@ const App = () => {
     }
   };
 
-  const handleSendMessage = async () => {
-    if (!profile?.user.id) return;
-    if (!messageText.trim()) {
-      setMessageStatus("Enter a message first.");
-      return;
-    }
-    try {
-      await trackEvent({
-        user_id: profile.user.id,
-        type: "MESSAGE_SENT",
-        ref_id: null,
-        metadata: { message: messageText.trim() },
-      });
-      setMessageStatus("Sent.");
-      setMessageText("");
-      setTimeout(() => setMessageOpen(false), 600);
-    } catch {
-      setMessageStatus("Unable to send.");
-    }
-  };
-
   const showPaidBanner = useMemo(() => {
     const params = new URLSearchParams(window.location.search);
     return params.get("paid") === "1";
   }, [handle]);
 
   return (
-    <div className="page">
-      <header className="nav">
-        <div className="nav-left">
-          <div className="logo">OPENMAT</div>
-          <div className="slug">/{handle}</div>
-        </div>
-        <div className="nav-actions">
-          <button className="button ghost" type="button" onClick={() => setMessageOpen(true)}>
-            Message
+    <div className="stage">
+      <div className="phone-shell">
+        <div className="phone-notch" />
+        <div className="phone-screen">
+          <header className="phone-header">
+            <div className="logo" aria-label="Openmat" />
+            <div className="segmented">
+              <button
+                className={activeTab === "profile" ? "segment active" : "segment"}
+                type="button"
+                onClick={() => setActiveTab("profile")}
+              >
+                Profile
+              </button>
+              <button
+                className={activeTab === "inbox" ? "segment active" : "segment"}
+                type="button"
+                onClick={() => setActiveTab("inbox")}
+              >
+                Inbox
+              </button>
+            </div>
+            <div className="header-spacer" />
+          </header>
+
+          {showPaidBanner ? <div className="notice">Payment received. Confirm when you meet.</div> : null}
+          {initMessage ? <div className="notice">{initMessage}</div> : null}
+
+          {activeTab === "profile" ? (
+            <>
+              <section
+                className={canEdit ? "card profile-card editable" : "card profile-card"}
+                onClick={canEdit ? openEditSheet : undefined}
+                role={canEdit ? "button" : undefined}
+                tabIndex={canEdit ? 0 : -1}
+                style={
+                  {
+                    "--card-bg": profile?.user.photo_url ? `url(${profile.user.photo_url})` : undefined,
+                  } as React.CSSProperties
+                }
+              >
+                <div className="profile-card-inner">
+                  {profile?.user.photo_url ? (
+                    <img className="avatar" src={profile.user.photo_url} alt={profile.user.name} />
+                  ) : (
+                    <div className="avatar" />
+                  )}
+                  <div className="profile-name">{profile?.user.name || handle}</div>
+                  <div className="last-label">LAST PAID</div>
+                  <div className="last-amount">{formatMoney(lastPaid)}</div>
+                </div>
+              </section>
+              <div className="carousel-dots" aria-hidden>
+                <span className="dot active" />
+                <span className="dot" />
+                <span className="dot" />
+              </div>
+              <button
+                className="button primary full"
+                type="button"
+                onClick={handleOpenSheet}
+                disabled={publicStripeStatus ? !publicPaymentsEnabled : false}
+              >
+                Book session
+              </button>
+              {publicStripeStatus && !publicPaymentsEnabled ? (
+                <div className="muted">Payments not enabled yet.</div>
+              ) : null}
+
+              <section className="card ledger">
+                <div className="card-title">Activity</div>
+                {loadingProfile ? <div className="muted">Loading ledger…</div> : null}
+                {profileError ? <div className="error-text">{profileError}</div> : null}
+                {profile?.redeemed_public_sessions?.length ? (
+                  <div className="ledger-list">
+                    {profile.redeemed_public_sessions.map((session) => (
+                      <div key={session.id} className="activity-row">
+                        <div className="activity-dot" />
+                        <div className="activity-body">
+                          <div className="activity-title">{formatMoney(session.amount_cents)} redeemed</div>
+                          <div className="activity-meta">
+                            {session.redeemed_at ? new Date(session.redeemed_at).toDateString() : ""}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="muted">No redeemed sessions yet.</div>
+                )}
+              </section>
+            </>
+          ) : (
+            <section className="card ledger">
+              <div className="card-title">Inbox</div>
+              {!hostMode ? (
+                <div className="muted">Nothing here yet.</div>
+              ) : (
+                <>
+                  {!hostUserId || !stripeConnected ? (
+                    <>
+                      <div className="muted">Stripe connection required to confirm sessions.</div>
+                      <button className="button primary full" type="button" onClick={handleConnectStripe}>
+                        Connect Stripe
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <div className="status-row">
+                        <span className={stripeStatus?.charges_enabled && stripeStatus?.payouts_enabled ? "status-good" : "status-warn"}>
+                          {stripeStatus?.charges_enabled && stripeStatus?.payouts_enabled
+                            ? "Payments enabled"
+                            : "Finish Stripe setup"}
+                        </span>
+                      </div>
+                      {hostLoading ? <div className="muted">Loading…</div> : null}
+                      {hostError ? <div className="error-text">{hostError}</div> : null}
+                      {hostSessions.length ? (
+                        <div className="session-list">
+                          {hostSessions.map((session) => (
+                            <div key={session.id} className="activity-row inbox-row">
+                              <div className="activity-dot" />
+                              <div className="activity-body">
+                                <div className="activity-title">{formatMoney(session.price_cents)}</div>
+                                <div className="activity-meta">{session.guest_name || "Guest"}</div>
+                              </div>
+                              <button
+                                className="button primary"
+                                type="button"
+                                onClick={() => handleRedeem(session.id)}
+                              >
+                                Confirm
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="muted">No pending sessions.</div>
+                      )}
+                    </>
+                  )}
+                </>
+              )}
+            </section>
+          )}
+
+          <button className="fab" type="button" onClick={handleOpenSheet}>
+            +
           </button>
         </div>
-      </header>
+      </div>
 
-      {showPaidBanner ? <div className="notice">Payment received. Confirm when you meet.</div> : null}
-      {initMessage ? <div className="notice">{initMessage}</div> : null}
-
-      <section className="card profile-card">
-        <div className="profile-header">
-          {profile?.user.photo_url ? (
-            <img className="avatar" src={profile.user.photo_url} alt={profile.user.name} />
-          ) : (
-            <div className="avatar" />
-          )}
-          <div>
-            <div className="profile-name">{profile?.user.name || handle}</div>
-            <div className="profile-role">Personal trainer · South Suburban Rec</div>
-          </div>
-        </div>
-        <div className="last-paid">
-          <div className="last-label">Last paid</div>
-          <div className="last-amount">{formatMoney(lastPaid)}</div>
-        </div>
-        <button className="button primary" type="button" onClick={handleOpenSheet}>
-          Pay {profile?.user.name || handle}
-        </button>
-      </section>
-
-      <section className="card ledger">
-        <div className="card-title">Proof of redeemed sessions</div>
-        {loadingProfile ? <div className="muted">Loading ledger…</div> : null}
-        {profileError ? <div className="error-text">{profileError}</div> : null}
-        {profile?.redeemed_public_sessions?.length ? (
-          <div className="ledger-list">
-            {profile.redeemed_public_sessions.map((session) => (
-              <div key={session.id} className="ledger-row">
-                <div>
-                  <div className="ledger-amount">{formatMoney(session.amount_cents)}</div>
-                  <div className="muted">{session.redeemed_at ? new Date(session.redeemed_at).toDateString() : ""}</div>
-                </div>
-                <div className="ledger-proof">Redeemed</div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="muted">No redeemed sessions yet.</div>
-        )}
-      </section>
-
-      {hostMode ? (
-        <section className="card host-panel">
-          <div className="card-title">Host</div>
-          {!hostUserId || !stripeConnected ? (
-            <>
-              <div className="muted">Connect Stripe to confirm sessions.</div>
-              <button className="button primary" type="button" onClick={handleConnectStripe}>
-                Connect Stripe
+      {editOpen ? (
+        <div className="sheet-backdrop" onClick={closeEditSheet}>
+          <div className="sheet" onClick={(event) => event.stopPropagation()}>
+            <div className="sheet-title">{editTitle}</div>
+            {showNameField ? (
+              <label className="field">
+                Name
+                <input value={editName} onChange={(event) => setEditName(event.target.value)} />
+              </label>
+            ) : null}
+            {showPhotoField ? (
+              <label className="field">
+                Photo URL
+                <input
+                  value={editPhoto}
+                  onChange={(event) => setEditPhoto(event.target.value)}
+                  placeholder="https://"
+                />
+              </label>
+            ) : null}
+            {editError ? <div className="error-text">{editError}</div> : null}
+            <div className="sheet-actions">
+              {!onboardingStep ? (
+                <button className="button ghost" type="button" onClick={closeEditSheet}>
+                  Cancel
+                </button>
+              ) : null}
+              <button className="button primary" type="button" onClick={handleSaveEdit} disabled={editSaving}>
+                {editSaving ? "Saving…" : saveLabel}
               </button>
-            </>
-          ) : (
-            <>
-              <div className="muted">Pending sessions</div>
-              {hostLoading ? <div className="muted">Loading…</div> : null}
-              {hostError ? <div className="error-text">{hostError}</div> : null}
-              {hostSessions.length ? (
-                <div className="session-list">
-                  {hostSessions.map((session) => (
-                    <div key={session.id} className="session-row">
-                      <div>
-                        <div className="session-amount">{formatMoney(session.price_cents)}</div>
-                        <div className="muted">{session.guest_name || "Guest"}</div>
-                      </div>
-                      <button
-                        className="button primary"
-                        type="button"
-                        onClick={() => handleRedeem(session.id)}
-                      >
-                        Confirm in person
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="muted">No pending sessions.</div>
-              )}
-            </>
-          )}
-        </section>
+            </div>
+          </div>
+        </div>
       ) : null}
 
       {sheetOpen ? (
@@ -360,33 +562,6 @@ const App = () => {
         </div>
       ) : null}
 
-      {messageOpen ? (
-        <div className="sheet-backdrop" onClick={() => setMessageOpen(false)}>
-          <div className="sheet" onClick={(event) => event.stopPropagation()}>
-            <div className="sheet-title">Message {profile?.user.name || handle}</div>
-            <label className="field">
-              Message
-              <textarea
-                value={messageText}
-                onChange={(event) => setMessageText(event.target.value)}
-              />
-            </label>
-            {messageStatus ? <div className="muted">{messageStatus}</div> : null}
-            <div className="sheet-actions">
-              <button className="button ghost" type="button" onClick={() => setMessageOpen(false)}>
-                Close
-              </button>
-              <button className="button primary" type="button" onClick={handleSendMessage}>
-                Send
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
-
-      <footer className="footer">
-        OPENMAT is a public ledger of real-world work. Proof creates demand.
-      </footer>
     </div>
   );
 };
