@@ -21,7 +21,8 @@ const ONBOARD_KEY = "openmat_onboarding";
 const parseHandle = () => {
   const path = window.location.pathname;
   const segments = path.split("/").filter(Boolean);
-  const raw = segments[0] || "mackley";
+  if (segments.length === 0) return "";
+  const raw = segments[0];
   return decodeURIComponent(raw)
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "");
@@ -61,6 +62,7 @@ const App = () => {
   const [stripeStatus, setStripeStatus] = useState<StripeStatusResponse | null>(null);
   const [hostStripeAccount, setHostStripeAccount] = useState(false);
   const [publicStripeStatus, setPublicStripeStatus] = useState<StripeStatusResponse | null>(null);
+  const isHome = !handle;
 
   const hostMode = useMemo(() => {
     const params = new URLSearchParams(window.location.search);
@@ -109,6 +111,12 @@ const App = () => {
   }, []);
 
   const loadProfile = async () => {
+    if (!handle) {
+      setProfile(null);
+      setProfileError(null);
+      setLoadingProfile(false);
+      return;
+    }
     setLoadingProfile(true);
     setProfileError(null);
     try {
@@ -142,7 +150,7 @@ const App = () => {
     getMe(hostUserId)
       .then((response) => {
         setHostStripeAccount(Boolean(response.user.stripe_account_id));
-        if (recentlyConnected && response.user.username && response.user.username !== handle) {
+        if ((recentlyConnected || !handle) && response.user.username && response.user.username !== handle) {
           const nextHandle = response.user.username;
           window.history.replaceState({}, "", `/${nextHandle}`);
           setHandle(nextHandle);
@@ -188,8 +196,10 @@ const App = () => {
   const isViewingOwnProfile =
     hostMode && hostUserId && profile?.user.id && Number(profile.user.id) === hostUserId;
   const canEdit = Boolean(isViewingOwnProfile);
+  const normalizedName = profile?.user.name?.trim().toLowerCase() || "";
   const nameIsPlaceholder =
-    Boolean(profile?.user.name) && profile?.user.name?.trim().toLowerCase() === handle.toLowerCase();
+    Boolean(normalizedName) &&
+    (normalizedName === handle.toLowerCase() || normalizedName === "new creator" || normalizedName === "newcreator");
   const showNameField = !onboardingStep || onboardingStep === "name";
   const showPhotoField = !onboardingStep || onboardingStep === "photo";
   const editTitle =
@@ -310,7 +320,8 @@ const App = () => {
     let userId = hostUserId;
     if (!userId) {
       try {
-        const created = await createUser({ name: handle, role: "creator" });
+        const seedName = handle ? handle : "New Creator";
+        const created = await createUser({ name: seedName, role: "creator" });
         userId = created.user.id;
       } catch {
         userId = profile?.user.id ?? null;
@@ -414,67 +425,82 @@ const App = () => {
 
           {activeTab === "profile" ? (
             <>
-              <section
-                className={canEdit ? "card profile-card editable" : "card profile-card"}
-                onClick={canEdit ? openEditSheet : undefined}
-                role={canEdit ? "button" : undefined}
-                tabIndex={canEdit ? 0 : -1}
-                style={
-                  {
-                    "--card-bg": profile?.user.photo_url ? `url(${profile.user.photo_url})` : undefined,
-                  } as React.CSSProperties
-                }
-              >
-                <div className="profile-card-inner">
-                  {profile?.user.photo_url ? (
-                    <img className="avatar" src={profile.user.photo_url} alt={profile.user.name} />
-                  ) : (
-                    <div className="avatar" />
-                  )}
-                  <div className="profile-name">{profile?.user.name || handle}</div>
-                  <div className="last-label">LAST PAID</div>
-                  <div className="last-amount">{formatMoney(lastPaid)}</div>
-                </div>
-              </section>
-              <div className="carousel-dots" aria-hidden>
-                <span className="dot active" />
-                <span className="dot" />
-                <span className="dot" />
-              </div>
-              <button
-                className="button primary full"
-                type="button"
-                onClick={handleOpenSheet}
-                disabled={publicStripeStatus ? !publicPaymentsEnabled : false}
-              >
-                Book session
-              </button>
-              {publicStripeStatus && !publicPaymentsEnabled ? (
-                <div className="muted">Payments not enabled yet.</div>
-              ) : null}
-
-              <section className="card ledger">
-                <div className="card-title">Activity</div>
-                {loadingProfile ? <div className="muted">Loading ledger…</div> : null}
-                {profileError ? <div className="error-text">{profileError}</div> : null}
-                {profile?.redeemed_public_sessions?.length ? (
-                  <div className="ledger-list">
-                    {profile.redeemed_public_sessions.map((session) => (
-                      <div key={session.id} className="activity-row">
-                        <div className="activity-dot" />
-                        <div className="activity-body">
-                          <div className="activity-title">{formatMoney(session.amount_cents)} redeemed</div>
-                          <div className="activity-meta">
-                            {session.redeemed_at ? new Date(session.redeemed_at).toDateString() : ""}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
+              {!profile && !loadingProfile ? (
+                <section className="card ledger">
+                  <div className="card-title">Get paid for your 1:1 service</div>
+                  <div className="muted">
+                    Connect Stripe, confirm your name and photo, and share your link.
                   </div>
-                ) : (
-                  <div className="muted">No redeemed sessions yet.</div>
-                )}
-              </section>
+                  <button className="button primary full" type="button" onClick={handleConnectStripe}>
+                    Connect Stripe
+                  </button>
+                  {profileError ? <div className="error-text">{profileError}</div> : null}
+                </section>
+              ) : (
+                <>
+                  <section
+                    className={canEdit ? "card profile-card editable" : "card profile-card"}
+                    onClick={canEdit ? openEditSheet : undefined}
+                    role={canEdit ? "button" : undefined}
+                    tabIndex={canEdit ? 0 : -1}
+                    style={
+                      {
+                        "--card-bg": profile?.user.photo_url ? `url(${profile.user.photo_url})` : undefined,
+                      } as React.CSSProperties
+                    }
+                  >
+                    <div className="profile-card-inner">
+                      {profile?.user.photo_url ? (
+                        <img className="avatar" src={profile.user.photo_url} alt={profile.user.name} />
+                      ) : (
+                        <div className="avatar" />
+                      )}
+                      <div className="profile-name">{profile?.user.name || "OPENMAT"}</div>
+                      <div className="last-label">LAST PAID</div>
+                      <div className="last-amount">{formatMoney(lastPaid)}</div>
+                    </div>
+                  </section>
+                  <div className="carousel-dots" aria-hidden>
+                    <span className="dot active" />
+                    <span className="dot" />
+                    <span className="dot" />
+                  </div>
+                  <button
+                    className="button primary full"
+                    type="button"
+                    onClick={handleOpenSheet}
+                    disabled={!profile || (publicStripeStatus ? !publicPaymentsEnabled : false)}
+                  >
+                    Book session
+                  </button>
+                  {publicStripeStatus && !publicPaymentsEnabled ? (
+                    <div className="muted">Payments not enabled yet.</div>
+                  ) : null}
+
+                  <section className="card ledger">
+                    <div className="card-title">Activity</div>
+                    {loadingProfile ? <div className="muted">Loading ledger…</div> : null}
+                    {profileError ? <div className="error-text">{profileError}</div> : null}
+                    {profile?.redeemed_public_sessions?.length ? (
+                      <div className="ledger-list">
+                        {profile.redeemed_public_sessions.map((session) => (
+                          <div key={session.id} className="activity-row">
+                            <div className="activity-dot" />
+                            <div className="activity-body">
+                              <div className="activity-title">{formatMoney(session.amount_cents)} redeemed</div>
+                              <div className="activity-meta">
+                                {session.redeemed_at ? new Date(session.redeemed_at).toDateString() : ""}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="muted">No redeemed sessions yet.</div>
+                    )}
+                  </section>
+                </>
+              )}
             </>
           ) : (
             <section className="card ledger">
@@ -530,9 +556,11 @@ const App = () => {
             </section>
           )}
 
-          <button className="fab" type="button" onClick={handleOpenSheet}>
-            +
-          </button>
+          {profile ? (
+            <button className="fab" type="button" onClick={handleOpenSheet}>
+              +
+            </button>
+          ) : null}
         </div>
       </div>
 
