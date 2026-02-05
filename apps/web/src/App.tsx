@@ -142,9 +142,14 @@ const App = () => {
     getMe(hostUserId)
       .then((response) => {
         setHostStripeAccount(Boolean(response.user.stripe_account_id));
+        if (recentlyConnected && response.user.username && response.user.username !== handle) {
+          const nextHandle = response.user.username;
+          window.history.replaceState({}, "", `/${nextHandle}`);
+          setHandle(nextHandle);
+        }
       })
       .catch(() => setHostStripeAccount(false));
-  }, [hostUserId]);
+  }, [hostUserId, recentlyConnected, handle]);
 
   useEffect(() => {
     if (!profile?.user.id) return;
