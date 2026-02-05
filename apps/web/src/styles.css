@@ -83,16 +83,19 @@ textarea {
   color: var(--muted);
   padding-top: 6px;
   padding-bottom: 2px;
+  overflow: visible;
 }
 
 .logo {
-  width: 32px;
-  height: 32px;
+  width: 34px;
+  height: 34px;
   border-radius: 50%;
   background: var(--logo-core);
-  background-size: cover;
+  background-size: contain;
+  background-position: center;
   background-repeat: no-repeat;
   box-shadow: inset 0 0 0 1px rgba(60, 60, 67, 0.12);
+  flex-shrink: 0;
 }
 
 .header-spacer {
