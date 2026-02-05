@@ -103,6 +103,24 @@ textarea {
   height: 28px;
 }
 
+.settings-button {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: #f2f2f7;
+  color: var(--muted);
+  display: grid;
+  place-items: center;
+  justify-self: end;
+  cursor: pointer;
+}
+
+.settings-button svg {
+  width: 18px;
+  height: 18px;
+}
+
 .segmented {
   justify-self: center;
   background: #e5e5ea;
@@ -361,6 +379,43 @@ textarea {
   font-size: 26px;
   border: none;
   box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+}
+
+.settings-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  background: transparent;
+}
+
+.settings-menu {
+  position: absolute;
+  top: 86px;
+  right: 28px;
+  background: #ffffff;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.16);
+  display: grid;
+  min-width: 160px;
+  overflow: hidden;
+}
+
+.settings-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 10px 14px;
+  font-size: 14px;
+  color: var(--text);
+  text-decoration: none;
+  background: #ffffff;
+  border: none;
+  cursor: pointer;
+}
+
+.settings-item + .settings-item {
+  border-top: 1px solid var(--border);
 }
 
 .sheet-backdrop {

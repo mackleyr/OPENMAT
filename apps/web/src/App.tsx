@@ -54,6 +54,7 @@ const App = () => {
   const [editSaving, setEditSaving] = useState(false);
   const [onboardingStep, setOnboardingStep] = useState<"name" | "photo" | null>(null);
   const [recentlyConnected, setRecentlyConnected] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   const [hostUserId, setHostUserId] = useState<number | null>(null);
   const [hostSessions, setHostSessions] = useState<SessionSummary[]>([]);
@@ -377,6 +378,21 @@ const App = () => {
     }
   };
 
+  const handleSignOut = () => {
+    localStorage.removeItem(HOST_ID_KEY);
+    localStorage.removeItem(ONBOARD_KEY);
+    setHostUserId(null);
+    setHostSessions([]);
+    setHostError(null);
+    setSettingsOpen(false);
+    setOnboardingStep(null);
+    setRecentlyConnected(false);
+    setProfile(null);
+    setProfileError(null);
+    setHandle("");
+    window.history.replaceState({}, "", "/");
+  };
+
   const handleRedeem = async (sessionId: number) => {
     if (!hostUserId) return;
     setHostError(null);
@@ -417,7 +433,18 @@ const App = () => {
                 Inbox
               </button>
             </div>
-            <div className="header-spacer" />
+            <button className="settings-button" type="button" onClick={() => setSettingsOpen((prev) => !prev)}>
+              <svg viewBox="0 0 24 24" aria-hidden>
+                <path
+                  d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7Zm8 3.5-.9-.35a7.47 7.47 0 0 0-.7-1.7l.5-.82a.9.9 0 0 0-.14-1.11l-1.3-1.3a.9.9 0 0 0-1.11-.14l-.82.5a7.47 7.47 0 0 0-1.7-.7L12 4a.9.9 0 0 0-.9.73l-.2 1a7.47 7.47 0 0 0-1.7.7l-.82-.5a.9.9 0 0 0-1.11.14l-1.3 1.3a.9.9 0 0 0-.14 1.11l.5.82a7.47 7.47 0 0 0-.7 1.7L4 12a.9.9 0 0 0 .73.9l1 .2a7.47 7.47 0 0 0 .7 1.7l-.5.82a.9.9 0 0 0 .14 1.11l1.3 1.3a.9.9 0 0 0 1.11.14l.82-.5a7.47 7.47 0 0 0 1.7.7l.2 1a.9.9 0 0 0 .9.73l1.6-.3a7.47 7.47 0 0 0 1.7-.7l.82.5a.9.9 0 0 0 1.11-.14l1.3-1.3a.9.9 0 0 0 .14-1.11l-.5-.82a7.47 7.47 0 0 0 .7-1.7l1-.2A.9.9 0 0 0 20 12Z"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.4"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </button>
           </header>
 
           {showPaidBanner ? <div className="notice">Payment received. Confirm when you meet.</div> : null}
@@ -563,6 +590,19 @@ const App = () => {
           ) : null}
         </div>
       </div>
+
+      {settingsOpen ? (
+        <div className="settings-backdrop" onClick={() => setSettingsOpen(false)}>
+          <div className="settings-menu" onClick={(event) => event.stopPropagation()}>
+            <button className="settings-item" type="button" onClick={handleSignOut}>
+              Sign out
+            </button>
+            <a className="settings-item" href="mailto:macrevers@gmail.com">
+              Contact
+            </a>
+          </div>
+        </div>
+      ) : null}
 
       {editOpen ? (
         <div className="sheet-backdrop" onClick={closeEditSheet}>

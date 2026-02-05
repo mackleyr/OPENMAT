@@ -15,6 +15,7 @@
     { "source": "/inbox/:path*", "destination": "/api" },
     { "source": "/metrics/:path*", "destination": "/api" },
     { "source": "/events/:path*", "destination": "/api" },
-    { "source": "/referrals/:path*", "destination": "/api" }
+    { "source": "/referrals/:path*", "destination": "/api" },
+    { "source": "/:path*", "destination": "/" }
   ]
 }
