@@ -588,21 +588,21 @@ const App = () => {
               +
             </button>
           ) : null}
+
+          {settingsOpen ? (
+            <div className="settings-backdrop" onClick={() => setSettingsOpen(false)}>
+              <div className="settings-menu" onClick={(event) => event.stopPropagation()}>
+                <button className="settings-item" type="button" onClick={handleSignOut}>
+                  Sign out
+                </button>
+                <a className="settings-item" href="mailto:macrevers@gmail.com">
+                  Contact
+                </a>
+              </div>
+            </div>
+          ) : null}
         </div>
       </div>
-
-      {settingsOpen ? (
-        <div className="settings-backdrop" onClick={() => setSettingsOpen(false)}>
-          <div className="settings-menu" onClick={(event) => event.stopPropagation()}>
-            <button className="settings-item" type="button" onClick={handleSignOut}>
-              Sign out
-            </button>
-            <a className="settings-item" href="mailto:macrevers@gmail.com">
-              Contact
-            </a>
-          </div>
-        </div>
-      ) : null}
 
       {editOpen ? (
         <div className="sheet-backdrop" onClick={closeEditSheet}>

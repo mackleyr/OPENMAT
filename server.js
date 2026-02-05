@@ -612,11 +612,15 @@ app.get("/sessions", requireHost, async (req, res) => {
       filter = "AND c.status = $2";
     }
   }
-  const sessionsResult = await query(
-    `SELECT c.id, c.status, c.created_at, c.redeemed_at, o.price_cents, u.name AS guest_name FROM claims c JOIN offers o ON o.id = c.offer_id LEFT JOIN users u ON u.id = c.user_id WHERE o.creator_id = $1 ${filter} ORDER BY c.created_at DESC`,
-    values
-  );
-  return res.json({ sessions: sessionsResult.rows });
+  try {
+    const sessionsResult = await query(
+      `SELECT c.id, c.status, c.created_at, c.redeemed_at, o.price_cents, u.name AS guest_name FROM claims c JOIN offers o ON o.id = c.offer_id LEFT JOIN users u ON u.id = c.user_id WHERE o.creator_id = $1 ${filter} ORDER BY c.created_at DESC`,
+      values
+    );
+    return res.json({ sessions: sessionsResult.rows });
+  } catch {
+    return res.json({ sessions: [] });
+  }
 });
 
 app.post("/checkout/session", async (req, res) => {
@@ -788,14 +792,24 @@ app.get("/u/:handle", async (req, res) => {
     return res.status(404).json({ error: "user_not_found" });
   }
   const userId = userResult.rows[0].id;
-  const lastPaidResult = await query(
-    "SELECT o.price_cents FROM redemptions r JOIN claims c ON c.id = r.claim_id JOIN offers o ON o.id = c.offer_id WHERE o.creator_id = $1 AND o.price_cents > 0 ORDER BY r.redeemed_at DESC NULLS LAST, r.created_at DESC LIMIT 1",
-    [userId]
-  );
-  const redeemedResult = await query(
-    "SELECT r.claim_id AS id, o.price_cents AS amount_cents, r.redeemed_at FROM redemptions r JOIN claims c ON c.id = r.claim_id JOIN offers o ON o.id = c.offer_id WHERE o.creator_id = $1 ORDER BY r.redeemed_at DESC NULLS LAST, r.created_at DESC LIMIT 12",
-    [userId]
-  );
+  let lastPaidResult = { rowCount: 0, rows: [] };
+  let redeemedResult = { rows: [] };
+  try {
+    lastPaidResult = await query(
+      "SELECT o.price_cents FROM redemptions r JOIN claims c ON c.id = r.claim_id JOIN offers o ON o.id = c.offer_id WHERE o.creator_id = $1 AND o.price_cents > 0 ORDER BY r.redeemed_at DESC NULLS LAST, r.created_at DESC LIMIT 1",
+      [userId]
+    );
+  } catch {
+    lastPaidResult = { rowCount: 0, rows: [] };
+  }
+  try {
+    redeemedResult = await query(
+      "SELECT r.claim_id AS id, o.price_cents AS amount_cents, r.redeemed_at FROM redemptions r JOIN claims c ON c.id = r.claim_id JOIN offers o ON o.id = c.offer_id WHERE o.creator_id = $1 ORDER BY r.redeemed_at DESC NULLS LAST, r.created_at DESC LIMIT 12",
+      [userId]
+    );
+  } catch {
+    redeemedResult = { rows: [] };
+  }
   return res.json({
     user: {
       id: userId,

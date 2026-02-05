@@ -67,7 +67,7 @@ textarea {
 .phone-screen {
   background: var(--screen);
   border-radius: 38px;
-  padding: 28px 20px 24px;
+  padding: 30px 24px 24px;
   min-height: 680px;
   display: flex;
   flex-direction: column;
@@ -96,6 +96,7 @@ textarea {
   background-repeat: no-repeat;
   box-shadow: inset 0 0 0 1px rgba(60, 60, 67, 0.12);
   flex-shrink: 0;
+  margin-left: 2px;
 }
 
 .header-spacer {
@@ -382,16 +383,16 @@ textarea {
 }
 
 .settings-backdrop {
-  position: fixed;
+  position: absolute;
   inset: 0;
-  z-index: 40;
+  z-index: 30;
   background: transparent;
 }
 
 .settings-menu {
   position: absolute;
-  top: 86px;
-  right: 28px;
+  top: 58px;
+  right: 18px;
   background: #ffffff;
   border-radius: 14px;
   border: 1px solid var(--border);
