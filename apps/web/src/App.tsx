@@ -3,11 +3,13 @@ import {
   createStripeConnectLink,
   createUser,
   createOffer,
+  createReferral,
   getMe,
   getPublicProfile,
   getSessions,
   getStripeStatus,
   initSession,
+  createReferral,
   trackEvent,
   updateMe,
   redeemSession,
@@ -69,6 +71,11 @@ const App = () => {
   const [offerEditingId, setOfferEditingId] = useState<number | null>(null);
   const [offerError, setOfferError] = useState<string | null>(null);
   const [offerSaving, setOfferSaving] = useState(false);
+  const [activeCardIndex, setActiveCardIndex] = useState(0);
+  const [waiverAccepted, setWaiverAccepted] = useState(false);
+  const [referralCode, setReferralCode] = useState<string | null>(null);
+  const [shareMessage, setShareMessage] = useState<string | null>(null);
+  const [shareError, setShareError] = useState<string | null>(null);
 
   const [hostUserId, setHostUserId] = useState<number | null>(null);
   const [hostSessions, setHostSessions] = useState<SessionSummary[]>([]);
@@ -95,6 +102,10 @@ const App = () => {
     const params = new URLSearchParams(window.location.search);
     const connected = params.get("connected");
     const userId = params.get("user_id");
+    const ref = params.get("ref");
+    if (ref) {
+      setReferralCode(ref);
+    }
     if (userId) {
       const parsed = Number(userId);
       if (Number.isFinite(parsed)) {
@@ -125,6 +136,12 @@ const App = () => {
       setRecentlyConnected(true);
     }
   }, []);
+
+  const formatLastPaid = () => {
+    const lastPaid = profile?.last_paid_amount_cents ?? null;
+    if (lastPaid == null) return "";
+    return formatMoney(lastPaid);
+  };
 
   const loadProfile = async () => {
     if (!handle) {
@@ -179,6 +196,9 @@ const App = () => {
     if (activeOfferIndex >= offerCount) {
       setActiveOfferIndex(0);
     }
+    if (activeCardIndex >= cardCount) {
+      setActiveCardIndex(0);
+    }
   }, [activeOfferIndex, profile?.offers?.length]);
 
   useEffect(() => {
@@ -228,6 +248,7 @@ const App = () => {
   const offers = profile?.offers ?? [];
   const activeOffer = offers.length ? offers[activeOfferIndex] ?? offers[0] : null;
   const hasMultipleOffers = offers.length > 1;
+  const cardCount = 1 + offers.length;
 
   const loadHostSessions = async () => {
     if (!hostUserId) return;
@@ -337,6 +358,7 @@ const App = () => {
   const handleOpenSheet = () => {
     setInitMessage(null);
     setInitError(null);
+    setWaiverAccepted(false);
     const nextOffer = activeOffer ?? null;
     const fallbackCents = nextOffer ? nextOffer.price_cents : lastPaid ?? 5000;
     setBookOffer(nextOffer);
@@ -357,9 +379,35 @@ const App = () => {
     setBookOffer(null);
   };
 
+  const handleShareInvite = async () => {
+    if (!profile?.user.id || !profile.user.handle || !activeOffer) {
+      setShareError("Create an offer first.");
+      return;
+    }
+    try {
+      setShareError(null);
+      setShareMessage(null);
+      const response = await createReferral({ inviter_id: profile.user.id, offer_id: activeOffer.id });
+      const code = response.code;
+      const link = `${window.location.origin}/${profile.user.handle}?ref=${code}`;
+      try {
+        await navigator.clipboard.writeText(link);
+        setShareMessage("Invite link copied");
+      } catch {
+        setShareMessage(link);
+      }
+    } catch {
+      setShareError("Unable to create invite right now.");
+    }
+  };
+
   const handleInitSession = async () => {
     setInitError(null);
     setInitMessage(null);
+    if (!waiverAccepted) {
+      setInitError("Accept the liability waiver to continue.");
+      return;
+    }
     let amountCents = 0;
     if (bookOffer) {
       amountCents = bookOffer.price_cents;
@@ -377,6 +425,7 @@ const App = () => {
         host_handle: handle,
         amount_cents: amountCents,
         offer_id: bookOffer?.id ?? null,
+        referral_code: referralCode,
       });
       if (response.checkout_url && amountCents > 0) {
         window.location.href = response.checkout_url;
@@ -711,6 +760,11 @@ const App = () => {
                   >
                     Book session
                   </button>
+                  <button className="button ghost full" type="button" onClick={handleShareInvite} disabled={!profile || !activeOffer}>
+                    Share invite link
+                  </button>
+                  {shareMessage ? <div className="muted">{shareMessage}</div> : null}
+                  {shareError ? <div className="error-text">{shareError}</div> : null}
                   {publicStripeStatus && !publicPaymentsEnabled ? (
                     <div className="muted">Payments not enabled yet.</div>
                   ) : null}
@@ -864,6 +918,14 @@ const App = () => {
               />
             </label>
             {bookOffer ? <div className="muted">Offer price is fixed.</div> : null}
+            <label className="checkbox-row">
+              <input
+                type="checkbox"
+                checked={waiverAccepted}
+                onChange={(event) => setWaiverAccepted(event.target.checked)}
+              />
+              <span>I accept the liability waiver.</span>
+            </label>
             {initError ? <div className="error-text">{initError}</div> : null}
             <div className="sheet-actions">
               <button className="button ghost" type="button" onClick={closeBookSheet}>

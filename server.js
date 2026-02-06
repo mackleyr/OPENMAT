@@ -439,8 +439,8 @@ app.post("/claims", async (req, res) => {
 });
 
 app.post("/sessions/init", async (req, res) => {
-  const { host_handle, amount_cents } = req.body || {};
-  if (!isNonEmptyString(host_handle) || !isNonNegativeInteger(amount_cents)) {
+  const { host_handle, amount_cents, offer_id, referral_code } = req.body || {};
+  if (!isNonEmptyString(host_handle) || !isNonNegativeInteger(amount_cents ?? 0)) {
     return res.status(400).json({ error: "invalid_session_payload" });
   }
   const hostResult = await query(
@@ -451,10 +451,33 @@ app.post("/sessions/init", async (req, res) => {
     return res.status(404).json({ error: "host_not_found" });
   }
   const host = hostResult.rows[0];
-  if (amount_cents > 0 && (!host.stripe_account_id || !host.stripe_access_token)) {
+
+  let selectedOffer = null;
+  if (isPositiveInteger(offer_id)) {
+    const offerResult = await query(
+      "SELECT id, creator_id, title, price_cents, deposit_cents, payment_mode FROM offers WHERE id = $1 AND creator_id = $2",
+      [offer_id, host.id]
+    );
+    if (offerResult.rowCount === 0) {
+      return res.status(404).json({ error: "offer_not_found" });
+    }
+    selectedOffer = offerResult.rows[0];
+  }
+
+  const amountCents = selectedOffer
+    ? selectedOffer.payment_mode === "full"
+      ? selectedOffer.price_cents
+      : selectedOffer.deposit_cents
+    : amount_cents;
+
+  if (!isNonNegativeInteger(amountCents)) {
+    return res.status(400).json({ error: "invalid_amount" });
+  }
+
+  if (amountCents > 0 && (!host.stripe_account_id || !host.stripe_access_token)) {
     return res.status(409).json({ error: "host_not_connected" });
   }
-  if (amount_cents > 0) {
+  if (amountCents > 0) {
     if (!stripe) {
       return res.status(500).json({ error: "stripe_not_configured" });
     }
@@ -479,15 +502,28 @@ app.post("/sessions/init", async (req, res) => {
     );
     const guestId = guestResult.rows[0].id;
 
-    const offerResult = await client.query(
-      "INSERT INTO offers (creator_id, title, price_cents, deposit_cents, payment_mode, capacity, location_text, description, image_url) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id, creator_id, price_cents, payment_mode",
-      [host.id, "Session", amount_cents, 0, "full", 1, "In person", "", null]
-    );
-    const offer = offerResult.rows[0];
+    let offerId = offer_id;
+    let offerTitle = "Session";
+    let offerPaymentMode = "full";
+    let offerDepositCents = 0;
+    if (selectedOffer) {
+      offerId = selectedOffer.id;
+      offerTitle = selectedOffer.title || "Session";
+      offerPaymentMode = selectedOffer.payment_mode || "full";
+      offerDepositCents = Number(selectedOffer.deposit_cents) || 0;
+    } else {
+      const offerResult = await client.query(
+        "INSERT INTO offers (creator_id, title, price_cents, deposit_cents, payment_mode, capacity, location_text, description, image_url) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id, creator_id, price_cents, payment_mode",
+        [host.id, "Session", amountCents, 0, "full", 1, "In person", "", null]
+      );
+      const offer = offerResult.rows[0];
+      offerId = offer.id;
+      offerPaymentMode = offer.payment_mode;
+    }
 
     const claimResult = await client.query(
       "INSERT INTO claims (offer_id, user_id, deposit_cents) VALUES ($1, $2, $3) RETURNING id",
-      [offer.id, guestId, 0]
+      [offerId, guestId, offerDepositCents]
     );
     const claimId = claimResult.rows[0].id;
 
@@ -496,21 +532,33 @@ app.post("/sessions/init", async (req, res) => {
       [host.id, EVENT_TYPES.OFFER_CLAIMED, claimId, null]
     );
 
+    if (referral_code && typeof referral_code === "string") {
+      const referralResult = await client.query(
+        "SELECT inviter_id FROM referral_links WHERE code = $1",
+        [referral_code]
+      );
+      if (referralResult.rowCount > 0) {
+        await client.query(
+          "INSERT INTO events (user_id, type, ref_id, metadata) VALUES ($1, $2, $3, $4)",
+          [referralResult.rows[0].inviter_id, EVENT_TYPES.REFERRAL_CONVERTED, claimId, null]
+        );
+      }
+    }
+
     await client.query("COMMIT");
 
-    if (amount_cents === 0) {
+    if (amountCents === 0) {
       await query(
         "INSERT INTO payments (claim_id, amount_cents, status, provider, provider_ref) VALUES ($1, $2, $3, $4, $5)",
         [claimId, 0, "zero", "stripe", null]
       );
-      return res.status(201).json({ session_id: claimId, amount_cents, status: "zero" });
+      return res.status(201).json({ session_id: claimId, amount_cents: amountCents, status: "zero" });
     }
 
-    const amountCents = amount_cents;
     const creatorStripe = new Stripe(host.stripe_access_token, { apiVersion: "2024-06-20" });
     const metadata = {
       claim_id: String(claimId),
-      offer_id: String(offer.id),
+      offer_id: String(offerId),
       creator_id: String(host.id),
       purpose: "payment",
     };
@@ -524,7 +572,7 @@ app.post("/sessions/init", async (req, res) => {
           price_data: {
             currency: "usd",
             unit_amount: amountCents,
-            product_data: { name: "Session" },
+            product_data: { name: offerTitle },
           },
         },
       ],
@@ -537,7 +585,7 @@ app.post("/sessions/init", async (req, res) => {
       [claimId, amountCents, "pending", "stripe", session.id]
     );
 
-    return res.status(201).json({ session_id: claimId, amount_cents, checkout_url: session.url });
+    return res.status(201).json({ session_id: claimId, amount_cents: amountCents, checkout_url: session.url });
   } catch (error) {
     await client.query("ROLLBACK");
     return res.status(500).json({ error: "create_session_failed" });

@@ -332,7 +332,12 @@ export const createStripeConnectLink = (userId: number) =>
         body: JSON.stringify({ user_id: userId }),
       });
 
-export const initSession = (input: { host_handle: string; amount_cents: number; offer_id?: number | null }) =>
+export const initSession = (input: {
+  host_handle: string;
+  amount_cents: number;
+  offer_id?: number | null;
+  referral_code?: string | null;
+}) =>
   USE_MOCKS
     ? Promise.resolve({ session_id: 1, amount_cents: input.amount_cents, checkout_url: null })
     : request<{ session_id: number; amount_cents: number; checkout_url?: string }>(
