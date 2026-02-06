@@ -1,0 +1,9 @@
+{
+  "name": "all-hands",
+  "version": "0.0.0",
+  "description": "Local stub to bypass All Hands sync (network-blocked).",
+  "bin": {
+    "all-hands": "./index.js"
+  },
+  "license": "MIT"
+}
