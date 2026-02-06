@@ -1,12 +1,14 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   createStripeConnectLink,
   createUser,
+  createOffer,
   getMe,
   getPublicProfile,
   getSessions,
   getStripeStatus,
   initSession,
+  trackEvent,
   updateMe,
   redeemSession,
   PublicProfileResponse,
@@ -17,6 +19,8 @@ import "./styles.css";
 
 const HOST_ID_KEY = "openmat_host_user_id";
 const ONBOARD_KEY = "openmat_onboarding";
+
+type PublicOffer = NonNullable<PublicProfileResponse["offers"]>[number];
 
 const parseHandle = () => {
   const path = window.location.pathname;
@@ -55,6 +59,16 @@ const App = () => {
   const [onboardingStep, setOnboardingStep] = useState<"name" | "photo" | null>(null);
   const [recentlyConnected, setRecentlyConnected] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [activeOfferIndex, setActiveOfferIndex] = useState(0);
+  const [bookOffer, setBookOffer] = useState<PublicOffer | null>(null);
+  const [offerSheetOpen, setOfferSheetOpen] = useState(false);
+  const [offerTitle, setOfferTitle] = useState("");
+  const [offerPrice, setOfferPrice] = useState("");
+  const [offerLocation, setOfferLocation] = useState("");
+  const [offerImage, setOfferImage] = useState("");
+  const [offerEditingId, setOfferEditingId] = useState<number | null>(null);
+  const [offerError, setOfferError] = useState<string | null>(null);
+  const [offerSaving, setOfferSaving] = useState(false);
 
   const [hostUserId, setHostUserId] = useState<number | null>(null);
   const [hostSessions, setHostSessions] = useState<SessionSummary[]>([]);
@@ -64,6 +78,7 @@ const App = () => {
   const [hostStripeAccount, setHostStripeAccount] = useState(false);
   const [publicStripeStatus, setPublicStripeStatus] = useState<StripeStatusResponse | null>(null);
   const isHome = !handle;
+  const carouselRef = useRef<HTMLDivElement | null>(null);
 
   const hostMode = useMemo(() => {
     const params = new URLSearchParams(window.location.search);
@@ -129,7 +144,27 @@ const App = () => {
       }
     } catch (error) {
       setProfileError("Unable to load profile.");
-      setProfile(null);
+      if (hostUserId) {
+        try {
+          const me = await getMe(hostUserId);
+          setProfile({
+            user: {
+              id: me.user.id,
+              handle: me.user.username || "",
+              name: me.user.name,
+              photo_url: me.user.image_url,
+            },
+            last_paid_amount_cents: null,
+            redeemed_public_sessions: [],
+            offers: [],
+          });
+          return;
+        } catch {
+          setProfile(null);
+        }
+      } else {
+        setProfile(null);
+      }
     } finally {
       setLoadingProfile(false);
     }
@@ -138,6 +173,13 @@ const App = () => {
   useEffect(() => {
     void loadProfile();
   }, [handle]);
+
+  useEffect(() => {
+    const offerCount = profile?.offers?.length ?? 0;
+    if (activeOfferIndex >= offerCount) {
+      setActiveOfferIndex(0);
+    }
+  }, [activeOfferIndex, profile?.offers?.length]);
 
   useEffect(() => {
     if (!hostUserId) return;
@@ -167,11 +209,25 @@ const App = () => {
       .catch(() => setPublicStripeStatus(null));
   }, [profile?.user.id]);
 
+  useEffect(() => {
+    if (!profile?.user.id) return;
+    trackEvent({
+      user_id: profile.user.id,
+      type: "offer_viewed",
+      ref_id: activeOffer?.id ?? null,
+      metadata: { source: "profile" },
+    }).catch(() => {});
+  }, [profile?.user.id, activeOffer?.id]);
+
   const stripeConnected =
     stripeStatus?.charges_enabled || stripeStatus?.payouts_enabled || stripeStatus?.details_submitted;
 
   const publicPaymentsEnabled =
     publicStripeStatus?.charges_enabled && publicStripeStatus?.payouts_enabled ? true : false;
+
+  const offers = profile?.offers ?? [];
+  const activeOffer = offers.length ? offers[activeOfferIndex] ?? offers[0] : null;
+  const hasMultipleOffers = offers.length > 1;
 
   const loadHostSessions = async () => {
     if (!hostUserId) return;
@@ -281,39 +337,137 @@ const App = () => {
   const handleOpenSheet = () => {
     setInitMessage(null);
     setInitError(null);
-    if (!amountInput && lastPaid != null) {
-      setAmountInput((lastPaid / 100).toFixed(0));
+    const nextOffer = activeOffer ?? null;
+    const fallbackCents = nextOffer ? nextOffer.price_cents : lastPaid ?? 5000;
+    setBookOffer(nextOffer);
+    setAmountInput((fallbackCents / 100).toFixed(0));
+    if (profile?.user.id) {
+      trackEvent({
+        user_id: profile.user.id,
+        type: "offer_claim_clicked",
+        ref_id: nextOffer?.id ?? null,
+        metadata: { amount_cents: fallbackCents, source: "profile" },
+      }).catch(() => {});
     }
     setSheetOpen(true);
+  };
+
+  const closeBookSheet = () => {
+    setSheetOpen(false);
+    setBookOffer(null);
   };
 
   const handleInitSession = async () => {
     setInitError(null);
     setInitMessage(null);
-    const raw = Number(amountInput);
-    if (!Number.isFinite(raw) || raw < 0) {
-      setInitError("Enter a valid amount.");
-      return;
+    let amountCents = 0;
+    if (bookOffer) {
+      amountCents = bookOffer.price_cents;
+    } else {
+      const raw = Number(amountInput);
+      if (!Number.isFinite(raw) || raw < 0) {
+        setInitError("Enter a valid amount.");
+        return;
+      }
+      amountCents = Math.round(raw * 100);
     }
-    const amountCents = Math.round(raw * 100);
     try {
-      const response = await initSession({ host_handle: handle, amount_cents: amountCents });
+      const bookedOfferId = bookOffer?.id ?? null;
+      const response = await initSession({
+        host_handle: handle,
+        amount_cents: amountCents,
+        offer_id: bookOffer?.id ?? null,
+      });
       if (response.checkout_url && amountCents > 0) {
         window.location.href = response.checkout_url;
         return;
       }
       setInitMessage("You’re set. Payment completes when you meet.");
       setSheetOpen(false);
+      setBookOffer(null);
       void loadProfile();
+      if (profile?.user.id) {
+        trackEvent({
+          user_id: profile.user.id,
+          type: "offer_claim_completed",
+          ref_id: bookedOfferId,
+          metadata: { amount_cents: amountCents, source: "profile" },
+        }).catch(() => {});
+      }
     } catch (error: any) {
       const message = String(error?.message || "");
       if (message.includes("host_not_connected")) {
-        setInitError("Mackley hasn’t connected Stripe yet.");
+        setInitError("Host hasn’t connected Stripe yet.");
       } else if (message.includes("payments_not_enabled")) {
         setInitError("Payments are not enabled yet.");
       } else {
         setInitError("Unable to start the session.");
       }
+    }
+  };
+
+  const handleOpenOfferSheet = () => {
+    if (!canEdit) return;
+    setOfferTitle("");
+    setOfferPrice("");
+    setOfferLocation("");
+    setOfferImage("");
+    setOfferError(null);
+    setOfferSheetOpen(true);
+    if (hostUserId) {
+      trackEvent({ user_id: hostUserId, type: "offer_create_started", ref_id: null }).catch(() => {});
+    }
+  };
+
+  const handleCreateOffer = async () => {
+    if (!hostUserId) return;
+    setOfferSaving(true);
+    setOfferError(null);
+    const title = offerTitle.trim();
+    const rawPrice = Number(offerPrice);
+    if (!title) {
+      setOfferError("Add a title.");
+      setOfferSaving(false);
+      return;
+    }
+    if (!Number.isFinite(rawPrice) || rawPrice < 0) {
+      setOfferError("Enter a valid price.");
+      setOfferSaving(false);
+      return;
+    }
+    const priceCents = Math.round(rawPrice * 100);
+    const location = offerLocation.trim() || "In person";
+    const imageUrl = offerImage.trim() || null;
+    try {
+      await createOffer({
+        creator_id: hostUserId,
+        title,
+        price_cents: priceCents,
+        deposit_cents: 0,
+        capacity: 1,
+        location_text: location,
+        description: "",
+        image_url: imageUrl,
+        payment_mode: "full",
+        slots: [],
+      });
+      setOfferSheetOpen(false);
+      setOfferTitle("");
+      setOfferPrice("");
+      setOfferLocation("");
+      setOfferImage("");
+      await loadProfile();
+      setActiveCardIndex(1);
+      requestAnimationFrame(() => {
+        if (carouselRef.current) {
+          carouselRef.current.scrollTo({ left: carouselRef.current.clientWidth, behavior: "smooth" });
+        }
+      });
+      trackEvent({ user_id: hostUserId, type: "offer_create_completed", ref_id: null }).catch(() => {});
+    } catch (error) {
+      setOfferError("Unable to create offer.");
+    } finally {
+      setOfferSaving(false);
     }
   };
 
@@ -334,6 +488,9 @@ const App = () => {
       localStorage.setItem(HOST_ID_KEY, String(userId));
       setHostUserId(userId);
     }
+    if (userId) {
+      trackEvent({ user_id: userId, type: "profile_create_started", ref_id: null }).catch(() => {});
+    }
     localStorage.setItem(ONBOARD_KEY, "1");
     const { url } = await createStripeConnectLink(userId);
     window.location.href = url;
@@ -343,6 +500,7 @@ const App = () => {
     if (!hostUserId) return;
     setEditSaving(true);
     setEditError(null);
+    const finishingOnboarding = onboardingStep === "photo";
     if (onboardingStep === "name" && !editName.trim()) {
       setEditError("Enter your name.");
       setEditSaving(false);
@@ -371,6 +529,9 @@ const App = () => {
       }
       setEditOpen(false);
       await loadProfile();
+      if (finishingOnboarding) {
+        trackEvent({ user_id: hostUserId, type: "profile_create_completed", ref_id: null }).catch(() => {});
+      }
     } catch (error) {
       setEditError("Unable to update profile.");
     } finally {
@@ -389,6 +550,9 @@ const App = () => {
     setRecentlyConnected(false);
     setProfile(null);
     setProfileError(null);
+    setOfferSheetOpen(false);
+    setSheetOpen(false);
+    setBookOffer(null);
     setHandle("");
     window.history.replaceState({}, "", "/");
   };
@@ -400,8 +564,19 @@ const App = () => {
       await redeemSession(sessionId, hostUserId);
       await loadHostSessions();
       await loadProfile();
+      trackEvent({ user_id: hostUserId, type: "redeem_completed", ref_id: sessionId }).catch(() => {});
     } catch (error) {
       setHostError("Unable to confirm right now.");
+    }
+  };
+
+  const handleCarouselScroll = () => {
+    const el = carouselRef.current;
+    if (!el) return;
+    const width = el.clientWidth || 1;
+    const nextIndex = Math.round(el.scrollLeft / width);
+    if (nextIndex !== activeCardIndex) {
+      setActiveCardIndex(nextIndex);
     }
   };
 
@@ -465,33 +640,69 @@ const App = () => {
                 </section>
               ) : (
                 <>
-                  <section
-                    className={canEdit ? "card profile-card editable" : "card profile-card"}
-                    onClick={canEdit ? openEditSheet : undefined}
-                    role={canEdit ? "button" : undefined}
-                    tabIndex={canEdit ? 0 : -1}
-                    style={
-                      {
-                        "--card-bg": profile?.user.photo_url ? `url(${profile.user.photo_url})` : undefined,
-                      } as React.CSSProperties
-                    }
+                  <div
+                    className={cardCount > 1 ? "carousel" : "carousel single"}
+                    ref={carouselRef}
+                    onScroll={cardCount > 1 ? handleCarouselScroll : undefined}
                   >
-                    <div className="profile-card-inner">
-                      {profile?.user.photo_url ? (
-                        <img className="avatar" src={profile.user.photo_url} alt={profile.user.name} />
-                      ) : (
-                        <div className="avatar" />
-                      )}
-                      <div className="profile-name">{profile?.user.name || "OPENMAT"}</div>
-                      <div className="last-label">LAST PAID</div>
-                      <div className="last-amount">{formatMoney(lastPaid)}</div>
+                    <div className="carousel-track">
+                      <div className="carousel-item">
+                        <section
+                          className={canEdit ? "card profile-card editable" : "card profile-card"}
+                          onClick={canEdit ? openEditSheet : undefined}
+                          role={canEdit ? "button" : undefined}
+                          tabIndex={canEdit ? 0 : -1}
+                          style={
+                            {
+                              "--card-bg": profile?.user.photo_url
+                                ? `url(${profile.user.photo_url})`
+                                : undefined,
+                            } as React.CSSProperties
+                          }
+                        >
+                          <div className="profile-card-inner">
+                            {profile?.user.photo_url ? (
+                              <img className="avatar" src={profile.user.photo_url} alt={profile.user.name} />
+                            ) : (
+                              <div className="avatar" />
+                            )}
+                            <div className="profile-name">{profile?.user.name || "OPENMAT"}</div>
+                            <div className="last-label">LAST PAID</div>
+                            <div className="last-amount">{formatMoney(lastPaid)}</div>
+                          </div>
+                        </section>
+                      </div>
+                      {offers.map((offer) => (
+                        <div className="carousel-item" key={offer.id}>
+                          <section
+                            className="card offer-card"
+                            style={
+                              {
+                                "--card-bg": offer.image_url
+                                  ? `url(${offer.image_url})`
+                                  : profile?.user.photo_url
+                                    ? `url(${profile.user.photo_url})`
+                                    : undefined,
+                              } as React.CSSProperties
+                            }
+                          >
+                            <div className="offer-card-inner">
+                              <div className="offer-title">{offer.title}</div>
+                              <div className="offer-price">{formatMoney(offer.price_cents)}</div>
+                              <div className="offer-meta">{offer.location_text}</div>
+                            </div>
+                          </section>
+                        </div>
+                      ))}
                     </div>
-                  </section>
-                  <div className="carousel-dots" aria-hidden>
-                    <span className="dot active" />
-                    <span className="dot" />
-                    <span className="dot" />
                   </div>
+                  {cardCount > 1 ? (
+                    <div className="carousel-dots" aria-hidden>
+                      {Array.from({ length: cardCount }).map((_, index) => (
+                        <span key={index} className={index === activeCardIndex ? "dot active" : "dot"} />
+                      ))}
+                    </div>
+                  ) : null}
                   <button
                     className="button primary full"
                     type="button"
@@ -583,8 +794,8 @@ const App = () => {
             </section>
           )}
 
-          {profile ? (
-            <button className="fab" type="button" onClick={handleOpenSheet}>
+          {canEdit ? (
+            <button className="fab" type="button" onClick={handleOpenOfferSheet}>
               +
             </button>
           ) : null}
@@ -640,24 +851,63 @@ const App = () => {
       ) : null}
 
       {sheetOpen ? (
-        <div className="sheet-backdrop" onClick={() => setSheetOpen(false)}>
+        <div className="sheet-backdrop" onClick={closeBookSheet}>
           <div className="sheet" onClick={(event) => event.stopPropagation()}>
-            <div className="sheet-title">Set your amount</div>
+            <div className="sheet-title">{bookOffer ? bookOffer.title : "Set your amount"}</div>
             <label className="field">
               Amount (USD)
               <input
                 value={amountInput}
                 onChange={(event) => setAmountInput(formatAmountInput(event.target.value))}
                 inputMode="decimal"
+                readOnly={Boolean(bookOffer)}
               />
             </label>
+            {bookOffer ? <div className="muted">Offer price is fixed.</div> : null}
             {initError ? <div className="error-text">{initError}</div> : null}
             <div className="sheet-actions">
-              <button className="button ghost" type="button" onClick={() => setSheetOpen(false)}>
+              <button className="button ghost" type="button" onClick={closeBookSheet}>
                 Cancel
               </button>
               <button className="button primary" type="button" onClick={handleInitSession}>
                 Continue
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {offerSheetOpen ? (
+        <div className="sheet-backdrop" onClick={() => setOfferSheetOpen(false)}>
+          <div className="sheet" onClick={(event) => event.stopPropagation()}>
+            <div className="sheet-title">Create offer</div>
+            <label className="field">
+              Title
+              <input value={offerTitle} onChange={(event) => setOfferTitle(event.target.value)} />
+            </label>
+            <label className="field">
+              Price (USD)
+              <input
+                value={offerPrice}
+                onChange={(event) => setOfferPrice(formatAmountInput(event.target.value))}
+                inputMode="decimal"
+              />
+            </label>
+            <label className="field">
+              Location
+              <input value={offerLocation} onChange={(event) => setOfferLocation(event.target.value)} />
+            </label>
+            <label className="field">
+              Image URL (optional)
+              <input value={offerImage} onChange={(event) => setOfferImage(event.target.value)} />
+            </label>
+            {offerError ? <div className="error-text">{offerError}</div> : null}
+            <div className="sheet-actions">
+              <button className="button ghost" type="button" onClick={() => setOfferSheetOpen(false)}>
+                Cancel
+              </button>
+              <button className="button primary" type="button" onClick={handleCreateOffer} disabled={offerSaving}>
+                {offerSaving ? "Saving…" : "Create offer"}
               </button>
             </div>
           </div>

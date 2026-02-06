@@ -71,6 +71,22 @@ const slugifyHandle = (value: string) =>
     .replace(/[^a-z0-9]+/g, "")
     .trim();
 
+const createGuestUser = async (client: any) => {
+  const guestName = "Guest";
+  const guestUsername = `guest-${Date.now().toString(36)}`;
+  const guestResult = await client.query(
+    "INSERT INTO users (name, role, username) VALUES ($1, $2, $3) RETURNING id",
+    [guestName, "customer", guestUsername]
+  );
+  return guestResult.rows[0].id;
+};
+
+const isPlaceholderName = (value?: string | null) => {
+  if (!value) return true;
+  const normalized = value.trim().toLowerCase();
+  return normalized === "new creator" || normalized === "newcreator";
+};
+
 const getUniqueUsername = async (base: string, excludeUserId?: number) => {
   const normalizedBase = slugifyHandle(base) || "user";
   let candidate = normalizedBase;
@@ -359,10 +375,40 @@ router.get("/offers/:offer_id", async (req, res) => {
   return res.json({ offer: offerResult.rows[0], slots: slotResult.rows, activity: activityResult.rows });
 });
 
+router.patch("/offers/:offer_id", async (req, res) => {
+  const offerId = Number(req.params.offer_id);
+  const { title, price_cents, image_url } = req.body;
+  if (!isPositiveInteger(offerId)) {
+    return res.status(400).json({ error: "Invalid offer id" });
+  }
+  if (title != null && !isNonEmptyString(title)) {
+    return res.status(400).json({ error: "Invalid title" });
+  }
+  if (price_cents != null && !isNonNegativeInteger(price_cents)) {
+    return res.status(400).json({ error: "Invalid price" });
+  }
+
+  const result = await query(
+    "UPDATE offers SET title = COALESCE($1, title), price_cents = COALESCE($2, price_cents), image_url = COALESCE($3, image_url) WHERE id = $4 RETURNING id, creator_id, title, price_cents, deposit_cents, payment_mode, capacity, location_text, description, image_url, created_at",
+    [
+      isNonEmptyString(title) ? title.trim() : null,
+      typeof price_cents === "number" ? price_cents : null,
+      isNonEmptyString(image_url) ? image_url : null,
+      offerId,
+    ]
+  );
+
+  if (result.rowCount === 0) {
+    return res.status(404).json({ error: "Offer not found" });
+  }
+
+  return res.json({ offer: result.rows[0] });
+});
+
 router.post("/claims", async (req, res) => {
   const { offer_id, user_id, slot_id, address, referral_code } = req.body;
 
-  if (!isPositiveInteger(offer_id) || !isPositiveInteger(user_id)) {
+  if (!isPositiveInteger(offer_id)) {
     return res.status(400).json({ error: "Invalid claim payload" });
   }
 
@@ -370,6 +416,11 @@ router.post("/claims", async (req, res) => {
 
   try {
     await client.query("BEGIN");
+
+    let resolvedUserId = isPositiveInteger(user_id) ? user_id : null;
+    if (!resolvedUserId) {
+      resolvedUserId = await createGuestUser(client);
+    }
 
     const offerResult = await client.query(
       "SELECT id, creator_id, deposit_cents, payment_mode, price_cents FROM offers WHERE id = $1",
@@ -405,7 +456,7 @@ router.post("/claims", async (req, res) => {
       "INSERT INTO claims (offer_id, user_id, slot_id, address, deposit_cents) VALUES ($1, $2, $3, $4, $5) RETURNING id, offer_id, user_id, slot_id, address, deposit_cents, created_at",
       [
         offer_id,
-        user_id,
+        resolvedUserId,
         slot_id ?? null,
         address ?? null,
         offerResult.rows[0].deposit_cents,
@@ -445,23 +496,45 @@ router.post("/claims", async (req, res) => {
 });
 
 router.post("/sessions/init", async (req, res) => {
-  const { host_handle, amount_cents } = req.body || {};
-  if (!isNonEmptyString(host_handle) || !isNonNegativeInteger(amount_cents)) {
+  const { host_handle, amount_cents, offer_id } = req.body || {};
+  const offerId = isPositiveInteger(offer_id) ? offer_id : null;
+  if (!offerId && (!isNonEmptyString(host_handle) || !isNonNegativeInteger(amount_cents))) {
     return res.status(400).json({ error: "Invalid session payload" });
   }
 
-  const hostResult = await query(
-    "SELECT id, stripe_account_id, stripe_access_token FROM users WHERE LOWER(username) = $1",
-    [host_handle.trim().toLowerCase()]
-  );
-  if (hostResult.rowCount === 0) {
-    return res.status(404).json({ error: "Host not found" });
+  let host = null;
+  let offer = null;
+  if (offerId) {
+    const offerResult = await query(
+      "SELECT o.id, o.creator_id, o.title, o.price_cents, u.username, u.stripe_account_id, u.stripe_access_token FROM offers o JOIN users u ON u.id = o.creator_id WHERE o.id = $1",
+      [offerId]
+    );
+    if (offerResult.rowCount === 0) {
+      return res.status(404).json({ error: "Offer not found" });
+    }
+    offer = offerResult.rows[0];
+    host = {
+      id: offer.creator_id,
+      stripe_account_id: offer.stripe_account_id,
+      stripe_access_token: offer.stripe_access_token,
+      username: offer.username,
+    };
+  } else {
+    const hostResult = await query(
+      "SELECT id, stripe_account_id, stripe_access_token FROM users WHERE LOWER(username) = $1",
+      [host_handle.trim().toLowerCase()]
+    );
+    if (hostResult.rowCount === 0) {
+      return res.status(404).json({ error: "Host not found" });
+    }
+    host = hostResult.rows[0];
   }
-  const host = hostResult.rows[0];
-  if (amount_cents > 0 && (!host.stripe_account_id || !host.stripe_access_token)) {
+
+  const amountCents = offer ? Number(offer.price_cents) : Number(amount_cents);
+  if (amountCents > 0 && (!host.stripe_account_id || !host.stripe_access_token)) {
     return res.status(409).json({ error: "host_not_connected" });
   }
-  if (amount_cents > 0) {
+  if (amountCents > 0) {
     if (!stripe) {
       return res.status(500).json({ error: "Stripe not configured" });
     }
@@ -486,52 +559,59 @@ router.post("/sessions/init", async (req, res) => {
     );
     const guestId = guestResult.rows[0].id;
 
-    const offerResult = await client.query(
-      "INSERT INTO offers (creator_id, title, price_cents, deposit_cents, payment_mode, capacity, location_text, description, image_url) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id, creator_id, price_cents, payment_mode",
-      [host.id, "Session", amount_cents, 0, "full", 1, "In person", "", null]
-    );
-    const offer = offerResult.rows[0];
+    let claimOfferId = offerId;
+    let offerTitle = offer ? offer.title : "Session";
+    if (!offerId) {
+      const offerResult = await client.query(
+        "INSERT INTO offers (creator_id, title, price_cents, deposit_cents, payment_mode, capacity, location_text, description, image_url) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id, creator_id, price_cents, payment_mode",
+        [host.id, "Session", amountCents, 0, "full", 1, "In person", "", null]
+      );
+      const createdOffer = offerResult.rows[0];
+      claimOfferId = createdOffer.id;
+      offerTitle = "Session";
+    }
 
     const claimResult = await client.query(
       "INSERT INTO claims (offer_id, user_id, deposit_cents) VALUES ($1, $2, $3) RETURNING id",
-      [offer.id, guestId, 0]
+      [claimOfferId, guestId, 0]
     );
     const claimId = claimResult.rows[0].id;
 
     await client.query(
       "INSERT INTO events (user_id, type, ref_id, metadata) VALUES ($1, $2, $3, $4)",
-      [host.id, EVENT_TYPES.OFFER_CLAIMED, claimId, null]
+      [host.id, EVENT_TYPES.OFFER_CLAIMED, claimId, offerId ? { offer_id: offerId } : null]
     );
 
     await client.query("COMMIT");
 
-    if (amount_cents === 0) {
+    if (amountCents === 0) {
       await query(
         "INSERT INTO payments (claim_id, amount_cents, status, provider, provider_ref) VALUES ($1, $2, $3, $4, $5)",
         [claimId, 0, "zero", "stripe", null]
       );
-      return res.status(201).json({ session_id: claimId, amount_cents, status: "zero" });
+      return res.status(201).json({ session_id: claimId, amount_cents: amountCents, status: "zero" });
     }
 
-    const amountCents = amount_cents;
     const creatorStripe = new Stripe(host.stripe_access_token, { apiVersion: "2024-06-20" });
     const metadata = {
       claim_id: String(claimId),
-      offer_id: String(offer.id),
+      offer_id: String(claimOfferId),
       creator_id: String(host.id),
       purpose: "payment",
     };
+    const redirectHandle = offer?.username || host_handle || "";
+    const redirectPath = redirectHandle ? `/${redirectHandle}` : "";
     const session = await creatorStripe.checkout.sessions.create({
       mode: "payment",
-      success_url: `${publicBaseUrl}/${host_handle}?paid=1&claim=${claimId}`,
-      cancel_url: `${publicBaseUrl}/${host_handle}?cancel=1`,
+      success_url: `${publicBaseUrl}${redirectPath}?paid=1&claim=${claimId}`,
+      cancel_url: `${publicBaseUrl}${redirectPath}?cancel=1`,
       line_items: [
         {
           quantity: 1,
           price_data: {
             currency: "usd",
             unit_amount: amountCents,
-            product_data: { name: "Session" },
+            product_data: { name: offerTitle },
           },
         },
       ],
@@ -544,7 +624,7 @@ router.post("/sessions/init", async (req, res) => {
       [claimId, amountCents, "pending", "stripe", session.id]
     );
 
-    return res.status(201).json({ session_id: claimId, amount_cents, checkout_url: session.url });
+    return res.status(201).json({ session_id: claimId, amount_cents: amountCents, checkout_url: session.url });
   } catch (error) {
     await client.query("ROLLBACK");
     return res.status(500).json({ error: "Unable to create session" });
@@ -857,15 +937,25 @@ router.get("/profile/:user_id", async (req, res) => {
     return res.status(404).json({ error: "User not found" });
   }
 
-  const scoreResult = await query(
-    "SELECT COUNT(r.id) AS score FROM redemptions r JOIN claims c ON c.id = r.claim_id JOIN offers o ON o.id = c.offer_id WHERE o.creator_id = $1",
-    [userId]
-  );
+  let scoreResult = { rows: [{ score: 0 }] };
+  try {
+    scoreResult = await query(
+      "SELECT COUNT(r.id) AS score FROM redemptions r JOIN claims c ON c.id = r.claim_id JOIN offers o ON o.id = c.offer_id WHERE o.creator_id = $1",
+      [userId]
+    );
+  } catch {
+    scoreResult = { rows: [{ score: 0 }] };
+  }
 
-  const offersResult = await query(
-    "SELECT o.id, o.creator_id, o.title, o.price_cents, o.deposit_cents, o.payment_mode, o.capacity, o.location_text, o.description, o.image_url, o.created_at, COUNT(c.id) AS claimed_count FROM offers o LEFT JOIN claims c ON c.offer_id = o.id WHERE o.creator_id = $1 GROUP BY o.id ORDER BY o.created_at DESC",
-    [userId]
-  );
+  let offersResult = { rows: [] as any[] };
+  try {
+    offersResult = await query(
+      "SELECT o.id, o.creator_id, o.title, o.price_cents, o.deposit_cents, o.payment_mode, o.capacity, o.location_text, o.description, o.image_url, o.created_at, COUNT(c.id) AS claimed_count FROM offers o LEFT JOIN claims c ON c.offer_id = o.id WHERE o.creator_id = $1 GROUP BY o.id ORDER BY o.created_at DESC",
+      [userId]
+    );
+  } catch {
+    offersResult = { rows: [] };
+  }
 
   return res.json({
     user: userResult.rows[0],
@@ -897,6 +987,7 @@ router.get("/u/:handle", async (req, res) => {
 
   let lastPaidResult = { rowCount: 0, rows: [] as { price_cents: number }[] };
   let redeemedResult = { rows: [] as { id: number; amount_cents: number; redeemed_at: string | null }[] };
+  let offersResult = { rows: [] as { id: number; title: string; price_cents: number; image_url: string | null; location_text: string; description: string; created_at: string }[] };
 
   try {
     lastPaidResult = await query(
@@ -916,6 +1007,15 @@ router.get("/u/:handle", async (req, res) => {
     redeemedResult = { rows: [] };
   }
 
+  try {
+    offersResult = await query(
+      "SELECT id, title, price_cents, image_url, location_text, description, created_at FROM offers WHERE creator_id = $1 ORDER BY created_at DESC",
+      [userId]
+    );
+  } catch {
+    offersResult = { rows: [] };
+  }
+
   return res.json({
     user: {
       id: userId,
@@ -930,6 +1030,15 @@ router.get("/u/:handle", async (req, res) => {
       amount_cents: Number(row.amount_cents),
       redeemed_at: row.redeemed_at,
       proof_url: null,
+    })),
+    offers: offersResult.rows.map((row) => ({
+      id: row.id,
+      title: row.title,
+      price_cents: Number(row.price_cents),
+      image_url: row.image_url,
+      location_text: row.location_text,
+      description: row.description,
+      created_at: row.created_at,
     })),
   });
 });
@@ -981,16 +1090,22 @@ router.get("/stripe/callback", async (req, res) => {
     );
     const user = userResult.rows[0] || {};
     const currentName = typeof user.name === "string" ? user.name : "";
-    const nextName =
-      (!currentName || currentName === "New creator") && stripeName ? stripeName : currentName;
+    const nextName = isPlaceholderName(currentName) && stripeName ? stripeName : currentName;
     const currentPhone = typeof user.phone === "string" ? user.phone : "";
     const nextPhone = !currentPhone && stripePhone ? stripePhone : currentPhone;
     const currentBio = typeof user.bio === "string" ? user.bio : "";
     const nextBio = !currentBio && stripeUrl ? stripeUrl : currentBio;
     const currentUsername = typeof user.username === "string" ? user.username : "";
     const usernameSource = stripeName || nextName || currentName;
+    const currentNameIsPlaceholder = isPlaceholderName(currentName);
+    const placeholderSlug = currentNameIsPlaceholder ? slugifyHandle(currentName) : "";
+    const currentUsernameIsPlaceholder =
+      !currentUsername ||
+      (currentNameIsPlaceholder && placeholderSlug && currentUsername.startsWith(placeholderSlug));
     const nextUsername =
-      !currentUsername && usernameSource ? await getUniqueUsername(usernameSource, userId) : currentUsername;
+      (!currentUsername || currentUsernameIsPlaceholder) && usernameSource
+        ? await getUniqueUsername(usernameSource, userId)
+        : currentUsername;
 
     await query(
       "UPDATE users SET stripe_account_id = $1, stripe_access_token = $2, stripe_refresh_token = $3, stripe_publishable_key = $4, stripe_account_email = COALESCE($5, stripe_account_email), name = $6, phone = $7, bio = $8, username = $9 WHERE id = $10",
@@ -1144,10 +1259,15 @@ router.get("/inbox/:user_id", async (req, res) => {
     return res.status(400).json({ error: "Invalid user id" });
   }
 
-  const eventsResult = await query(
-    "SELECT e.id, e.type, e.ref_id, e.created_at, u.name AS actor_name, o.title AS offer_title FROM events e LEFT JOIN claims c ON e.type IN ($2, $3) AND c.id = e.ref_id LEFT JOIN offers o ON (e.type IN ($2, $3) AND o.id = c.offer_id) OR (e.type = $4 AND o.id = e.ref_id) LEFT JOIN users u ON u.id = c.user_id WHERE e.user_id = $1 ORDER BY e.created_at DESC",
-    [userId, EVENT_TYPES.OFFER_CLAIMED, EVENT_TYPES.REDEMPTION_COMPLETED, EVENT_TYPES.OFFER_CREATED]
-  );
+  let eventsResult = { rows: [] as any[] };
+  try {
+    eventsResult = await query(
+      "SELECT e.id, e.type, e.ref_id, e.created_at, u.name AS actor_name, o.title AS offer_title FROM events e LEFT JOIN claims c ON e.type IN ($2, $3) AND c.id = e.ref_id LEFT JOIN offers o ON (e.type IN ($2, $3) AND o.id = c.offer_id) OR (e.type = $4 AND o.id = e.ref_id) LEFT JOIN users u ON u.id = c.user_id WHERE e.user_id = $1 ORDER BY e.created_at DESC",
+      [userId, EVENT_TYPES.OFFER_CLAIMED, EVENT_TYPES.REDEMPTION_COMPLETED, EVENT_TYPES.OFFER_CREATED]
+    );
+  } catch {
+    eventsResult = { rows: [] };
+  }
 
   return res.json({ events: eventsResult.rows });
 });
@@ -1181,10 +1301,14 @@ router.post("/events", async (req, res) => {
     return res.status(400).json({ error: "Invalid event payload" });
   }
 
-  await query(
-    "INSERT INTO events (user_id, type, ref_id, metadata) VALUES ($1, $2, $3, $4)",
-    [user_id, type, ref_id ?? null, metadata ?? null]
-  );
+  try {
+    await query(
+      "INSERT INTO events (user_id, type, ref_id, metadata) VALUES ($1, $2, $3, $4)",
+      [user_id, type, ref_id ?? null, metadata ?? null]
+    );
+  } catch {
+    return res.json({ ok: true });
+  }
 
   return res.json({ ok: true });
 });

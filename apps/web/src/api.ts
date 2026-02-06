@@ -69,6 +69,15 @@ export type PublicProfileResponse = {
     redeemed_at: string | null;
     proof_url: string | null;
   }>;
+  offers?: Array<{
+    id: number;
+    title: string;
+    price_cents: number;
+    image_url: string | null;
+    location_text: string;
+    description: string;
+    created_at: string;
+  }>;
 };
 
 export type SessionSummary = {
@@ -139,7 +148,7 @@ export type CreateUserInput = {
 
 export type CreateClaimInput = {
   offer_id: number;
-  user_id: number;
+  user_id?: number | null;
   slot_id: number | null;
   address?: string;
   referral_code?: string;
@@ -250,6 +259,15 @@ const mockPublicProfile: PublicProfileResponse = {
       proof_url: null,
     },
   ],
+  offers: mockOffers.map((offer) => ({
+    id: offer.id,
+    title: offer.title,
+    price_cents: offer.price_cents,
+    image_url: offer.image_url,
+    location_text: offer.location_text,
+    description: offer.description,
+    created_at: offer.created_at,
+  })),
 };
 
 export const getProfile = (userId: number) =>
@@ -314,7 +332,7 @@ export const createStripeConnectLink = (userId: number) =>
         body: JSON.stringify({ user_id: userId }),
       });
 
-export const initSession = (input: { host_handle: string; amount_cents: number }) =>
+export const initSession = (input: { host_handle: string; amount_cents: number; offer_id?: number | null }) =>
   USE_MOCKS
     ? Promise.resolve({ session_id: 1, amount_cents: input.amount_cents, checkout_url: null })
     : request<{ session_id: number; amount_cents: number; checkout_url?: string }>(
@@ -431,6 +449,28 @@ export const createOffer = (input: CreateOfferInput) => {
 
   return request<{ offer: Offer }>("/offers", {
     method: "POST",
+    body: JSON.stringify(input),
+  });
+};
+
+export const updateOffer = (offerId: number, input: { title?: string; price_cents?: number; image_url?: string | null }) => {
+  if (USE_MOCKS) {
+    const offerIndex = mockOffers.findIndex((offer) => offer.id === offerId);
+    if (offerIndex === -1) {
+      throw new Error("Offer not found");
+    }
+    const updated = {
+      ...mockOffers[offerIndex],
+      title: input.title ?? mockOffers[offerIndex].title,
+      price_cents: input.price_cents ?? mockOffers[offerIndex].price_cents,
+      image_url: input.image_url ?? mockOffers[offerIndex].image_url,
+    };
+    mockOffers = [updated, ...mockOffers.filter((offer) => offer.id !== offerId)];
+    return Promise.resolve({ offer: updated });
+  }
+
+  return request<{ offer: Offer }>(`/offers/${offerId}`, {
+    method: "PATCH",
     body: JSON.stringify(input),
   });
 };
